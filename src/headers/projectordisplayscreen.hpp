@@ -25,14 +25,12 @@
 #include <QQuickView>
 #include <QQuickItem>
 #include <QtQml>
-#include <QMediaPlayer>
 #include "spimageprovider.hpp"
 #include "imagegenerator.hpp"
 #include "settings.hpp"
 #include "bible.hpp"
 #include "song.hpp"
 #include "announcement.hpp"
-#include "videoinfo.hpp"
 //#include "slideshow.hpp"
 
 namespace Ui {
@@ -56,14 +54,6 @@ public slots:
     void renderSongText(Stanza stanza, SongSettings &sSets);
     void renderAnnounceText(AnnounceSlide announce, TextSettings &aSets);
     void renderSlideShow(QPixmap slide,SlideShowSettings &ssSets);
-    void renderVideo(VideoInfo videoDetails);
-
-    void playVideo();
-    void pauseVideo();
-    void stopVideo();
-    void setVideoVolume(int level);
-    void setVideoMuted(bool muted);
-    void setVideoPosition(qint64 position);
 
     void positionControls(DisplayControlsSettings & dSettings);
     void setControlsVisible(bool visible);
@@ -72,28 +62,16 @@ private slots:
     void setBackPixmap(QPixmap p,int fillMode); // 0 = Strech, 1 = keep aspect, 2 = keep aspect by expanding
     void setBackPixmap(QPixmap p, QColor c);
     void setTextPixmap(QPixmap p);
-    void setBackVideo(QString path);
-    void setVideoSource(QObject *playerObject, QUrl path);
     void updateScreen();
 
     void exitSlideClicked();
     void nextSlideClicked();
     void prevSlideClicked();
 
-    void videoPositionChanged(int position);
-    void videoDurationChanged(int duration);
-    void videoPlaybackStateChanged(int state);
-    void playbackStopped();
-
 signals:
     void exitSlide();
     void nextSlide();
     void prevSlide();
-
-    void videoPositionChanged(qint64 position);
-    void videoDurationChanged(qint64 duration);
-    void videoPlaybackStateChanged(QMediaPlayer::PlaybackState state);
-    void videoStopped();
 
 protected:
     void keyReleaseEvent(QKeyEvent *event);

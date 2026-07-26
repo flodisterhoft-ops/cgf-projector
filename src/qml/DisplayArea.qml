@@ -18,7 +18,6 @@
 ***************************************************************************/
 
 import QtQuick
-import QtMultimedia
 
 Rectangle {
     id: dispArea
@@ -40,38 +39,6 @@ Rectangle {
     signal exitClicked()
     signal nextClicked()
     signal prevClicked()
-
-    // Video signals
-    signal positionChanged(int position)
-    signal durationChanged(int duration)
-    signal playbackStateChanged(int state)
-    signal playbackStopped()
-
-    MediaPlayer
-    {
-        id: player
-        objectName: "player"
-        onSourceChanged: console.debug(player.source)
-        onPositionChanged:
-        {
-            dispArea.positionChanged(player.position)
-        }
-        onDurationChanged:
-        {
-            dispArea.durationChanged(player.duration)
-        }
-        onPlaybackStateChanged:
-        {
-            dispArea.playbackStateChanged(player.playbackState)
-        }
-    }
-
-    VideoOutput
-    {
-        id: vidOut
-        objectName: "vidOut"
-        anchors.fill: parent
-    }
 
     Image
     {
@@ -675,53 +642,6 @@ Rectangle {
             backImage1.y = parent.y
             backImage2.x = parent.x
             backImage2.y = parent.y
-        }
-    }
-
-//    function setVideoSource(vidSource)
-//    {
-//        player.source = vidSource
-//    }
-
-    function playVideo()
-    {
-        if(player.playbackState === MediaPlayer.StoppedState
-                || player.playbackState === MediaPlayer.PausedState)
-        {
-            player.play()
-        }
-
-    }
-
-    function stopVideo()
-    {
-        if(player.playbackState === MediaPlayer.PlayingState
-                || player.playbackState === MediaPlayer.PausedState)
-        {
-            player.stop()
-        }
-    }
-
-    function setVideoVolume(level)
-    {
-        player.volume = level
-    }
-
-    function setVideoMuted(toMute)
-    {
-        player.muted = toMute
-    }
-
-    function setVideoPosition(position)
-    {
-        player.seek(position)
-    }
-
-    function pauseVideo()
-    {
-        if(player.playbackState === MediaPlayer.PlayingState)
-        {
-            player.pause()
         }
     }
 

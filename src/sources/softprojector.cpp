@@ -56,9 +56,6 @@ SoftProjector::SoftProjector(QWidget *parent)
     manageDialog = new ManageDataDialog(this);
     settingsDialog = new SettingsDialog(this);
     helpDialog = new HelpDialog();
-    pictureWidget = new PictureWidget;
-    mediaPlayer = new MediaWidget;
-    mediaControls = new MediaControl(this);
 
     ui->setupUi(this);
 
@@ -82,8 +79,6 @@ SoftProjector::SoftProjector(QWidget *parent)
     ui->projectTab->clear();
     ui->projectTab->addTab(bibleWidget,QIcon(":/icons/icons/book.png"), tr("Bible (F6)"));
     ui->projectTab->addTab(songWidget,QIcon(":/icons/icons/song_tab.png"), tr("Songs (F7)"));
-    ui->projectTab->addTab(pictureWidget,QIcon(":/icons/icons/photo.png"),tr("Pictures"));
-    ui->projectTab->addTab(mediaPlayer,QIcon(":/icons/icons/video.png"),tr("Media"));
     ui->projectTab->addTab(announceWidget,QIcon(":/icons/icons/announce.png"), tr("Announcements (F8)"));
     ui->projectTab->setCurrentIndex(0);
 
@@ -96,10 +91,6 @@ SoftProjector::SoftProjector(QWidget *parent)
     connect(songWidget, SIGNAL(setArrowCursor()), this, SLOT(setArrowCursor()));
     connect(songWidget, SIGNAL(setWaitCursor()), this, SLOT(setWaitCursor()));
     connect(announceWidget,SIGNAL(sendAnnounce(Announcement,int)), this, SLOT(setAnnounceText(Announcement,int)));
-    connect(pictureWidget, SIGNAL(sendSlideShow(QList<SlideShowItem>&,int,QString)),
-            this, SLOT(setPictureList(QList<SlideShowItem>&,int,QString)));
-    connect(pictureWidget, SIGNAL(sendToSchedule(SlideShow&)),this,SLOT(addToShcedule(SlideShow&)));
-    connect(mediaPlayer, SIGNAL(toProjector(VideoInfo&)), this, SLOT(setVideo(VideoInfo&)));
     connect(editWidget, SIGNAL(updateSongFromDatabase(int,int)), songWidget, SLOT(updateSongFromDatabase(int,int)));
     connect(editWidget, SIGNAL(addedNew(Song,int)), songWidget,SLOT(addNewSong(Song,int)));
     connect(manageDialog, SIGNAL(setMainArrowCursor()), this, SLOT(setArrowCursor()));
@@ -169,23 +160,6 @@ SoftProjector::SoftProjector(QWidget *parent)
     ui->widgetMultiVerse->setVisible(false);
 
     // Set up video controls
-    ui->verticalLayoutDisplayControls->insertWidget(1,mediaControls);
-    mediaControls->setVisible(false);
-    mediaControls->setVolume(100);
-    connect(pds1,SIGNAL(videoPositionChanged(qint64)),
-            mediaControls,SLOT(updateTime(qint64)));
-    connect(pds1,SIGNAL(videoDurationChanged(qint64)),
-            mediaControls,SLOT(setMaximumTime(qint64)));
-    connect(pds1,SIGNAL(videoPlaybackStateChanged(QMediaPlayer::State)),
-            mediaControls,SLOT(updatePlayerState(QMediaPlayer::State)));
-    connect(pds1,SIGNAL(videoStopped()),this,SLOT(videoStopped()));
-    connect(mediaControls,SIGNAL(play()),this,SLOT(playVideo()));
-    connect(mediaControls,SIGNAL(pause()),this,SLOT(pauseVideo()));
-    connect(mediaControls,SIGNAL(stop()),this,SLOT(stopVideo()));
-    connect(mediaControls,SIGNAL(volumeChanged(int)),pds1,SLOT(setVideoVolume(int)));
-    connect(mediaControls,SIGNAL(muted(bool)),pds1,SLOT(setVideoMuted(bool)));
-    connect(mediaControls,SIGNAL(timeChanged(qint64)),this,SLOT(setVideoPosition(qint64)));
-
     version_string = "0.1";
     this->setWindowTitle("CGF Projector " + version_string);
 }
@@ -198,7 +172,6 @@ SoftProjector::~SoftProjector()
     delete bibleWidget;
     delete announceWidget;
     delete manageDialog;
-    delete mediaPlayer;
     delete pds1;
     delete pds2;
     delete pds3;
@@ -413,7 +386,6 @@ void SoftProjector::updateSetting(GeneralSettings &g, Theme &t, SlideShowSetting
     mySettings.saveSettings();
     theme = t;
     bibleWidget->setSettings(mySettings.bibleSets);
-    pictureWidget->setSettings(mySettings.slideSets);
 
     theme.bible.versions = mySettings.bibleSets;
     theme.bible2.versions = mySettings.bibleSets2;
@@ -549,7 +521,6 @@ void SoftProjector::setAnnounceText(Announcement announce, int row)
     pType = ANNOUCEMENT;
     ui->widgetMultiVerse->setVisible(false);
     ui->rbMultiVerse->setChecked(false);
-    mediaControls->setVisible(false);
     showing = true;
     new_list = true;
     ui->labelIcon->setPixmap(QPixmap(":/icons/icons/announce.png").scaled(16,16,Qt::IgnoreAspectRatio,Qt::SmoothTransformation));
@@ -575,7 +546,6 @@ void SoftProjector::setSongList(Song song, int row)
     pType = SONG;
     ui->widgetMultiVerse->setVisible(false);
     ui->rbMultiVerse->setChecked(false);
-    mediaControls->setVisible(false);
     showing = true;
     new_list = true;
     ui->listShow->clear();
@@ -602,7 +572,6 @@ void SoftProjector::setChapterList(QStringList chapter_list, QString caption, QI
     // Called to show a bible verse from a chapter in the preview list
     pType = BIBLE;
     ui->widgetMultiVerse->setVisible(true);
-    mediaControls->setVisible(false);
     showing = true;
     new_list = true;
     ui->labelIcon->setPixmap(QPixmap(":/icons/icons/book.png").scaled(16,16,Qt::IgnoreAspectRatio,Qt::SmoothTransformation));
@@ -621,132 +590,6 @@ void SoftProjector::setChapterList(QStringList chapter_list, QString caption, QI
     ui->listShow->selectionModel()->select(selectedItems,QItemSelectionModel::Select);
     ui->listShow->setFocus();
     new_list = false;
-    updateScreen();
-}
-
-void SoftProjector::setPictureList(QList<SlideShowItem> &image_list,int row,QString name)
-{
-    // Called to show picture list
-    pType = PICTURE;
-    showing = true;
-    ui->widgetMultiVerse->setVisible(false);
-    ui->rbMultiVerse->setChecked(false);
-    mediaControls->setVisible(false);
-    new_list = true;
-    pictureShowList = image_list;
-    ui->labelIcon->setPixmap(QPixmap(":/icons/icons/photo.png").scaled(16,16,Qt::IgnoreAspectRatio,Qt::SmoothTransformation));
-    ui->labelShow->setText(name);
-    ui->labelSongNotes->setVisible(false);
-    ui->listShow->clear();
-    ui->listShow->setSpacing(1);
-    ui->listShow->setIconSize(QSize(100,100));
-
-    foreach(const SlideShowItem &p, pictureShowList)
-    {
-        QListWidgetItem *itm = new QListWidgetItem;
-        QIcon ico(p.imageSmall);
-        itm->setIcon(ico);
-        ui->listShow->addItem(itm);
-    }
-
-    ui->listShow->setCurrentRow(row);
-    ui->listShow->setFocus();
-    new_list = false;
-    updateScreen();
-}
-
-void SoftProjector::setVideo(VideoInfo &video)
-{
-    // Called when showing video
-    pType = VIDEO;
-    currentVideo = video;
-    showing = true;
-    ui->widgetMultiVerse->setVisible(false);
-    ui->rbMultiVerse->setChecked(false);
-    if(!mediaControls->isVisible())
-    {
-        mediaControls->setVisible(true);
-    }
-    new_list = true;
-    ui->listShow->clear();
-    ui->labelSongNotes->setVisible(false);
-    ui->labelIcon->setPixmap(QPixmap(":/icons/icons/video.png").scaled(16,16,Qt::IgnoreAspectRatio,Qt::SmoothTransformation));
-    ui->labelShow->setText(currentVideo.fileName);
-    new_list = false;
-    updateScreen();
-}
-
-void SoftProjector::playVideo()
-{
-    pds1->playVideo();
-    if(hasDisplayScreen2)
-    {
-        pds2->playVideo();
-    }
-    if(hasDisplayScreen3)
-    {
-        pds3->playVideo();
-    }
-    if(hasDisplayScreen4)
-    {
-        pds4->playVideo();
-    }
-}
-
-void SoftProjector::pauseVideo()
-{
-    pds1->pauseVideo();
-    if(hasDisplayScreen2)
-    {
-        pds2->pauseVideo();
-    }
-    if(hasDisplayScreen3)
-    {
-        pds3->pauseVideo();
-    }
-    if(hasDisplayScreen4)
-    {
-        pds4->pauseVideo();
-    }
-}
-
-void SoftProjector::stopVideo()
-{
-    pds1->stopVideo();
-    if(hasDisplayScreen2)
-    {
-        pds2->stopVideo();
-    }
-    if(hasDisplayScreen3)
-    {
-        pds3->stopVideo();
-    }
-    if(hasDisplayScreen4)
-    {
-        pds4->stopVideo();
-    }
-}
-
-void SoftProjector::setVideoPosition(qint64 position)
-{
-    pds1->setVideoPosition(position);
-    if(hasDisplayScreen2)
-    {
-        pds2->setVideoPosition(position);
-    }
-    if(hasDisplayScreen3)
-    {
-        pds3->setVideoPosition(position);
-    }
-    if(hasDisplayScreen4)
-    {
-        pds4->setVideoPosition(position);
-    }
-}
-
-void SoftProjector::videoStopped()
-{
-    showing = false;
     updateScreen();
 }
 
@@ -819,12 +662,11 @@ void SoftProjector::updateScreen()
             }
 
         }
-           stopVideo();
         ui->actionShow->setEnabled(true);
         ui->actionHide->setEnabled(false);
         ui->actionClear->setEnabled(false);
     }
-    else if ((currentRow >=0 || pType == VIDEO)  && !new_list)
+    else if (currentRow >=0 && !new_list)
     {
         if(isSingleScreen)
         {
@@ -863,12 +705,6 @@ void SoftProjector::updateScreen()
             break;
         case ANNOUCEMENT:
             showAnnounce(currentRow);
-            break;
-        case PICTURE:
-            showPicture(currentRow);
-            break;
-        case VIDEO:
-            showVideo();
             break;
         default:
             // ERROR Unown type to show.
@@ -1030,47 +866,6 @@ void SoftProjector::showAnnounce(int currentRow)
     }
 }
 
-void SoftProjector::showPicture(int currentRow)
-{
-    pds1->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
-    if(hasDisplayScreen2)
-    {
-        pds2->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
-    }
-    if(hasDisplayScreen3)
-    {
-        pds3->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
-    }
-    if(hasDisplayScreen4)
-    {
-        pds4->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
-    }
-}
-
-void SoftProjector::showVideo()
-{
-    pds1->renderVideo(currentVideo);
-    pds1->setVideoVolume(100);
-    if(hasDisplayScreen2)
-    {
-        pds2->setVideoVolume(0);
-        pds2->setVideoMuted(true);
-        pds2->renderVideo(currentVideo);
-    }
-    if(hasDisplayScreen3)
-    {
-        pds3->setVideoVolume(0);
-        pds3->setVideoMuted(true);
-        pds3->renderVideo(currentVideo);
-    }
-    if(hasDisplayScreen4)
-    {
-        pds4->setVideoVolume(0);
-        pds4->setVideoMuted(true);
-        pds4->renderVideo(currentVideo);
-    }
-}
-
 void SoftProjector::on_actionShow_triggered()
 {
     showing = true;
@@ -1194,29 +989,7 @@ void SoftProjector::updateEditActions()
         ui->actionCopy->setIcon(QIcon(":/icons/icons/song_copy.png"));
         ui->actionDelete->setIcon(QIcon(":/icons/icons/song_delete.png"));
     }
-    else if (ctab == 2) // Picture Tab
-    {
-        ui->actionNew->setText(tr("&New Slide Show..."));
-        ui->actionEdit->setText(tr("&Edit Slide Show..."));
-        ui->actionCopy->setText("");
-        ui->actionDelete->setText(tr("&Delete Slide Show"));
-        ui->actionNew->setIcon(QIcon(":/icons/icons/slideshow_new.png"));
-        ui->actionEdit->setIcon(QIcon(":/icons/icons/slideshow_edit.png"));
-        ui->actionCopy->setIcon(QIcon());
-        ui->actionDelete->setIcon(QIcon(":/icons/icons/slideshow_delete.png"));
-    }
-    else if (ctab == 3) // Media Tab
-    {
-        ui->actionNew->setText(tr("&Add Media Files..."));
-        ui->actionEdit->setText("");
-        ui->actionCopy->setText("");
-        ui->actionDelete->setText(tr("&Remove Media Files"));
-        ui->actionNew->setIcon(QIcon(":/icons/icons/video_add.png"));
-        ui->actionEdit->setIcon(QIcon());
-        ui->actionCopy->setIcon(QIcon());
-        ui->actionDelete->setIcon(QIcon(":/icons/icons/video_remove.png"));
-    }
-    else if (ctab == 4) // Announcement Tab
+    else if (ctab == 2) // Announcement Tab
     {
         ui->actionNew->setText(tr("&New Announcement..."));
         ui->actionEdit->setText(tr("&Edit Announcement..."));
@@ -1254,7 +1027,7 @@ void SoftProjector::updateEditActions()
 
     /////////////////////////////////////////
     // Set Print Action Menu enabled
-    ui->actionPrint->setEnabled(ctab == 0 || ctab == 1 || ctab == 4);
+    ui->actionPrint->setEnabled(ctab == 0 || ctab == 1 || ctab == 2);
 }
 
 void SoftProjector::on_actionNew_triggered()
@@ -1263,10 +1036,6 @@ void SoftProjector::on_actionNew_triggered()
     if(ctab == 1)
         newSong();
     else if(ctab == 2)
-        newSlideShow();
-    else if(ctab == 3)
-        addMediaToLibrary();
-    else if(ctab == 4)
         newAnnouncement();
 }
 
@@ -1276,8 +1045,6 @@ void SoftProjector::on_actionEdit_triggered()
     if(ctab == 1)
         editSong();
     else if(ctab == 2)
-        editSlideShow();
-    else if(ctab == 4)
         editAnnouncement();
 }
 
@@ -1286,7 +1053,7 @@ void SoftProjector::on_actionCopy_triggered()
     int ctab = ui->projectTab->currentIndex();
     if(ctab == 1)
         copySong();
-    else if(ctab == 4)
+    else if(ctab == 2)
         copyAnnouncement();
 }
 
@@ -1298,10 +1065,6 @@ void SoftProjector::on_actionDelete_triggered()
     else if(ctab == 1)
         deleteSong();
     else if(ctab == 2)
-        deleteSlideShow();
-    else if(ctab == 3)
-        removeMediaFromLibrary();
-    else if(ctab == 4)
         deleteAnnoucement();
 }
 
@@ -1501,95 +1264,6 @@ void SoftProjector::deleteSong()
         ms.setWindowTitle(tr("No song selected"));
         ms.setText(tr("No song has been selected to delete"));
         ms.setInformativeText(tr("Please select a song to delete"));
-        ms.setIcon(QMessageBox::Information);
-        ms.exec();
-    }
-}
-
-void SoftProjector::newSlideShow()
-{
-    SlideShowEditor * sse = new SlideShowEditor;
-    sse->setSettings(mySettings.slideSets);
-    sse->exec();
-    pictureWidget->loadSlideShows();
-    delete sse;
-}
-
-void SoftProjector::editSlideShow()
-{
-    if(pictureWidget->isSlideShowSelected())
-    {
-        SlideShowEditor * sse = new SlideShowEditor;
-        sse->setSettings(mySettings.slideSets);
-        sse->setSlideShow(pictureWidget->getCurrentSlideshow());
-        sse->exec();
-        pictureWidget->loadSlideShows();
-        delete sse;
-    }
-    else
-    {
-        QMessageBox ms(this);
-        ms.setWindowTitle(tr("No slideshow selected"));
-        ms.setText(tr("No slideshow has been selected to edit."));
-        ms.setInformativeText(tr("Please select a slideshow to edit."));
-        ms.setIcon(QMessageBox::Information);
-        ms.exec();
-    }
-}
-
-void SoftProjector::deleteSlideShow()
-{
-    if(pictureWidget->isSlideShowSelected())
-    {
-        QString title = pictureWidget->getCurrentSlideshow().name;
-        QMessageBox ms(this);
-        ms.setWindowTitle(tr("Delete slideshow?"));
-        ms.setText(tr("Delete slideshow: \"") + title + "\"?");
-        ms.setInformativeText(tr("This action will permanentrly delete this slideshow"));
-        ms.setIcon(QMessageBox::Question);
-        ms.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-        ms.setDefaultButton(QMessageBox::Yes);
-        int ret = ms.exec();
-
-        switch (ret) {
-        case QMessageBox::Yes:
-            // Delete a slideshow
-            pictureWidget->deleteSlideShow();
-            break;
-        case QMessageBox::No:
-            // Cancel was clicked
-            break;
-        default:
-            // should never be reached
-            break;
-        }
-    }
-    else
-    {
-        QMessageBox ms(this);
-        ms.setWindowTitle(tr("No slideshow selected"));
-        ms.setText(tr("No slideshow has been selected to delete."));
-        ms.setInformativeText(tr("Please select a slideshow to delete."));
-        ms.setIcon(QMessageBox::Information);
-        ms.exec();
-    }
-}
-
-void SoftProjector::addMediaToLibrary()
-{
-    mediaPlayer->addToLibrary();
-}
-
-void SoftProjector::removeMediaFromLibrary()
-{
-    if(mediaPlayer->isValidMedia())
-    mediaPlayer->removeFromLibrary();
-    else
-    {
-        QMessageBox ms(this);
-        ms.setWindowTitle(tr("No media selected"));
-        ms.setText(tr("No media item has been selected to delete."));
-        ms.setInformativeText(tr("Please select a media item to delete."));
         ms.setIcon(QMessageBox::Information);
         ms.exec();
     }
@@ -1929,23 +1603,7 @@ void SoftProjector::on_actionScheduleAdd_triggered()
             addToShcedule(s);
         }
     }
-    else if(ctab == 2) // Slide Show
-    {
-        if(pictureWidget->isSlideShowSelected())
-        {
-            SlideShow ssi = pictureWidget->getCurrentSlideshow();
-            addToShcedule(ssi);
-        }
-    }
-    else if(ctab == 3) // Multimedia
-    {
-        if(mediaPlayer->isValidMedia())
-        {
-            VideoInfo v = mediaPlayer->getMedia();
-            addToShcedule(v);
-        }
-    }
-    else if(ctab == 4)
+    else if(ctab == 2)
     {
         if(announceWidget->isAnnounceValid())
         {
@@ -2039,21 +1697,9 @@ void SoftProjector::on_listWidgetSchedule_doubleClicked(const QModelIndex &index
         setSongList(s.song,0);
         songWidget->counter.addSongCount(s.song);
     }
-    else if(s.stype == "slideshow")
-    {
-        ui->projectTab->setCurrentIndex(2);
-        pictureWidget->sendToPreviewFromSchedule(s.slideshow);
-        setPictureList(s.slideshow.slides,0,s.slideshow.name);
-    }
-    else if(s.stype == "media")
-    {
-        ui->projectTab->setCurrentIndex(3);
-        mediaPlayer->setMediaFromSchedule(s.media);
-        mediaPlayer->goLiveFromSchedule();
-    }
     else if(s.stype == "announce")
     {
-        ui->projectTab->setCurrentIndex(4);
+        ui->projectTab->setCurrentIndex(2);
         announceWidget->setAnnouncementFromHistory(s.announce);
         setAnnounceText(s.announce,0);
     }
@@ -2075,19 +1721,9 @@ void SoftProjector::on_listWidgetSchedule_itemSelectionChanged()
             ui->projectTab->setCurrentIndex(1);
             songWidget->sendToPreviewFromSchedule(s.song);
         }
-        else if(s.stype == "slideshow")
-        {
-            ui->projectTab->setCurrentIndex(2);
-            pictureWidget->sendToPreviewFromSchedule(s.slideshow);
-        }
-        else if(s.stype == "media")
-        {
-            ui->projectTab->setCurrentIndex(3);
-            mediaPlayer->setMediaFromSchedule(s.media);
-        }
         else if(s.stype == "announce")
         {
-            ui->projectTab->setCurrentIndex(4);
+            ui->projectTab->setCurrentIndex(2);
             announceWidget->setAnnouncementFromHistory(s.announce);
         }
     }

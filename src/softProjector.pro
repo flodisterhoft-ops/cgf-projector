@@ -25,9 +25,7 @@ QT += core \
     sql \
     qml \
     quick \
-    printsupport \
-    multimedia \
-    multimediawidgets
+    printsupport
 
 TARGET = CGFProjector
 TEMPLATE = app
@@ -71,24 +69,18 @@ SOURCES += sources/main.cpp \
     sources/controlbutton.cpp \
     sources/passivesettingwidget.cpp \
     sources/theme.cpp \
-    sources/picturewidget.cpp \
     sources/slideshow.cpp \
-    sources/mediawidget.cpp \
-    sources/videoplayerwidget.cpp \
     sources/videoinfo.cpp \
     sources/spfunctions.cpp \
-    sources/slideshoweditor.cpp \
     sources/editannouncementdialog.cpp \
     sources/announcement.cpp \
     sources/schedule.cpp \
-    sources/picturesettingwidget.cpp \
     sources/moduledownloaddialog.cpp \
     sources/moduleprogressdialog.cpp \
     sources/displaysetting.cpp \
     sources/projectordisplayscreen.cpp \
     sources/imagegenerator.cpp \
-    sources/spimageprovider.cpp \
-    sources/mediacontrol.cpp
+    sources/spimageprovider.cpp
 HEADERS += headers/softprojector.hpp \
     headers/songwidget.hpp \
     headers/biblewidget.hpp \
@@ -114,24 +106,18 @@ HEADERS += headers/softprojector.hpp \
     headers/controlbutton.hpp \
     headers/passivesettingwidget.hpp \
     headers/theme.hpp \
-    headers/picturewidget.hpp \
     headers/slideshow.hpp \
-    headers/mediawidget.hpp \
-    headers/videoplayerwidget.hpp \
     headers/videoinfo.hpp \
     headers/spfunctions.hpp \
-    headers/slideshoweditor.hpp \
     headers/editannouncementdialog.hpp \
     headers/announcement.hpp \
     headers/schedule.hpp \
-    headers/picturesettingwidget.hpp \
     headers/moduledownloaddialog.hpp \
     headers/moduleprogressdialog.hpp \
     headers/displaysetting.hpp \
     headers/projectordisplayscreen.hpp \
     headers/imagegenerator.hpp \
-    headers/spimageprovider.hpp \
-    headers/mediacontrol.hpp
+    headers/spimageprovider.hpp
 FORMS += ui/softprojector.ui \
     ui/songwidget.ui \
     ui/biblewidget.ui \
@@ -150,15 +136,10 @@ FORMS += ui/softprojector.ui \
     ui/announcementsettingwidget.ui \
     ui/printpreviewdialog.ui \
     ui/passivesettingwidget.ui \
-    ui/picturewidget.ui \
-    ui/mediawidget.ui \
-    ui/slideshoweditor.ui \
     ui/editannouncementdialog.ui \
-    ui/picturesettingwidget.ui \
     ui/moduledownloaddialog.ui \
     ui/moduleprogressdialog.ui \
-    ui/projectordisplayscreen.ui \
-    ui/mediacontrol.ui
+    ui/projectordisplayscreen.ui
 TRANSLATIONS += translations/softpro_de.ts\
     translations/softpro_ru.ts\
     translations/softpro_cs.ts\
