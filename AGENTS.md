@@ -45,9 +45,11 @@ stripping what they never used and wiring the app into a central CGF library.
   per-song update pushes ride the WebSocket bridge and apply AT ANY TIME,
   including mid-service — the app itself writes its local DB and refreshes all
   non-live UI (search/preview/schedule) instantly. THE ONE GUARD: the
-  currently-projected song's on-screen copy is never changed implicitly; the
-  operator gets a "song updated — reload" nudge (auto-apply-when-structure-
-  matches is a possible later upgrade). Projection renders from an in-memory
+  currently-projected song's on-screen copy is never changed implicitly.
+  NO OPERATOR ACTION IS EVER REQUIRED (user: "the guys are lazy, they'll
+  never press it"): queued/schedule/preview songs update silently; the live
+  song auto-applies the moment it leaves the screen; a reload nudge exists
+  only as an optional shortcut. Projection renders from an in-memory
   copy, so DB writes can never disturb the screen by themselves. Push =
   best-effort freshness; the launch-time snapshot swap = guaranteed
   convergence (missed pushes self-heal). "Instant" = instant after PUBLISH,
