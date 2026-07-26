@@ -1,0 +1,6 @@
+{
+  "source": "\\\\server-or-folder\\cgf-publish  (or https://…/publish)",
+  "appDir": "C:\\Users\\<you>\\CGFProjector",
+  "sqlite3": "C:\\path\\to\\sqlite3.exe  (optional - enables settings/quick-add carry-forward)",
+  "keep": 3
+}
