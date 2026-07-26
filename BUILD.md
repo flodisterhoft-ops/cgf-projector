@@ -57,3 +57,24 @@ The resulting `bin/` folder (~106 MB) is portable. The app reads
 Remaining gate items before heavy investment:
 1. 60-minute dual-display soak on booth-class hardware with the real workload.
 2. A second person reproduces this build from this file alone.
+
+## Transformation log — branch `cgf-transform` (2026-07-26)
+
+Evidence-based strip, one commit per cut, smoke-tested against a copy of the
+production database after each build:
+
+| Commit | Cut | Why |
+|---|---|---|
+| Rebrand | CGF Projector 0.1, About attribution, Donate/dead-help removed | make it ours, GPL-clean |
+| Media + Pictures | tabs, widgets, video-in-display (C++ and QML), picture settings page, vendored QMediaPlaylist, `QT -= multimedia multimediawidgets` | 0 Media rows, 1 slide in ~10 years of church use |
+| Downloader + translations | legacy HTTP module downloader (insecure, upstream-disabled), Language menu + de/ru/cs/ua/hy UI translations | content comes from the CGF library; English-only UI (content stays trilingual) |
+
+Numbers:
+- C++ sources: 20,697 → 18,378 lines
+- Deployed app: ~106 MB → **82 MB** (ffmpeg/multimedia gone)
+- Operator tabs: 5 → **3** (Bible F6, Songs F7, Announcements F8)
+- Printing **kept** (user decision); schedule, song editor, usage counter kept
+
+Kept as inert data types so old schedules still load: `VideoInfo`, `SlideShow`.
+Deliberately deferred to pass 2 (needs sync + fixed CGF themes to exist first):
+Database manager gutting, settings-machinery reduction, quick-add upload flow.

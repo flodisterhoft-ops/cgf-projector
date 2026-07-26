@@ -17,7 +17,6 @@
 //
 ***************************************************************************/
 
-#include "../3rdparty/headers/qmediaplaylist.h"
 #include "../headers/projectordisplayscreen.hpp"
 #include "ui_projectordisplayscreen.h"
 
@@ -39,12 +38,6 @@ ProjectorDisplayScreen::ProjectorDisplayScreen(QWidget *parent) :
     connect(dispObj,SIGNAL(exitClicked()),this,SLOT(exitSlideClicked()));
     connect(dispObj,SIGNAL(nextClicked()),this,SLOT(nextSlideClicked()));
     connect(dispObj,SIGNAL(prevClicked()),this,SLOT(prevSlideClicked()));
-
-    // Connect Media Player objects
-    connect(dispObj,SIGNAL(positionChanged(int)),this,SLOT(videoPositionChanged(int)));
-    connect(dispObj,SIGNAL(durationChanged(int)),this,SLOT(videoDurationChanged(int)));
-    connect(dispObj,SIGNAL(playbackStateChanged(int)),this,SLOT(videoPlaybackStateChanged(int)));
-    connect(dispObj,SIGNAL(playbackStopped()),this,SLOT(playbackStopped()));
 
     backImSwitch1 = backImSwitch2 = textImSwitch1 = textImSwitch2 = false;
     back1to2 = text1to2 = isNewBack = true;
@@ -171,42 +164,11 @@ void ProjectorDisplayScreen::setTextPixmap(QPixmap p)
     }
 }
 
-void ProjectorDisplayScreen::setBackVideo(QString path)
-{
-    QObject *item = dispView->rootObject()->findChild<QObject*>("player");
-    QObject *item2 = dispView->rootObject()->findChild<QObject*>("vidOut");
-
-    setVideoSource(item,path);
-    item->setProperty("volume",0.0);
-    item->setProperty("loops",QMediaPlaylist::Loop);
-    item2->setProperty("fillMode",Qt::IgnoreAspectRatio);
-}
-
-void ProjectorDisplayScreen::setVideoSource(QObject* playerObject, QUrl path)
-{
-//#if  (defined(Q_OS_UNIX))
-//    // Prefix "file://" to the file name only for Unix like systems.
-//    path = "file://" + path;
-//#endif
-//    playerObject->setProperty("source",path);
-    playerObject->setProperty("source",path.toString());
-}
-
 void ProjectorDisplayScreen::updateScreen()
 {
     QObject *root = dispView->rootObject();
     QMetaObject::invokeMethod(root,"stopTransitions");
     //    QString tranType = "seq";
-
-    // if background is a video, play video, else stop it.
-    if(backType == B_VIDEO)
-    {
-        QMetaObject::invokeMethod(root,"playVideo");
-    }
-    else
-    {
-        QMetaObject::invokeMethod(root,"stopVideo");
-    }
 
     if(text1to2 && back1to2)
     {
@@ -247,21 +209,6 @@ void ProjectorDisplayScreen::nextSlideClicked()
 void ProjectorDisplayScreen::prevSlideClicked()
 {
     emit prevSlide();
-}
-
-void ProjectorDisplayScreen::videoPositionChanged(int position)
-{
-    emit videoPositionChanged((qint64)position);
-}
-
-void ProjectorDisplayScreen::videoDurationChanged(int duration)
-{
-    emit videoDurationChanged((qint64)duration);
-}
-
-void ProjectorDisplayScreen::videoPlaybackStateChanged(int state)
-{
-    emit videoPlaybackStateChanged((QMediaPlayer::PlaybackState)state);
 }
 
 void ProjectorDisplayScreen::keyReleaseEvent(QKeyEvent *event)
@@ -433,66 +380,6 @@ void ProjectorDisplayScreen::renderSlideShow(QPixmap slide, SlideShowSettings &s
         setBackPixmap(slide,3);
     updateScreen();
 
-}
-
-void ProjectorDisplayScreen::renderVideo(VideoInfo videoDetails)
-{
-    backType = B_VIDEO;
-    setTextPixmap(imGen.generateEmptyImage());
-    setBackPixmap(imGen.generateColorImage(m_color),0);
-    QObject *root = dispView->rootObject();
-    QObject *item = root->findChild<QObject*>("player");
-    QObject *item2 = root->findChild<QObject*>("vidOut");
-
-    setVideoSource(item,videoDetails.filePath);
-
-    item->setProperty("volume",1.0);
-    item->setProperty("loops",QMediaPlaylist::CurrentItemOnce);
-    item2->setProperty("fillMode",Qt::KeepAspectRatio);
-
-    updateScreen();
-}
-
-void ProjectorDisplayScreen::playVideo()
-{
-    QObject *root = dispView->rootObject();
-    QMetaObject::invokeMethod(root,"playVideo");
-}
-
-void ProjectorDisplayScreen::pauseVideo()
-{
-    QObject *root = dispView->rootObject();
-    QMetaObject::invokeMethod(root,"pauseVideo");
-}
-
-void ProjectorDisplayScreen::stopVideo()
-{
-    QObject *root = dispView->rootObject();
-    QMetaObject::invokeMethod(root,"stopVideo");
-}
-
-void ProjectorDisplayScreen::playbackStopped()
-{
-    emit videoStopped();
-}
-
-void ProjectorDisplayScreen::setVideoVolume(int level)
-{
-    float vol = 1.0*level/100;
-    QObject *root = dispView->rootObject();
-    QMetaObject::invokeMethod(root,"setVideoVolume",Q_ARG(QVariant,vol));
-}
-
-void ProjectorDisplayScreen::setVideoMuted(bool muted)
-{
-    QObject *root = dispView->rootObject();
-    QMetaObject::invokeMethod(root,"setVideoVolume",Q_ARG(QVariant,(!muted)));
-}
-
-void ProjectorDisplayScreen::setVideoPosition(qint64 position)
-{
-    QObject *root = dispView->rootObject();
-    QMetaObject::invokeMethod(root,"setVideoPosition",Q_ARG(QVariant,position));
 }
 
 void ProjectorDisplayScreen::positionControls(DisplayControlsSettings &dSettings)

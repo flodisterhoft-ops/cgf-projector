@@ -28,17 +28,13 @@
 #include "editwidget.hpp"
 #include "bible.hpp"
 #include "managedatadialog.hpp"
-#include "mediacontrol.hpp"
 #include "settingsdialog.hpp"
 #include "songcounter.hpp"
 #include "settings.hpp"
 #include "printpreviewdialog.hpp"
 #include "helpdialog.hpp"
-#include "picturewidget.hpp"
 #include "slideshow.hpp"
-#include "mediawidget.hpp"
 #include "videoinfo.hpp"
-#include "slideshoweditor.hpp"
 #include "schedule.hpp"
 
 class QActionGroup;
@@ -73,9 +69,6 @@ public:
     ProjectorDisplayScreen *pds2;
     ProjectorDisplayScreen *pds3;
     ProjectorDisplayScreen *pds4;
-    PictureWidget *pictureWidget;
-    MediaWidget *mediaPlayer;
-    MediaControl *mediaControls;
 
     bool showing; // whether we are currently showing to the projector
     Song current_song;
@@ -106,15 +99,11 @@ private:
     HelpDialog *helpDialog;
     PresentationType pType;
     bool new_list;
-    QActionGroup *languageGroup;
-    QString languagePath;
-    QTranslator translator;
 
     //For saving and opening schedule files
     //QString project_file_path;
     QString schedule_file_path;
     bool is_schedule_saved;
-    QString cur_locale;
     bool isSingleScreen;
     bool hasDisplayScreen2;
     bool hasDisplayScreen3;
@@ -127,12 +116,10 @@ private:
     QShortcut *shSart2;
 
     // Pictures
-    QList<SlideShowItem> pictureShowList;
 
     // video items
 //    Phonon::SeekSlider *playerSlider;
 //    Phonon::VolumeSlider *volumeSlider;
-    VideoInfo currentVideo;
 //    Phonon::AudioOutput *playerAudioOutput;
 
     // Schelude list
@@ -156,13 +143,7 @@ private slots:
     void showBible();
     void showSong(int currentRow);
     void showAnnounce(int currentRow);
-    void showPicture(int currentRow);
-    void showVideo();
 
-    void retranslateUis();
-    void createLanguageActions();
-    void switchLanguage(QAction *action);
-    void on_actionDonate_triggered();
     void on_action_Help_triggered();
     void on_actionManage_Database_triggered();
     void on_actionAbout_triggered();
@@ -172,11 +153,6 @@ private slots:
     void copySong();
     void editSong();
     void deleteSong();
-    void newSlideShow();
-    void editSlideShow();
-    void deleteSlideShow();
-    void addMediaToLibrary();
-    void removeMediaFromLibrary();
     void newAnnouncement();
     void editAnnouncement();
     void copyAnnouncement();
@@ -188,13 +164,6 @@ private slots:
     void setSongList(Song song, int row);
     void setAnnounceText(Announcement announce, int row);
     void setChapterList(QStringList chapter_list, QString caption, QItemSelection selectedItems);
-    void setPictureList(QList<SlideShowItem> &image_list, int row, QString name);
-    void setVideo(VideoInfo &video);
-    void playVideo();
-    void pauseVideo();
-    void stopVideo();
-    void setVideoPosition(qint64 position);
-    void videoStopped();
 
     void on_listShow_itemSelectionChanged();
     void on_rbMultiVerse_toggled(bool checked);

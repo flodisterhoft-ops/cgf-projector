@@ -251,18 +251,8 @@
     <property name="title">
      <string>&amp;Help</string>
     </property>
-    <addaction name="actionDonate"/>
-    <addaction name="separator"/>
     <addaction name="actionAbout"/>
     <addaction name="action_Help"/>
-   </widget>
-   <widget class="QMenu" name="menuLanguage">
-    <property name="toolTip">
-     <string>Select Language</string>
-    </property>
-    <property name="title">
-     <string>Language</string>
-    </property>
    </widget>
    <widget class="QMenu" name="menuSongs">
     <property name="title">
@@ -298,7 +288,6 @@
    <addaction name="menuEdit"/>
    <addaction name="menuSongs"/>
    <addaction name="menuDisplay_Screen"/>
-   <addaction name="menuLanguage"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QToolBar" name="toolBarFile">
@@ -542,14 +531,6 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Del</string>
-   </property>
-  </action>
-  <action name="actionDonate">
-   <property name="text">
-    <string>Donate</string>
-   </property>
-   <property name="toolTip">
-    <string>Donate to softProjector development team</string>
    </property>
   </action>
   <action name="actionScheduleAdd">

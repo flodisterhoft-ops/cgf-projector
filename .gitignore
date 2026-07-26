@@ -31,10 +31,11 @@
 Makefile*
 object_script*
 softProjector.pro.user
-unknownsys_build/*
-win32_build/*
-unix_build/*
-mac_build/*
+# Build output dirs at any depth (upstream's anchored patterns missed src/win32_build)
+unknownsys_build/
+win32_build/
+unix_build/
+mac_build/
 
 # Qt build artifacts
 build*/
@@ -71,3 +72,7 @@ secrets*
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Tool logs
+aqtinstall.log
+*.log

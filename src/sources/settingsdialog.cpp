@@ -30,14 +30,12 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
     passiveSettingwidget = new PassiveSettingWidget;
     bibleSettingswidget = new BibleSettingWidget;
     songSettingswidget = new SongSettingWidget;
-    pictureSettingWidget = new PictureSettingWidget;
     announcementSettingswidget = new AnnouncementSettingWidget;
 
     ui->scrollAreaGeneralSettings->setWidget(generalSettingswidget);
     ui->scrollAreaPassiveSettings->setWidget(passiveSettingwidget);
     ui->scrollAreaBibleSettings->setWidget(bibleSettingswidget);
     ui->scrollAreaSongSettings->setWidget(songSettingswidget);
-    ui->scrollAreaPicture->setWidget(pictureSettingWidget);
     ui->scrollAreaAnnouncementSettings->setWidget(announcementSettingswidget);
 
     btnOk = new QPushButton(tr("OK"));
@@ -83,7 +81,6 @@ void SettingsDialog::loadSettings(GeneralSettings &sets, Theme &thm, SlideShowSe
     // Set individual items
     generalSettingswidget->setSettings(gsettings);
     bibleSettingswidget->setBibleVersions(bsettings,bsettings2,bsettings3,bsettings4);
-    pictureSettingWidget->setSettings(ssettings);
     setThemes();
 }
 
@@ -160,7 +157,6 @@ void SettingsDialog::applySettings()
 {
     gsettings = generalSettingswidget->getSettings();
     bibleSettingswidget->getBibleVersions(bsettings,bsettings2,bsettings3,bsettings4);
-    pictureSettingWidget->getSettings(ssettings);
     getThemes();
 
     // Apply settings

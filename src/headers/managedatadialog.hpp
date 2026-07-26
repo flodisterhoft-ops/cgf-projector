@@ -30,7 +30,6 @@
 #include "addsongbookdialog.hpp"
 #include "bibleinformationdialog.hpp"
 #include "theme.hpp"
-#include "moduledownloaddialog.hpp"
 #include "moduleprogressdialog.hpp"
 
 namespace Ui {
@@ -75,18 +74,11 @@ private:
     BiblesModel *bible_model;
     SongbooksModel *songbook_model;
     ThemeModel *themeModel;
-    QNetworkAccessManager downManager;
-    QNetworkReply *modDownload;
-    QNetworkReply *currentDownload;
-    QQueue<Module> downQueue;
     QQueue<QString> modQueue;
     QString downType;
     QString importType;
     QDir dataDir;
-    QFile outFile;
-    QList<Module> moduleList;
     ModuleProgressDialog *progressDia;
-    QElapsedTimer downTime;
     Ui::ManageDataDialog *ui;
 
 private slots:
@@ -132,18 +124,6 @@ private slots:
     void transferThemePassive(QSqlQuery &sqf,QSqlQuery &sqt,int tmId);
     void transferThemeSong(QSqlQuery &sqf,QSqlQuery &sqt,int tmId);
     void importTheme(QString path);
-    void on_pushButtonDownBible_clicked();
-    void on_pushButtonDownSong_clicked();
-    void on_pushButtonDownTheme_clicked();
-
-    void downloadModList(QUrl url);
-    void downloadNextMod();
-    QString getSaveFileName(QUrl url);
-    void saveModFile();
-    void downloadModListCompleted();
-    void downloadCompleted();
-    void dowloadProgress(qint64 recBytes,qint64 totBytes);
-    QStringList getModList(QString filepath);
     void importNextModule();
     void importModules();
     QString cleanSongLines(QString songText);

@@ -74,17 +74,6 @@
        <item>
         <layout class="QVBoxLayout" name="verticalLayout_3">
          <item>
-          <widget class="QPushButton" name="pushButtonDownBible">
-           <property name="enabled">
-            <bool>true</bool>
-           </property>
-           <property name="text">
-            <string>Download
-&amp;&amp; Import...</string>
-           </property>
-          </widget>
-         </item>
-         <item>
           <widget class="QPushButton" name="import_bible_pushButton">
            <property name="toolTip">
             <string>Import a new Bible into your database</string>
@@ -175,14 +164,6 @@
        <item>
         <layout class="QVBoxLayout" name="verticalLayout">
          <item>
-          <widget class="QPushButton" name="pushButtonDownSong">
-           <property name="text">
-            <string>Download
-&amp;&amp; Import...</string>
-           </property>
-          </widget>
-         </item>
-         <item>
           <widget class="QPushButton" name="import_songbook_pushButton">
            <property name="toolTip">
             <string>Import a new Songbook into database.</string>
@@ -265,14 +246,6 @@
        </item>
        <item>
         <layout class="QVBoxLayout" name="verticalLayout_2">
-         <item>
-          <widget class="QPushButton" name="pushButtonDownTheme">
-           <property name="text">
-            <string>Download
-&amp;&amp; Import...</string>
-           </property>
-          </widget>
-         </item>
          <item>
           <widget class="QPushButton" name="pushButtonThemeImport">
            <property name="toolTip">
@@ -375,20 +348,17 @@
  <tabstops>
   <tabstop>tabWidget</tabstop>
   <tabstop>bibleTableView</tabstop>
-  <tabstop>pushButtonDownBible</tabstop>
   <tabstop>import_bible_pushButton</tabstop>
   <tabstop>edit_bible_pushButton</tabstop>
   <tabstop>export_bible_pushButton</tabstop>
   <tabstop>delete_bible_pushButton</tabstop>
   <tabstop>ok_pushButton</tabstop>
   <tabstop>songbookTableView</tabstop>
-  <tabstop>pushButtonDownSong</tabstop>
   <tabstop>import_songbook_pushButton</tabstop>
   <tabstop>edit_songbook_pushButton</tabstop>
   <tabstop>export_songbook_pushButton</tabstop>
   <tabstop>delete_songbook_pushButton</tabstop>
   <tabstop>TableViewTheme</tabstop>
-  <tabstop>pushButtonDownTheme</tabstop>
   <tabstop>pushButtonThemeImport</tabstop>
   <tabstop>pushButtonThemeNew</tabstop>
   <tabstop>pushButtonThemeEdit</tabstop>
