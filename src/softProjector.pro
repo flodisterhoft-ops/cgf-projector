@@ -29,7 +29,7 @@ QT += core \
     multimedia \
     multimediawidgets
 
-TARGET = SoftProjector
+TARGET = CGFProjector
 TEMPLATE = app
 CONFIG += x86 ppc x86_64 ppc64 # Compile a universal build
 

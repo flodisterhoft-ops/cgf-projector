@@ -186,8 +186,8 @@ SoftProjector::SoftProjector(QWidget *parent)
     connect(mediaControls,SIGNAL(muted(bool)),pds1,SLOT(setVideoMuted(bool)));
     connect(mediaControls,SIGNAL(timeChanged(qint64)),this,SLOT(setVideoPosition(qint64)));
 
-    version_string = "2.2";
-    this->setWindowTitle("SoftProjector " + version_string);
+    version_string = "0.1";
+    this->setWindowTitle("CGF Projector " + version_string);
 }
 
 SoftProjector::~SoftProjector()
@@ -1372,11 +1372,6 @@ void SoftProjector::on_actionManage_Database_triggered()
     }
 }
 
-void SoftProjector::on_actionDonate_triggered()
-{
-    QDesktopServices::openUrl(QUrl("https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=FPCLPXFMH9XP4"));
-}
-
 void SoftProjector::on_actionAbout_triggered()
 {
     AboutDialog *aboutDialog;
@@ -1388,7 +1383,7 @@ void SoftProjector::on_actionAbout_triggered()
 void SoftProjector::on_action_Help_triggered()
 {
     //helpDialog->show();
-     QDesktopServices::openUrl(QUrl("http://softprojector.org/help/index.html"));
+     QDesktopServices::openUrl(QUrl("https://github.com/flodisterhoft-ops/cgf-projector"));
 }
 
 void SoftProjector::newSong()

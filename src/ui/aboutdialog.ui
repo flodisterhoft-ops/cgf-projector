@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>About softProjecor</string>
+   <string>About CGF Projector</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -480,11 +480,9 @@ Vitaliy Zhaborovskyy</string>
       </font>
      </property>
      <property name="text">
-      <string>If you would like to help developing this program&lt;br&gt;
-or would like to contribute data, please visit:&lt;br&gt;
-&lt;a href=&quot;http://softprojector.org/&quot;&gt;http://softprojector.org/&lt;/a&gt;
-&lt;br&gt;
-&lt;a href=&quot;http://sourceforge.net/projects/softprojector/&quot;&gt;http://sourceforge.net/projects/softprojector/&lt;/a&gt;</string>
+      <string>CGF Projector is a fork of SoftProjector, licensed under the GNU GPL v3.&lt;br&gt;
+Fork source code: &lt;a href=&quot;https://github.com/flodisterhoft-ops/cgf-projector&quot;&gt;github.com/flodisterhoft-ops/cgf-projector&lt;/a&gt;&lt;br&gt;
+Original project: &lt;a href=&quot;https://github.com/SoftProjector/softprojector&quot;&gt;github.com/SoftProjector/softprojector&lt;/a&gt;</string>
      </property>
      <property name="openExternalLinks">
       <bool>true</bool>
@@ -515,7 +513,7 @@ or would like to contribute data, please visit:&lt;br&gt;
         </font>
        </property>
        <property name="text">
-        <string>&lt;a href=&quot;https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&amp;hosted_button_id=FPCLPXFMH9XP4&quot;&gt;Donate&lt;/a&gt;</string>
+        <string></string>
        </property>
        <property name="openExternalLinks">
         <bool>true</bool>

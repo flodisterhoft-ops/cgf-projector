@@ -251,8 +251,6 @@
     <property name="title">
      <string>&amp;Help</string>
     </property>
-    <addaction name="actionDonate"/>
-    <addaction name="separator"/>
     <addaction name="actionAbout"/>
     <addaction name="action_Help"/>
    </widget>
@@ -542,14 +540,6 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Del</string>
-   </property>
-  </action>
-  <action name="actionDonate">
-   <property name="text">
-    <string>Donate</string>
-   </property>
-   <property name="toolTip">
-    <string>Donate to softProjector development team</string>
    </property>
   </action>
   <action name="actionScheduleAdd">

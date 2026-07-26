@@ -162,7 +162,6 @@ private slots:
     void retranslateUis();
     void createLanguageActions();
     void switchLanguage(QAction *action);
-    void on_actionDonate_triggered();
     void on_action_Help_triggered();
     void on_actionManage_Database_triggered();
     void on_actionAbout_triggered();
