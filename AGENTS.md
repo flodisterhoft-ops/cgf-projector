@@ -124,6 +124,14 @@ vs church DB copy). Transformation branch pushed: rebrand (CGF Projector 0.1),
 media+pictures cut, downloader+translations cut, light theme fix. Deployed app
 82 MB (was 106), C++ 20,697 → 18,378 lines, tabs 5 → 3. Remaining gate items:
 60-min dual-display soak on booth-class hardware; second-person build repro.
-Next milestones: merge to master → exporter from master library (per-placement
-rows, sp_song_id preserved) → snapshot download agent → proposals upload →
-WebSocket bridge (remote + OBS) → web planner.
+`cgf-transform` merged to master (048a016) after user verification.
+**Exporter DONE** (2026-07-26): `CGF Lyrics/library/tools/export_spdata.py` —
+deterministic, read-only on master, one Songs row per live placement (10,312),
+all 8,386 sp_song_ids preserved, 1,926 new ids minted >12377 and recorded
+append-only in `library/exports/sp_export_idmap.json` (never regenerate this
+file — it is the id contract with every deployed client). Usage counters
+(5,798 uses / 1,258 songs) carried from master. Bibles/Announcements/Themes/
+Settings copied from the donor snapshot. Output `library/exports/spData-cgf.sqlite`,
+smoke-tested in CGF Projector.
+Next milestones: snapshot download agent → proposals upload → WebSocket bridge
+(remote + OBS) → web planner.
