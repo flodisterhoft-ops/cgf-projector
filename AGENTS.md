@@ -146,5 +146,13 @@ file — it is the id contract with every deployed client). Usage counters
 (5,798 uses / 1,258 songs) carried from master. Bibles/Announcements/Themes/
 Settings copied from the donor snapshot. Output `library/exports/spData-cgf.sqlite`,
 smoke-tested in CGF Projector.
-Next milestones: snapshot download agent → proposals upload → WebSocket bridge
-(remote + OBS) → web planner.
+**Download agent DONE** (2026-07-26): `agent/cgf-sync-agent.ps1` — manifest-driven,
+transport-agnostic, sha256-verified, never swaps under a running app (stages),
+prev-1..N rollback, optional sqlite3 carry-forward of local Settings +
+quick-adds (reserved client id band >500000, set by the exporter). Publisher:
+`CGF Lyrics/library/tools/publish_snapshot.py` (versioned immutable snapshots,
+monotonic content_version, sha256-dedup). End-to-end tested on this machine
+against a local publish dir. NOT yet registered as a scheduled task and no
+sqlite3.exe on clients yet (both pending user approval).
+Next milestones: proposals upload → WebSocket bridge (remote + OBS + tier-3
+push) → web planner.
