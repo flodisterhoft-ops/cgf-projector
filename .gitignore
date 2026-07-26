@@ -79,3 +79,4 @@ aqtinstall.log
 
 # Machine-specific agent config (paths differ per machine)
 agent/cgf-sync.json
+agent/sqlite3.exe
