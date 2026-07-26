@@ -254,14 +254,6 @@
     <addaction name="actionAbout"/>
     <addaction name="action_Help"/>
    </widget>
-   <widget class="QMenu" name="menuLanguage">
-    <property name="toolTip">
-     <string>Select Language</string>
-    </property>
-    <property name="title">
-     <string>Language</string>
-    </property>
-   </widget>
    <widget class="QMenu" name="menuSongs">
     <property name="title">
      <string>View</string>
@@ -296,7 +288,6 @@
    <addaction name="menuEdit"/>
    <addaction name="menuSongs"/>
    <addaction name="menuDisplay_Screen"/>
-   <addaction name="menuLanguage"/>
    <addaction name="menuHelp"/>
   </widget>
   <widget class="QToolBar" name="toolBarFile">

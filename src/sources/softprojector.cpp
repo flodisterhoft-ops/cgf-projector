@@ -59,10 +59,6 @@ SoftProjector::SoftProjector(QWidget *parent)
 
     ui->setupUi(this);
 
-    // Create action group for language slections
-    languagePath = qApp->applicationDirPath()+QString(QDir::separator())+"translations"+QString(QDir::separator());
-    createLanguageActions();
-
     // Always place the "Settings" menu item under the application
     // menu, even if the item is translated (Mac OS X):
     ui->actionSettings->setMenuRole(QAction::PreferencesRole);
@@ -95,7 +91,6 @@ SoftProjector::SoftProjector(QWidget *parent)
     connect(editWidget, SIGNAL(addedNew(Song,int)), songWidget,SLOT(addNewSong(Song,int)));
     connect(manageDialog, SIGNAL(setMainArrowCursor()), this, SLOT(setArrowCursor()));
     connect(manageDialog, SIGNAL(setMainWaitCursor()), this, SLOT(setWaitCursor()));
-    connect(languageGroup, SIGNAL(triggered(QAction*)), this, SLOT(switchLanguage(QAction*)));
     connect(pds1,SIGNAL(exitSlide()),this,SLOT(on_actionHide_triggered()));
     connect(pds1,SIGNAL(nextSlide()),this,SLOT(nextSlide()));
     connect(pds1,SIGNAL(prevSlide()),this,SLOT(prevSlide()));
@@ -176,7 +171,6 @@ SoftProjector::~SoftProjector()
     delete pds2;
     delete pds3;
     delete pds4;
-    delete languageGroup;
     delete settingsDialog;
     delete shpgUP;
     delete shpgDwn;
@@ -354,20 +348,6 @@ void SoftProjector::saveSettings()
     // Save window maximized state
     mySettings.spMain.isWindowMaximized = this->isMaximized();
 
-    // save translation settings
-    QList<QAction*> languageActions = ui->menuLanguage->actions();
-
-    for(int i(0);i < languageActions.count();++i)
-    {
-        if(languageActions.at(i)->isChecked())
-        {
-            if(i < languageActions.count())
-                mySettings.spMain.uiTranslation = languageActions.at(i)->data().toString();
-            else
-                mySettings.spMain.uiTranslation = "en";
-        }
-    }
-
     // save settings
     mySettings.saveSettings();
     theme.saveThemeUpdate();
@@ -409,27 +389,6 @@ void SoftProjector::applySetting(GeneralSettings &g, Theme &t, SlideShowSettings
     if(mySettings.spMain.isWindowMaximized)
         this->setWindowState(Qt::WindowMaximized);
 
-    // Apply current translation
-    QList<QAction*> la = ui->menuLanguage->actions();
-    QString splocale;
-    for(int i(0);i < la.count(); ++i)
-    {
-        if(la.at(i)->data().toString() == mySettings.spMain.uiTranslation)
-        {
-            if(i < la.count())
-            {
-                ui->menuLanguage->actions().at(i)->setChecked(true);
-                splocale = mySettings.spMain.uiTranslation;
-            }
-            else
-            {
-                ui->menuLanguage->actions().at(0)->setChecked(true);//default
-                splocale = "en";
-            }
-        }
-    }
-    cur_locale = splocale;
-    retranslateUis();
 }
 
 void SoftProjector::closeEvent(QCloseEvent *event)
@@ -1352,87 +1311,13 @@ void SoftProjector::setWaitCursor()
     this->setCursor(Qt::WaitCursor);
 }
 
-void SoftProjector::createLanguageActions()
-{
-    // find all *.qm files at language folder
-     // and create coresponding action in language menu
 
-        languageGroup = new QActionGroup(this);
-        //default language and flag
-        QAction *englishAction = new QAction(QIcon(":/icons/icons/flag_uk.png"), "English", this);
-        englishAction->setCheckable(true);
-        englishAction->setChecked(true);
-        englishAction->setIconVisibleInMenu(true);
-        languageGroup->addAction(englishAction);
-        ui->menuLanguage->addAction(englishAction);
 
-        QDir languageDir(languagePath);
-        //all available languages
-        QStringList languagesList = languageDir.entryList(QStringList("softpro_*.qm"), QDir::Files);
-        //all available flags
-        QStringList flagsList = languageDir.entryList(QStringList("flag_*.png"), QDir::Files);
-
-        foreach(QString agent, languagesList)
-        {
-            // local translator for taken original language's name
-            QTranslator tmpTranslator;
-            tmpTranslator.load(agent, languageDir.absolutePath());
-            // this string are used for detection language' name
-            // this is one of translated strings
-
-            QString fullLanguageName = tmpTranslator.translate("Native language name", "English","Do not change");
-            QAction *tmpAction = new QAction(fullLanguageName, this);
-
-            QString splocale = agent.remove(0, agent.indexOf('_')+1);
-            splocale.chop(3);
-
-            // flag's file name
-            QString flagFileName = "flag_"+splocale+".png";
-            if(flagsList.contains(flagFileName))//  if flag is available
-            {
-                tmpAction->setIcon(QIcon(languageDir.absolutePath() + QDir::separator() + flagFileName));
-                tmpAction->setIconVisibleInMenu(true);
-            }
-
-            tmpAction->setData(splocale);// information abount localization
-            tmpAction->setCheckable(true);
-            languageGroup->addAction(tmpAction);
-            ui->menuLanguage->addAction(tmpAction);
-        }
-}
-
-void SoftProjector::switchLanguage(QAction *action)
-{
-    cur_locale = action->data().toString();
-    retranslateUis();
-}
-
-void SoftProjector::retranslateUis()
-{
-    qApp->removeTranslator(&translator);
-    if(cur_locale != "en")
-    {
-        translator.load("softpro_"+cur_locale+".qm", QDir(languagePath).absolutePath());
-        // qt libs translator must be add there,
-        // but where are qt_locale.qm files?
-        qApp->installTranslator(&translator);
-    }
-
-    ui->retranslateUi(this);
-    ui->projectTab->setTabText(0, tr("Bible (F6)"));
-    ui->projectTab->setTabText(1, tr("Songs (F7)"));
-    ui->projectTab->setTabText(2, tr("Pictures"));
-//    ui->projectTab->setTabText(3, tr("Media"));
-    ui->projectTab->setTabText(3, tr("Announcements (F8)"));
-    updateEditActions();
-    songWidget->retranslateUis();
-    editWidget->retranslateUis();
-}
 
 void SoftProjector::on_actionSong_Counter_triggered()
 {
     SongCounter *songCounter;
-    songCounter = new SongCounter(this, cur_locale);
+    songCounter = new SongCounter(this, "en");
     songCounter->exec();
     delete songCounter;
 }

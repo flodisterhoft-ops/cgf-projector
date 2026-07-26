@@ -99,15 +99,11 @@ private:
     HelpDialog *helpDialog;
     PresentationType pType;
     bool new_list;
-    QActionGroup *languageGroup;
-    QString languagePath;
-    QTranslator translator;
 
     //For saving and opening schedule files
     //QString project_file_path;
     QString schedule_file_path;
     bool is_schedule_saved;
-    QString cur_locale;
     bool isSingleScreen;
     bool hasDisplayScreen2;
     bool hasDisplayScreen3;
@@ -148,9 +144,6 @@ private slots:
     void showSong(int currentRow);
     void showAnnounce(int currentRow);
 
-    void retranslateUis();
-    void createLanguageActions();
-    void switchLanguage(QAction *action);
     void on_action_Help_triggered();
     void on_actionManage_Database_triggered();
     void on_actionAbout_triggered();

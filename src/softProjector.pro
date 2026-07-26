@@ -75,7 +75,6 @@ SOURCES += sources/main.cpp \
     sources/editannouncementdialog.cpp \
     sources/announcement.cpp \
     sources/schedule.cpp \
-    sources/moduledownloaddialog.cpp \
     sources/moduleprogressdialog.cpp \
     sources/displaysetting.cpp \
     sources/projectordisplayscreen.cpp \
@@ -112,7 +111,6 @@ HEADERS += headers/softprojector.hpp \
     headers/editannouncementdialog.hpp \
     headers/announcement.hpp \
     headers/schedule.hpp \
-    headers/moduledownloaddialog.hpp \
     headers/moduleprogressdialog.hpp \
     headers/displaysetting.hpp \
     headers/projectordisplayscreen.hpp \
@@ -137,15 +135,8 @@ FORMS += ui/softprojector.ui \
     ui/printpreviewdialog.ui \
     ui/passivesettingwidget.ui \
     ui/editannouncementdialog.ui \
-    ui/moduledownloaddialog.ui \
     ui/moduleprogressdialog.ui \
     ui/projectordisplayscreen.ui
-TRANSLATIONS += translations/softpro_de.ts\
-    translations/softpro_ru.ts\
-    translations/softpro_cs.ts\
-    translations/softpro_ua.ts\
-    translations/softpro_hy.ts
-CODECFORTR = UTF-8
 RESOURCES += softprojector.qrc
 
 win32 {
