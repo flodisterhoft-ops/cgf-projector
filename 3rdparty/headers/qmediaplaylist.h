@@ -6,7 +6,8 @@
 
 #include <QObject>
 
-#include <qmediaenumdebug.h>
+// CGF: <qmediaenumdebug.h> was removed in newer Qt 6 releases; it only
+// provided the Q_MEDIA_ENUM_DEBUG QDebug helpers, which are not needed.
 
 QT_BEGIN_NAMESPACE
 
@@ -88,8 +89,5 @@ private:
 };
 
 QT_END_NAMESPACE
-
-Q_MEDIA_ENUM_DEBUG(QMediaPlaylist, PlaybackMode)
-Q_MEDIA_ENUM_DEBUG(QMediaPlaylist, Error)
 
 #endif // QMEDIAPLAYLIST_H
