@@ -38,9 +38,20 @@ stripping what they never used and wiring the app into a central CGF library.
   Operators never load files (no .spsc handling, no imports, no backups).
   Projection must keep working with the internet down — non-negotiable.
 - **Library sync = snapshot DOWN / proposals UP.** Full published snapshots
-  down (corpus is ~40 MB — no delta protocols, no revision cursors); local
+  down (corpus is ~40 MB — no delta protocols as source of truth); local
   quick-adds upload as *proposals* into the master library's review queue.
-  Never bidirectional merge. Never sync during a service (freeze window).
+  Never bidirectional merge.
+- **Tier-3 live push (user decision 2026-07-26, replaces the freeze window):**
+  per-song update pushes ride the WebSocket bridge and apply AT ANY TIME,
+  including mid-service — the app itself writes its local DB and refreshes all
+  non-live UI (search/preview/schedule) instantly. THE ONE GUARD: the
+  currently-projected song's on-screen copy is never changed implicitly; the
+  operator gets a "song updated — reload" nudge (auto-apply-when-structure-
+  matches is a possible later upgrade). Projection renders from an in-memory
+  copy, so DB writes can never disturb the screen by themselves. Push =
+  best-effort freshness; the launch-time snapshot swap = guaranteed
+  convergence (missed pushes self-heal). "Instant" = instant after PUBLISH,
+  never per keystroke.
 - **Real-time sync is for service PLANS only** (tiny data, WebSockets fine),
   never for the library.
 - **The one worthwhile deep fork feature: a local WebSocket bridge** inside the
