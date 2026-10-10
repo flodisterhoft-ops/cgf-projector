@@ -34,6 +34,7 @@ public:
     QString info;
     explicit AddSongbookDialog(QWidget *parent = 0);
     virtual ~AddSongbookDialog();
+    virtual void accept();
 
 public slots:
     void setSongbook(QString i_title, QString i_info);
@@ -47,7 +48,6 @@ private:
 
 private slots:
     void on_buttonBox_rejected();
-    void on_buttonBox_accepted();
 };
 
 #endif // ADDSONGBOOKDIALOG_HPP

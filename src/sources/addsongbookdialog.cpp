@@ -17,6 +17,7 @@
 //
 ***************************************************************************/
 
+#include <QMessageBox>
 #include "../headers/addsongbookdialog.hpp"
 #include "ui_addsongbookdialog.h"
 
@@ -44,11 +45,22 @@ void AddSongbookDialog::changeEvent(QEvent *e)
     }
 }
 
-void AddSongbookDialog::on_buttonBox_accepted()
+void AddSongbookDialog::accept()
 {
+    // The title is required: keep the dialog open until there is one
+    if(ui->songbook_title_box->text().trimmed().isEmpty())
+    {
+        QMessageBox mb(this);
+        mb.setText(tr("The title cannot be left empty.\nPlease enter a title."));
+        mb.setWindowTitle(tr("Title is missing"));
+        mb.setIcon(QMessageBox::Warning);
+        mb.exec();
+        ui->songbook_title_box->setFocus();
+        return;
+    }
     title = ui->songbook_title_box->text().trimmed();
     info = ui->songbook_info_box->toPlainText().trimmed();
-    close();
+    QDialog::accept();
 }
 
 void AddSongbookDialog::on_buttonBox_rejected()

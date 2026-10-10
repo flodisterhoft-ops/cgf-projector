@@ -66,8 +66,8 @@ public:
     Song(int id);
     Song(int id, int num, QString songbook_id, QString songbook_name);
     void readData();
-    void saveUpdate();
-    void saveNew();
+    bool saveUpdate();
+    bool saveNew();
     QStringList getSongTextList();
     Stanza getStanza(int current);
     QString getSongbookName();

@@ -75,23 +75,39 @@ void EditWidget::on_btnSave_clicked()
     setSave();
 
     setWaitCursor();
+    bool saved;
     if (is_new)
     {
-        newSong.saveNew();
-        // Get new songs ID
-        QSqlQuery sq;
-        sq.exec("SELECT seq FROM sqlite_sequence WHERE name = 'Songs'");
-        sq.last();
-        newSong.songID = sq.value(0).toInt();
+        saved = newSong.saveNew();
+        if (saved)
+        {
+            // Get new songs ID
+            QSqlQuery sq;
+            sq.exec("SELECT seq FROM sqlite_sequence WHERE name = 'Songs'");
+            sq.last();
+            newSong.songID = sq.value(0).toInt();
 
-        emit addedNew(newSong,song_to_edit_id);
+            emit addedNew(newSong,song_to_edit_id);
+        }
     }
     else
     {
-        newSong.saveUpdate();
-        emit updateSongFromDatabase(newSong.songID,song_to_edit_id);
+        saved = newSong.saveUpdate();
+        if (saved)
+            emit updateSongFromDatabase(newSong.songID,song_to_edit_id);
     }
     setArrowCursor();
+
+    if (!saved)
+    {
+        // Keep the editor open, otherwise the typed text would be lost
+        QMessageBox mb(this);
+        mb.setText(tr("The song could not be saved to the database.\nYour changes are still in the editor."));
+        mb.setWindowTitle(tr("Song not saved"));
+        mb.setIcon(QMessageBox::Warning);
+        mb.exec();
+        return;
+    }
 
     resetUiItems();
     close();
@@ -339,6 +355,17 @@ void EditWidget::addSongbook()
     add_sbor.setWindowTitle(tr("Add a Songbook"));
     int last(0);
     int ret = add_sbor.exec();
+    // Songbooks are looked up by their title, so a title that is taken has to be changed
+    while(ret == AddSongbookDialog::Accepted
+          && !song_database.getSongbookIdStringFromName(add_sbor.title).isEmpty())
+    {
+        QMessageBox mb(this);
+        mb.setText(tr("A songbook with this title already exists.\nPlease enter a different title."));
+        mb.setWindowTitle(tr("Songbook title is taken"));
+        mb.setIcon(QMessageBox::Warning);
+        mb.exec();
+        ret = add_sbor.exec();
+    }
     switch(ret)
     {
     case AddSongbookDialog::Accepted:
@@ -417,34 +444,43 @@ void EditWidget::loadCategories(bool ui_update)
 
 int EditWidget::isInDatabase(Song *song)
 {
-    QString s_title(""), s_id("0"), sb_id("0");
+    QString sb_id("0");
+    int s_id(0);
     QSqlQuery sq;
 
     // check if song is part of songbook
-    sq.exec("SELECT id FROM Songbooks WHERE name = '" + song->songbook_name + "'");
+    sq.prepare("SELECT id FROM Songbooks WHERE name = ?");
+    sq.addBindValue(song->songbook_name);
+    sq.exec();
     while(sq.next())
         sb_id = sq.value(0).toString().trimmed();
     sq.clear();
     if(sb_id == "0")
         return 0; // no such songbook in database
 
-    // get song id
-    sq.exec("SELECT id, title from Songs WHERE songbook_id = '" + sb_id +"' AND number = '" + QString::number(song->number) +"'");
+    // get song id. Several songs of a songbook can share a number, so look at all of
+    // them: the song that is edited wins, else the first one with the same title
+    sq.prepare("SELECT id, title FROM Songs WHERE songbook_id = ? AND number = ?");
+    sq.addBindValue(sb_id.toInt());
+    sq.addBindValue(song->number);
+    sq.exec();
     while(sq.next())
     {
-        s_id = sq.value(0).toString().trimmed();
-        s_title = sq.value(1).toString().trimmed();
+        if(sq.value(1).toString().trimmed() != song->title.trimmed())
+            continue; // another song that has the same number
+        if(sq.value(0).toInt() == song->songID)
+        {
+            s_id = song->songID;
+            break;
+        }
+        if(s_id == 0)
+            s_id = sq.value(0).toInt();
     }
     sq.clear();
-    if(s_id == "0")
+    if(s_id == 0)
         return 0; // no matching song
-    song->songID = s_id.toInt();
-
-    // get song title
-    if(s_title!=song->title.trimmed())
-        return 0;
-    else
-        return s_id.toInt();
+    song->songID = s_id;
+    return s_id;
 }
 
 void EditWidget::on_checkBoxSongSettings_toggled(bool checked)

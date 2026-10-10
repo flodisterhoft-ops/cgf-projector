@@ -19,6 +19,13 @@
 
 #include "../headers/highlight.hpp"
 
+static QRegularExpression titleRule(QString pattern)
+{
+    // Same rule as isStanzaTitle() in song.cpp: the title keyword must not run into a longer
+    // word ("Verse 1" is a title, "Versenkt in ..." is lyrics). \p{L} needs no extra option.
+    return QRegularExpression(pattern.replace("[^\n]*", "(?!\\p{L})[^\n]*"));
+}
+
 Highlight::Highlight(QTextDocument *parent)
     : QSyntaxHighlighter(parent)
 {
@@ -34,7 +41,7 @@ Highlight::Highlight(QTextDocument *parent)
              << QString::fromUtf8("^Verš[^\n]*") << QString::fromUtf8("^&Verš[^\n]*");
     foreach (const QString &pattern, patterns)
     {
-        rule.pattern = QRegularExpression(pattern);
+        rule.pattern = titleRule(pattern);
         rule.format = verseFormat;
         highlightingRules.append(rule);
     }
@@ -53,7 +60,7 @@ Highlight::Highlight(QTextDocument *parent)
              << QString::fromUtf8("^Refrén[^\n]*") << QString::fromUtf8("^&Refrén[^\n]*");
     foreach (const QString &pattern, patterns)
     {
-        rule.pattern = QRegularExpression(pattern);
+        rule.pattern = titleRule(pattern);
         rule.format = chorusFormat;
         highlightingRules.append(rule);
     }
@@ -74,7 +81,7 @@ Highlight::Highlight(QTextDocument *parent)
              << QString::fromUtf8("^Úvod[^\n]*") << QString::fromUtf8("^Závěr[^\n]*");
     foreach (const QString &pattern, patterns)
     {
-        rule.pattern = QRegularExpression(pattern);
+        rule.pattern = titleRule(pattern);
         rule.format = vstavkaFormat;
         highlightingRules.append(rule);
     }
@@ -158,7 +165,9 @@ void HighlightSearch::setHighlightText(QString text)
     HighlightingRule rule;
     highlightingRules.clear();
     resultFormat.setForeground(Qt::red);
-    rule.pattern = QRegularExpression(text,QRegularExpression::CaseInsensitiveOption);
+    // Unicode properties: the search patterns use \b and \W, which are ASCII-only otherwise
+    rule.pattern = QRegularExpression(text,QRegularExpression::CaseInsensitiveOption
+                                      | QRegularExpression::UseUnicodePropertiesOption);
     rule.format = resultFormat;
     highlightingRules.append(rule);
 }

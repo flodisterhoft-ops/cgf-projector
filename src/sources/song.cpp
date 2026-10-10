@@ -28,9 +28,18 @@
 QString clean(QString str)
 {
     //Removes all none alphanumeric characters from the string
-    str.replace(QRegularExpression("[\\W*]")," ");
+    // (without Unicode properties \W would also strip Cyrillic letters and umlauts)
+    str.replace(QRegularExpression("[\\W*]", QRegularExpression::UseUnicodePropertiesOption)," ");
     str = str.simplified();
     return str;
+}
+
+static bool startsWithKeyword(const QString &string, const QString &keyword)
+{
+    // The keyword has to stand alone: "Verse 1" is a title, but lyrics such as
+    // "Versenkt in ..." or "Diadem ..." only start with the same letters.
+    return string.startsWith(keyword)
+            && (string.size() == keyword.size() || !string.at(keyword.size()).isLetter());
 }
 
 bool isStanzaTitle(QString string)
@@ -53,13 +62,13 @@ bool isStanzaTitle(QString string)
 bool isStanzaVerseTitle(QString string)
 {
     // Check if the line is verse title line
-    if(string.startsWith("Verse"))
+    if(startsWithKeyword(string, "Verse"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Куплет")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Куплет")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Strophe")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Strophe")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Verš")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Verš")))
         return true;
     else
         return false;
@@ -68,13 +77,13 @@ bool isStanzaVerseTitle(QString string)
 bool isStanzaAndVerseTitle(QString string)
 {
     // Check if the line is additional verse title line
-    if(string.startsWith("&Verse"))
+    if(startsWithKeyword(string, "&Verse"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("&Куплет")))
+    else if (startsWithKeyword(string, QString::fromUtf8("&Куплет")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("&Strophe")))
+    else if (startsWithKeyword(string, QString::fromUtf8("&Strophe")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("&Verš")))
+    else if (startsWithKeyword(string, QString::fromUtf8("&Verš")))
         return true;
     else
         return false;
@@ -83,17 +92,17 @@ bool isStanzaAndVerseTitle(QString string)
 bool isStanzaRefrainTitle(QString string)
 {
     // Check if line is refrain title line
-    if(string.startsWith("Chorus"))
+    if(startsWithKeyword(string, "Chorus"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Sbor")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Sbor")))
         return true;
-    else if (string.startsWith("Refrain"))
+    else if (startsWithKeyword(string, "Refrain"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Припев")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Припев")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Приспів")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Приспів")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Refrén")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Refrén")))
         return true;
     else
         return false;
@@ -102,17 +111,17 @@ bool isStanzaRefrainTitle(QString string)
 bool isStanzaAndRefrainTitle(QString string)
 {
     // Check if line is additional refrain title line
-    if(string.startsWith("&Chorus"))
+    if(startsWithKeyword(string, "&Chorus"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("&Sbor")))
+    else if (startsWithKeyword(string, QString::fromUtf8("&Sbor")))
         return true;
-    else if (string.startsWith("&Refrain"))
+    else if (startsWithKeyword(string, "&Refrain"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("&Припев")))
+    else if (startsWithKeyword(string, QString::fromUtf8("&Припев")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("&Приспів")))
+    else if (startsWithKeyword(string, QString::fromUtf8("&Приспів")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("&Refrén")))
+    else if (startsWithKeyword(string, QString::fromUtf8("&Refrén")))
         return true;
     else
         return false;
@@ -121,41 +130,41 @@ bool isStanzaAndRefrainTitle(QString string)
 bool isStanzaSlideTitle(QString string)
 {
     // Check if line is slide or other stanza title line
-    if(string.startsWith("Slide"))
+    if(startsWithKeyword(string, "Slide"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Слайд")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Слайд")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Dia")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Dia")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Snímek")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Snímek")))
         return true;
-    else if (string.startsWith("Insert"))
+    else if (startsWithKeyword(string, "Insert"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Вставка")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Вставка")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Einfügung")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Einfügung")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Vložka")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Vložka")))
         return true;
-    else if (string.startsWith("Intro"))
+    else if (startsWithKeyword(string, "Intro"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Вступление")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Вступление")))
         return true;
     //else if (string.startsWith(QString::fromUtf8("Вступ")))
     //    return true;
-    else if (string.startsWith(QString::fromUtf8("Einleitung")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Einleitung")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Úvod")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Úvod")))
         return true;
-    else if (string.startsWith("Ending"))
+    else if (startsWithKeyword(string, "Ending"))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Окончание")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Окончание")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Закінчення")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Закінчення")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Ende")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Ende")))
         return true;
-    else if (string.startsWith(QString::fromUtf8("Závěr")))
+    else if (startsWithKeyword(string, QString::fromUtf8("Závěr")))
         return true;
     else
         return false;
@@ -207,6 +216,15 @@ void Song::setDefaults()
     notes = "";
 }
 
+static void setFontFromString(QFont &font, const QString &description)
+{
+    // Most songs store an empty (or family-less) font description. Skip those and keep the
+    // default font instead of making QFont::fromString() warn "Invalid description".
+    const QString desc = description.trimmed();
+    if(!desc.isEmpty() && !desc.startsWith(QLatin1Char(',')))
+        font.fromString(desc);
+}
+
 void Song::readData()
 {
     QSqlQuery sq;
@@ -233,16 +251,13 @@ void Song::readData()
         alignmentH = sq.value(11).toInt();
     if(!sq.value(12).isNull())
         color = QColor::fromRgb(sq.value(12).toUInt());
-    if(!sq.value(13).isNull())
-        font.fromString(sq.value(13).toString());
+    setFontFromString(font, sq.value(13).toString());
     if(!sq.value(14).isNull())
         infoColor = QColor::fromRgb(sq.value(14).toUInt());
-    if(!sq.value(15).isNull())
-        infoFont.fromString(sq.value(15).toString());
+    setFontFromString(infoFont, sq.value(15).toString());
     if(!sq.value(16).isNull())
         endingColor = QColor::fromRgb(sq.value(16).toUInt());
-    if(!sq.value(17).isNull())
-        endingFont.fromString(sq.value(17).toString());
+    setFontFromString(endingFont, sq.value(17).toString());
     useBackground = sq.value(18).toBool();
     backgroundName = sq.value(19).toString();
     background.loadFromData(sq.value(20).toByteArray());
@@ -256,6 +271,7 @@ QStringList Song::getSongTextList()
     QString text, line;
     QStringList songlist;
     QStringList chorus;
+    QStringList untitled; // lines of a stanza that comes without a title line
     bool has_chorus=false;
     bool has_vstavka=false;
     int pnum = 0;
@@ -264,6 +280,23 @@ QStringList Song::getSongTextList()
 
     songlist = songText.split("\n");
     listcount = songlist.count();
+
+    // Lyrics in front of the first title line (or in a song that has no title line at all)
+    // would be dropped. Keep them as stanzas of their own, split at blank lines.
+    while(pnum < listcount && !isStanzaTitle(songlist.at(pnum)))
+    {
+        if(!songlist.at(pnum).trimmed().isEmpty())
+            untitled.append(songlist.at(pnum));
+        else if(!untitled.isEmpty())
+        {
+            formatedSong.append(untitled.join("\n").trimmed());
+            untitled.clear();
+        }
+        ++pnum;
+    }
+    if(!untitled.isEmpty())
+        formatedSong.append(untitled.join("\n").trimmed());
+
     while(pnum < listcount)
     {
         line = songlist.at(pnum);
@@ -404,8 +437,20 @@ Stanza Song::getStanza(int current)
     QStringList lines_list = song_list.at(current).split("\n");
     if(isStanzaTitle(lines_list.at(0)))
     {
-        stanza.stanzaTitle = lines_list.at(0);
-        lines_list.removeFirst();
+        QString title_line = lines_list.takeFirst();
+        // Lyrics may follow the title on the same line ("Chorus: Praise Him ...").
+        // Keep them as the first line of the stanza instead of dropping them with the title.
+        static const QRegularExpression title_with_text(
+                    QStringLiteral("^(&?[^\\W\\d_]+\\s*\\d*[^\\W\\d_]?\\s*[:.])\\s+(\\S+\\s+\\S.*)$"),
+                    QRegularExpression::UseUnicodePropertiesOption);
+        QRegularExpressionMatch match = title_with_text.match(title_line.trimmed());
+        if(match.hasMatch())
+        {
+            stanza.stanzaTitle = match.captured(1);
+            lines_list.prepend(match.captured(2));
+        }
+        else
+            stanza.stanzaTitle = title_line;
     }
 
     stanza.stanza = lines_list.join("\n").trimmed();
@@ -622,9 +667,15 @@ bool SongProxyModel::filterAcceptsRow(int sourceRow,
         return true;
 
     // Process filtering
-    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
-    s = filter_string;
-    s.replace(" ","\\W*");
+    // Unicode properties: without them \W also matches Cyrillic letters and umlauts
+    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption
+                         | QRegularExpression::UseUnicodePropertiesOption);
+    // The typed text is literal (a "(" or "?" must not break the pattern),
+    // only its spaces match any run of non-word characters.
+    QStringList words = filter_string.split(" ");
+    for(int i(0); i < words.count(); ++i)
+        words[i] = QRegularExpression::escape(words.at(i));
+    s = words.join("\\W*");
 
     if(exact_match)
         retValue = ( str1.compare(filter_string, Qt::CaseInsensitive) == 0
@@ -647,7 +698,7 @@ SongDatabase::SongDatabase()
 {
 }
 
-void Song::saveUpdate()
+bool Song::saveUpdate()
 {
     // Update song information
     QSqlQuery sq;
@@ -677,10 +728,10 @@ void Song::saveUpdate()
     sq.addBindValue(backgroundName);
     sq.addBindValue(pixToByte(background));
     sq.addBindValue(songID);
-    sq.exec();
+    return sq.exec();
 }
 
-void Song::saveNew()
+bool Song::saveNew()
 {
     // Add a new song
     QSqlQuery sq;
@@ -709,7 +760,7 @@ void Song::saveNew()
     sq.addBindValue(useBackground);
     sq.addBindValue(backgroundName);
     sq.addBindValue(pixToByte(background));
-    sq.exec();
+    return sq.exec();
 }
 
 Song SongDatabase::getSong(int id)
@@ -762,20 +813,20 @@ QList<Song> SongDatabase::getSongs()
             song.alignmentH = sq.value(12).toInt();
         if(!sq.value(13).isNull())
             song.color = QColor::fromRgb(sq.value(13).toUInt());
-        if(!sq.value(14).isNull())
-            song.font.fromString(sq.value(14).toString());
+        setFontFromString(song.font, sq.value(14).toString());
         if(!sq.value(15).isNull())
             song.infoColor = QColor::fromRgb(sq.value(15).toUInt());
-        if(!sq.value(16).isNull())
-            song.infoFont.fromString(sq.value(16).toString());
+        setFontFromString(song.infoFont, sq.value(16).toString());
         if(!sq.value(17).isNull())
             song.endingColor = QColor::fromRgb(sq.value(17).toUInt());
-        if(!sq.value(18).isNull())
-            song.endingFont.fromString(sq.value(18).toString());
+        setFontFromString(song.endingFont, sq.value(18).toString());
         song.useBackground = sq.value(19).toBool();
         song.backgroundName = sq.value(20).toString();
         song.background.loadFromData(sq.value(21).toByteArray());
-        song.songbook_name = sb_names.at(sb_ids.indexOf(song.songbook_id));
+        // a song whose songbook is gone keeps an empty songbook name instead of crashing
+        int sb_index = sb_ids.indexOf(song.songbook_id);
+        if(sb_index >= 0)
+            song.songbook_name = sb_names.at(sb_index);
 
         songs.append(song);
     }
@@ -831,9 +882,13 @@ void SongDatabase::deleteSong(int song_id)
 QString SongDatabase::getSongbookIdStringFromName(QString songbook_name)
 {
     QSqlQuery sq;
-    sq.exec("SELECT id FROM Songbooks WHERE name = '" + songbook_name +"'"); //ilya
-    sq.first();
-    return sq.value(0).toString();
+    // bound, so that a name with an apostrophe (Kids' songs) is found like any other
+    sq.prepare("SELECT id FROM Songbooks WHERE name = ?");
+    sq.addBindValue(songbook_name);
+    sq.exec();
+    if(sq.first())
+        return sq.value(0).toString();
+    return QString();
 }
 
 void SongDatabase::addSongbook(QString name, QString info)

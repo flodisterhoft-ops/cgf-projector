@@ -52,6 +52,9 @@ SongWidget::SongWidget(QWidget *parent) :
     loadCategories(false);
 
     isSpinboxEditing = false;
+    // Look the song up when the number is confirmed, not after every typed digit
+    // (the "No such song" box would pop up for numbers that are only half typed)
+    ui->song_num_spinbox->setKeyboardTracking(false);
 
     // set highligher
     highlight = new HighlighterDelegate(ui->listPreview);
@@ -421,7 +424,12 @@ void SongWidget::updateSongFromDatabase(int songid, int initial_sid)
 
 void SongWidget::deleteSong()
 {
-    song_database.deleteSong(currentSong().songID);
+    int song_id = currentSong().songID;
+    song_database.deleteSong(song_id);
+    // The full list is what the search results and "Clear results" are built from
+    for(int i(allSongs.count()-1); i >= 0; --i)
+        if(allSongs.at(i).songID == song_id)
+            allSongs.removeAt(i);
     preview_song = Song();
     ui->preview_label->clear();
     ui->listPreview->clear();
@@ -435,20 +443,11 @@ void SongWidget::addNewSong(Song song, int initial_sid)
     songs_model->addSong(song);
     allSongs.append(song);
 
-    // Get added song row number to select it.
-    // If added song is not found list, no selection will be done
-    int row = 0;
-    for(int i(0);i<proxy_model->rowCount();++i)
-    {
-        row = i;
-        if(song.title == songs_model->getSong(
-                    proxy_model->mapToSource(
-                        ui->songs_view->indexAt(QPoint(0,i*20)))).title)
-        {
-            ui->songs_view->selectRow(row);
-            break;
-        }
-    }
+    // Select the added song, it is the last row of the model.
+    // If the current filter hides it, no selection will be done
+    QModelIndex added = proxy_model->mapFromSource(songs_model->index(songs_model->rowCount()-1, 0));
+    if(added.isValid())
+        ui->songs_view->selectRow(added.row());
 
     sendToPreview(song);
 }
@@ -564,7 +563,9 @@ void SongWidget::on_pushButtonSearch_clicked()
 
     // set filter
     QRegularExpression rx;
-    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+    // Unicode properties: otherwise \b and \W only know ASCII letters (not Cyrillic, umlauts)
+    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption
+                         | QRegularExpression::UseUnicodePropertiesOption);
     search_text.replace(" ","\\W*");
     if(type == 1 )
         // Search whole word exsact phrase only
@@ -591,7 +592,7 @@ void SongWidget::on_pushButtonSearch_clicked()
             bool hasAll = false;
             for(int j(0);j<stl.count();++j)
             {
-                hasAll = allSongs.at(i).songText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",QRegularExpression::CaseInsensitiveOption));
+                hasAll = allSongs.at(i).songText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",rx.patternOptions()));
                 if(!hasAll)
                     break;
             }
