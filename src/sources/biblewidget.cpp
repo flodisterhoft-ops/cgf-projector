@@ -132,7 +132,11 @@ void BibleWidget::on_listChapterNum_currentTextChanged(QString currentText)
         ui->chapter_preview_list->clear();
         ui->chapter_preview_list->addItems(currentChapterList);
         ui->chapter_ef->setText(currentText);
-        verse_validator->setTop(ui->chapter_preview_list->count());
+        // The highest verse number can be above the row count when a Bible skips verses
+        int top_verse = ui->chapter_preview_list->count();
+        for(int i(0); i<bible.previewVerseNumbers.count(); ++i)
+            top_verse = qMax(top_verse, bible.previewVerseNumbers.at(i));
+        verse_validator->setTop(top_verse);
         ui->chapter_preview_list->setCurrentRow(0);
     }
     else
@@ -143,12 +147,20 @@ void BibleWidget::on_listChapterNum_currentTextChanged(QString currentText)
 
 QString BibleWidget::getCurrentBook()
 {
-    return ui->listBook->currentItem()->text();
+    // The book list is empty (no current item) e.g. when the book filter matches nothing
+    QListWidgetItem *item = ui->listBook->currentItem();
+    if(item == nullptr)
+        return QString();
+    return item->text();
 }
 
 int BibleWidget::getCurrentChapter()
 {
-    return ui->listChapterNum->currentItem()->text().toInt();
+    // 0 when no chapter is selected, see getCurrentBook()
+    QListWidgetItem *item = ui->listChapterNum->currentItem();
+    if(item == nullptr)
+        return 0;
+    return item->text().toInt();
 }
 
 /*
@@ -170,7 +182,8 @@ bool BibleWidget::eventFilter(QObject *object, QEvent *event)
 
 void BibleWidget::on_chapter_preview_list_currentRowChanged(int currentRow)
 {
-    ui->verse_ef->setText(QString::number(currentRow+1));
+    // Show the real verse number; the row is only verse-1 for Bibles that skip no verse
+    ui->verse_ef->setText(QString::number(bible.getPreviewVerseNumber(currentRow)));
 }
 
 void BibleWidget::on_chapter_preview_list_doubleClicked(QModelIndex index)
@@ -181,10 +194,13 @@ void BibleWidget::on_chapter_preview_list_doubleClicked(QModelIndex index)
 
 void BibleWidget::sendToProjector(bool add_to_history)
 {
-    bible.currentIdList = bible.previewIdList;
     QItemSelection selectedItems = ui->chapter_preview_list->selectionModel()->selection();
-    if(selectedItems.count())
+    if(selectedItems.count() && ui->listBook->currentItem() && ui->listChapterNum->currentItem())
     {
+        // Take the id snapshot only when something is really sent. Otherwise the ids of the live
+        // (show) list would be replaced by those of the previewed chapter while the show list keeps its verses.
+        bible.currentIdList = bible.previewIdList;
+
         // Get the caption string to show above the show list (right-most list)
         QString cap = QString("%1 %2").arg(ui->listBook->currentItem()->text()).arg(ui->listChapterNum->currentItem()->text());
         emit goLive(bible.verseList, cap,selectedItems);
@@ -265,7 +281,9 @@ void BibleWidget::on_lineEditBook_textChanged(QString text)
 
                 if( ! book_words.at(0).startsWith(num_str) )
                     continue;
-                if( !book_words.at(1).startsWith(name_str, Qt::CaseInsensitive) )
+                // Book names without a space (e.g. "1John") have no second word: use the rest of the first one
+                QString book_rest = (book_words.count() > 1) ? book_words.at(1) : book_words.at(0).mid(num_str.length());
+                if( !book_rest.startsWith(name_str, Qt::CaseInsensitive) )
                     continue;
 
                 filtered_books.append(book);
@@ -274,10 +292,13 @@ void BibleWidget::on_lineEditBook_textChanged(QString text)
         else
             filtered_books = all_books.filter(text, Qt::CaseInsensitive);
 
-        if( ui->listBook->count() != filtered_books.count() )
+        // This is an important optimization: only rebuild the list when it really differs.
+        // Comparing the count alone kept a stale list when another filter matched the same number of books.
+        bool same_books = (ui->listBook->count() == filtered_books.count());
+        for(int i=0; same_books && i<filtered_books.count(); i++)
+            same_books = (ui->listBook->item(i)->text() == filtered_books.at(i));
+        if( !same_books )
         {
-            // This is an important optimization
-            // FIXME don't just check the count; check values
             ui->listBook->clear();
             ui->listBook->addItems(filtered_books);
         }
@@ -292,8 +313,10 @@ void BibleWidget::on_lineEditBook_textChanged(QString text)
     {
         if( ui->listChapterNum->currentRow() != (chapter-1) )
             ui->listChapterNum->setCurrentRow(chapter-1);
-        if( verse != 0 && verse <= ui->chapter_preview_list->count() )
-            ui->chapter_preview_list->setCurrentRow(verse-1);
+        // The verse number is not always row+1 (some Bibles skip verses)
+        int verse_row = bible.getPreviewVerseRow(verse);
+        if( verse != 0 && verse_row >= 0 )
+            ui->chapter_preview_list->setCurrentRow(verse_row);
     }
 }
 
@@ -305,7 +328,15 @@ void BibleWidget::on_btnLive_clicked()
 void BibleWidget::on_verse_ef_textChanged(QString new_string)
 {
     int value = new_string.toInt();
-    ui->chapter_preview_list->setCurrentRow(value-1);
+
+    // Already on this verse (e.g. the field was just set from the selected row): keep that row,
+    // verse numbers can repeat in broken modules
+    int current_row = ui->chapter_preview_list->currentRow();
+    if(current_row >= 0 && bible.getPreviewVerseNumber(current_row) == value)
+        return;
+
+    // The verse number is not always row+1 (some Bibles skip verses)
+    ui->chapter_preview_list->setCurrentRow(bible.getPreviewVerseRow(value));
 }
 
 void BibleWidget::on_chapter_ef_textChanged(QString new_string)
@@ -331,8 +362,18 @@ void BibleWidget::on_search_button_clicked()
     int type = ui->comboBoxSearchType->currentIndex();
     int range = ui->comboBoxSearchRange->currentIndex();
 
+    // A book/chapter search needs a selected book/chapter; none is selected while the book filter matches nothing
+    if((range >= 1 && ui->listBook->currentItem() == nullptr)
+            || (range == 2 && ui->listChapterNum->currentItem() == nullptr))
+    {
+        ui->result_count_label->setText(tr("No search\nresults."));
+        emit setArrowCursor();
+        return;
+    }
+
     QRegularExpression rx, rxh;
-    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+    // UseUnicodeProperties: without it \b and \W only know ASCII letters (breaks Cyrillic and umlauts)
+    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
     search_text.replace(" ","\\W*");
     if(type == 0)
     {
@@ -478,15 +519,31 @@ void BibleWidget::setSelectedHistory(BibleHistory &b)
         ui->listBook->addItems(all_books);
     }
     QString bk;
-    int ch,vr,vrl;
+    int ch(0),vr(0),vrl(0);
     bible.getVerseRef(b.verseIds,bk,ch,vr);
     vrl = bible.getVerseNumberLast(b.verseIds);
 
-    ui->listBook->setCurrentRow(all_books.indexOf(bk));
+    int book_row = all_books.indexOf(bk);
+    if(book_row < 0 || ch < 1 || vr < 1)
+    {
+        // The verse is not in the operator Bible (e.g. the schedule was made with another Bible).
+        // Select nothing, so that a following "go live" cannot send some other verse.
+        ui->chapter_preview_list->clearSelection();
+        return;
+    }
+
+    ui->listBook->setCurrentRow(book_row);
     ui->chapter_ef->setText(QString::number(ch));
+
+    // Preview rows of the first and last verse (the verse number is not always row+1)
+    int first_row = bible.getPreviewVerseRow(vr);
+    int last_row = bible.getPreviewVerseRow(vrl);
+    if(last_row < first_row)
+        last_row = first_row;
     QItemSelection sel;
-    sel.select(ui->chapter_preview_list->model()->index(vr-1,0,QModelIndex()),
-               ui->chapter_preview_list->model()->index(vrl-1,0,QModelIndex()));
+    if(first_row >= 0)
+        sel.select(ui->chapter_preview_list->model()->index(first_row,0,QModelIndex()),
+                   ui->chapter_preview_list->model()->index(last_row,0,QModelIndex()));
     ui->chapter_preview_list->clearSelection();
     ui->verse_ef->setText(QString::number(vr));
     ui->chapter_preview_list->selectionModel()->select(sel,QItemSelectionModel::Select);
@@ -527,7 +584,7 @@ BibleHistory BibleWidget::getCurrentVerse()
     BibleHistory b;
     QString selected_ids;
 
-    QString book = ui->listBook->currentItem()->text();
+    QString book = getCurrentBook();
     QString chapter = ui->chapter_ef->text();
 
     int first_selected(-1),last_selected(-1);
@@ -543,17 +600,22 @@ BibleHistory BibleWidget::getCurrentVerse()
     }
     selected_ids.chop(1);
 
+    // Nothing selected: return an empty entry instead of reading a missing item
+    if(first_selected == -1)
+        return b;
+
     QString verse_text = ui->chapter_preview_list->item(first_selected)->text().trimmed();
     b.verseIds = selected_ids;
 
+    // Captions use the real verse numbers; the row is only verse-1 for Bibles that skip no verse
     if(first_selected==last_selected)
     {
-        b.caption = book + " " + chapter + ":" + QString::number(first_selected+1);
+        b.caption = book + " " + chapter + ":" + QString::number(bible.getPreviewVerseNumber(first_selected));
         b.captionLong = book + " " + chapter + ":" + verse_text;
     }
     else
     {   // Create multi verse caption for display
-        int f(first_selected+1), l(last_selected+1),j(0);
+        int f(bible.getPreviewVerseNumber(first_selected)), l(bible.getPreviewVerseNumber(last_selected)),j(0);
         QString v=verse_text,p=".";
         while(v.at(j)!=p.at(0))
             ++j;

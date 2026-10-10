@@ -86,6 +86,7 @@ public:
     QStringList verseList;
     QStringList previewIdList; // Verses that are in the preview (chapter) list
     QStringList currentIdList; // Verses that are in the show list
+    QList<int> previewVerseNumbers; // Verse number of each preview entry (not always row+1: some Bibles skip verses)
     QList<BibleBook> books;
 public slots:
     QList<BibleSearch> searchBible(bool begins, QRegularExpression searchExp);
@@ -96,6 +97,8 @@ public slots:
     void getVerseRef(QString vId, QString &book, int &chapter, int &verse);
     int getVerseNumberLast(QString vId);
     QStringList getChapter(int book, int chapter);
+    int getPreviewVerseNumber(int row);
+    int getPreviewVerseRow(int verse);
     void getVerseAndCaption(QString &verse, QString &caption, QString verId, QString &bibId, bool useAbbr);
     int getCurrentBookRow(QString book);
     Verse getCurrentVerseAndCaption(QList<int> currentRows, BibleSettings& sets, BibleVersionSettings& bv);

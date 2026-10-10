@@ -82,6 +82,12 @@ QString Bible::getBookName(int id)
 
 void Bible::getVerseRef(QString vId, QString &book, int &chapter, int &verse)
 {
+    // The id may not exist in this Bible (e.g. schedule saved with another operator Bible):
+    // report that with empty/zero values instead of leaving the caller's variables untouched
+    book.clear();
+    chapter = 0;
+    verse = 0;
+
     if(vId.contains(","))
         vId = vId.split(",").first();
 
@@ -139,18 +145,21 @@ QStringList Bible::getChapter(int book, int chapter)
     int verse(0), verse_old(0);
 
     previewIdList.clear();
+    previewVerseNumbers.clear();
     verseList.clear();
     foreach (const BibleVerse &bv,operatorBible)
     {
         if(bv.book == book && bv.chapter == chapter)
         {
             verse  = bv.verseNumber;
-            if(verse==verse_old)
+            // Nothing to merge into when the chapter starts with verse 0
+            if(verse==verse_old && !verseList.isEmpty())
             {
                 verseText = verseText.simplified() + " " + bv.verseText;
                 id += "," + bv.verseId;
                 verseList.removeLast();
                 previewIdList.removeLast();
+                previewVerseNumbers.removeLast();
             }
             else
             {
@@ -159,6 +168,7 @@ QStringList Bible::getChapter(int book, int chapter)
             }
             verseList << QString::number(verse) + ". " + verseText;
             previewIdList << id;
+            previewVerseNumbers << verse;
             verse_old = verse;
         }
     }
@@ -166,16 +176,50 @@ QStringList Bible::getChapter(int book, int chapter)
     return verseList;
 }
 
+int Bible::getPreviewVerseNumber(int row)
+{
+    // Verse number shown in a preview row. It is not always row+1 because some Bibles skip verses.
+    if(row >= 0 && row < previewVerseNumbers.count())
+        return previewVerseNumbers.at(row);
+    return row + 1;
+}
+
+int Bible::getPreviewVerseRow(int verse)
+{
+    // Preview row of a verse number, or the row of the next verse if this Bible skips it.
+    // Returns -1 for verse < 1 or when the verse is past the end of the chapter.
+    if(verse < 1)
+        return -1;
+
+    int next_row(-1);
+    for(int i(0); i<previewVerseNumbers.count(); ++i)
+    {
+        int n = previewVerseNumbers.at(i);
+        if(n == verse)
+            return i;
+        if(n > verse && (next_row == -1 || n < previewVerseNumbers.at(next_row)))
+            next_row = i;
+    }
+    return next_row;
+}
+
 Verse Bible::getCurrentVerseAndCaption(QList<int>  currentRows, BibleSettings& sets, BibleVersionSettings &bv)
 {
     QString verse_id;
     for(int i(0);i<currentRows.count();++i)
     {
-        verse_id += currentIdList.at(currentRows.at(i)) + ",";
+        // Skip rows without an id (show list and id list out of step) instead of reading past the end
+        int row = currentRows.at(i);
+        if(row >= 0 && row < currentIdList.count())
+            verse_id += currentIdList.at(row) + ",";
     }
     verse_id.chop(1);
 
     Verse v;
+
+    // Nothing valid to look up: return an empty verse instead of a stray ":" caption
+    if(verse_id.isEmpty())
+        return v;
 
     // get primary verse
     getVerseAndCaption(v.primary_text,v.primary_caption,verse_id,bv.primaryBible,sets.useAbbriviation);
@@ -193,7 +237,7 @@ Verse Bible::getCurrentVerseAndCaption(QList<int>  currentRows, BibleSettings& s
 
 void Bible::getVerseAndCaption(QString& verse, QString& caption, QString verId, QString& bibId, bool useAbbr)
 {
-    QString verse_old, verse_show, verse_n, verse_nold, verse_nfirst, chapter;
+    QString verse_old, verse_show, verse_n, verse_nold, verse_nfirst, chapter, chapter_first;
     QString book;
     QStringList ids;
     QSqlQuery sq;
@@ -217,7 +261,15 @@ void Bible::getVerseAndCaption(QString& verse, QString& caption, QString verId, 
 
             // Set first verse number
             if (verse_nfirst.isEmpty())
+            {
                 verse_nfirst = verse_n;
+                chapter_first = chapter;
+            }
+
+            // Caption of a verse range. The rows can lie in two chapters when this Bible numbers its
+            // chapters differently from the operator Bible (e.g. RST 14:31 sits under NKJV 15:1); then name both
+            QString range = chapter_first + ":" + verse_nfirst + "-"
+                    + (chapter == chapter_first ? QString() : chapter + ":") + verse_n;
 
             // If second(nold) verse number is the same or it is empty, then create a regular sigle verse
             // Else create a single display of muliple verses
@@ -243,13 +295,13 @@ void Bible::getVerseAndCaption(QString& verse, QString& caption, QString verId, 
                 else
                     // Else if current verse number does match first verse number,
                     // then show bigening and eding verse numbers in caption
-                    caption = " " + chapter + ":" + verse_nfirst + "-" + verse_n;
+                    caption = " " + range;
 
                 verse_show += " " + verse;
             }
             else
             {
-                caption =" " + chapter + ":" + verse_nfirst + "-" + verse_n;
+                caption = " " + range;
                 verse = " (" + verse_n + ") " + verse;
                 verse_show += verse;
                 if(!verse_show.startsWith(" ("))
@@ -296,6 +348,8 @@ void Bible::getVerseAndCaption(QString& verse, QString& caption, QString verId, 
 
 QList<BibleSearch> Bible::searchBible(bool allWords, QRegularExpression searchExp)
 {   ///////// Search entire Bible //////////
+    // Note: \b and \W only know ASCII letters unless QRegularExpression::UseUnicodePropertiesOption
+    // is set, so every word-boundary regex here and in BibleWidget needs it for Cyrillic and umlauts.
 
     QList<BibleSearch> return_results;
 
@@ -313,7 +367,8 @@ QList<BibleSearch> Bible::searchBible(bool allWords, QRegularExpression searchEx
                 bool hasAll = false;
                 for (int j(0);j<stl.count();++j)
                 {
-                    hasAll = bv.verseText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",QRegularExpression::CaseInsensitiveOption));
+                    hasAll = bv.verseText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",QRegularExpression::CaseInsensitiveOption
+                                                                       | QRegularExpression::UseUnicodePropertiesOption));
                     if(!hasAll)
                         break;
                 }
@@ -348,7 +403,8 @@ QList<BibleSearch> Bible::searchBible(bool allWords, QRegularExpression searchEx
                 bool hasAll = false;
                 for (int j(0);j<stl.count();++j)
                 {
-                    hasAll = bv.verseText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",QRegularExpression::CaseInsensitiveOption));
+                    hasAll = bv.verseText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",QRegularExpression::CaseInsensitiveOption
+                                                                       | QRegularExpression::UseUnicodePropertiesOption));
                     if(!hasAll)
                         break;
                 }
@@ -382,7 +438,8 @@ QList<BibleSearch> Bible::searchBible(bool allWords, QRegularExpression searchEx
                 bool hasAll = false;
                 for (int j(0);j<stl.count();++j)
                 {
-                    hasAll = bv.verseText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",QRegularExpression::CaseInsensitiveOption));
+                    hasAll = bv.verseText.contains(QRegularExpression("\\b"+stl.at(j)+"\\b",QRegularExpression::CaseInsensitiveOption
+                                                                       | QRegularExpression::UseUnicodePropertiesOption));
                     if(!hasAll)
                         break;
                 }

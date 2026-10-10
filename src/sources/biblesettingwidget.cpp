@@ -20,6 +20,14 @@
 #include "../headers/biblesettingwidget.hpp"
 #include "ui_biblesettingwidget.h"
 
+// QList::removeAt() only asserts its index (compiled out in release builds), so ignore invalid ones.
+// The index is -1 when a combo box is empty or its Bible no longer exists in the database.
+static void removeIdAt(QStringList &list, int index)
+{
+    if(index >= 0 && index < list.count())
+        list.removeAt(index);
+}
+
 BibleSettingWidget::BibleSettingWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::BibleSettingWidget)
@@ -407,7 +415,11 @@ void BibleSettingWidget::loadSettings()
 
     // Background Color 4 Text
     // Display 1
+    // Set these group boxes silently: their toggled() handlers overwrite the background settings
+    // (use/name/pixmap) that were just loaded above
+    ui->groupBoxAddBackgroundToText->blockSignals(true);
     ui->groupBoxAddBackgroundToText->setChecked(mySettings.bibleAddBKColorToText);
+    ui->groupBoxAddBackgroundToText->blockSignals(false);
     p.setColor(QPalette::Base,mySettings.bibleTextRecBKColor);
     ui->graphicViewAddBKColor->setPalette(p);
 
@@ -415,7 +427,9 @@ void BibleSettingWidget::loadSettings()
     ui->graphicViewChangeGenBKColor->setPalette(p);
 
     // Display 2
+    ui->groupBoxAddBackgroundToText2->blockSignals(true);
     ui->groupBoxAddBackgroundToText2->setChecked(mySettings2.bibleAddBKColorToText);
+    ui->groupBoxAddBackgroundToText2->blockSignals(false);
     p.setColor(QPalette::Base,mySettings2.bibleTextRecBKColor);
     ui->graphicViewAddBKColor2->setPalette(p);
 
@@ -423,7 +437,9 @@ void BibleSettingWidget::loadSettings()
     ui->graphicViewChangeGenBKColor2->setPalette(p);
 
     // Display 3
+    ui->groupBoxAddBackgroundToText3->blockSignals(true);
     ui->groupBoxAddBackgroundToText3->setChecked(mySettings3.bibleAddBKColorToText);
+    ui->groupBoxAddBackgroundToText3->blockSignals(false);
     p.setColor(QPalette::Base,mySettings3.bibleTextRecBKColor);
     ui->graphicViewAddBKColor3->setPalette(p);
 
@@ -431,7 +447,9 @@ void BibleSettingWidget::loadSettings()
     ui->graphicViewChangeGenBKColor3->setPalette(p);
 
     // Display 4
+    ui->groupBoxAddBackgroundToText4->blockSignals(true);
     ui->groupBoxAddBackgroundToText4->setChecked(mySettings4.bibleAddBKColorToText);
+    ui->groupBoxAddBackgroundToText4->blockSignals(false);
     p.setColor(QPalette::Base,mySettings4.bibleTextRecBKColor);
     ui->graphicViewAddBKColor4->setPalette(p);
 
@@ -590,7 +608,7 @@ void BibleSettingWidget::updateSecondaryBibleMenu()
     secondary_bibles.removeOne(pbible);
 
     secondary_id_list = bible_id_list;
-    secondary_id_list.removeAt(ui->comboBoxPrimaryBible->currentIndex());
+    removeIdAt(secondary_id_list, ui->comboBoxPrimaryBible->currentIndex());
     ui->comboBoxSecondaryBible->clear();
     ui->comboBoxSecondaryBible->addItem(tr("None"));
     ui->comboBoxSecondaryBible->addItems(secondary_bibles);
@@ -611,7 +629,7 @@ void BibleSettingWidget::updateSecondaryBibleMenu2()
     secondary_bibles2.removeOne(pbible);
 
     secondary_id_list2 = bible_id_list;
-    secondary_id_list2.removeAt(ui->comboBoxPrimaryBible2->currentIndex());
+    removeIdAt(secondary_id_list2, ui->comboBoxPrimaryBible2->currentIndex());
     ui->comboBoxSecondaryBible2->clear();
     ui->comboBoxSecondaryBible2->addItem(tr("None"));
     ui->comboBoxSecondaryBible2->addItems(secondary_bibles2);
@@ -632,7 +650,7 @@ void BibleSettingWidget::updateSecondaryBibleMenu3()
     secondary_bibles3.removeOne(pbible);
 
     secondary_id_list3 = bible_id_list;
-    secondary_id_list3.removeAt(ui->comboBoxPrimaryBible3->currentIndex());
+    removeIdAt(secondary_id_list3, ui->comboBoxPrimaryBible3->currentIndex());
     ui->comboBoxSecondaryBible3->clear();
     ui->comboBoxSecondaryBible3->addItem(tr("None"));
     ui->comboBoxSecondaryBible3->addItems(secondary_bibles3);
@@ -653,7 +671,7 @@ void BibleSettingWidget::updateSecondaryBibleMenu4()
     secondary_bibles4.removeOne(pbible);
 
     secondary_id_list4 = bible_id_list;
-    secondary_id_list4.removeAt(ui->comboBoxPrimaryBible4->currentIndex());
+    removeIdAt(secondary_id_list4, ui->comboBoxPrimaryBible4->currentIndex());
     ui->comboBoxSecondaryBible4->clear();
     ui->comboBoxSecondaryBible4->addItem(tr("None"));
     ui->comboBoxSecondaryBible4->addItems(secondary_bibles4);
@@ -681,7 +699,7 @@ void BibleSettingWidget::updateTrinaryBibleMenu()
         trinary_bibles.removeOne(sbible);
 
         trinary_id_list = secondary_id_list;
-        trinary_id_list.removeAt(ui->comboBoxSecondaryBible->currentIndex()-1);
+        removeIdAt(trinary_id_list, ui->comboBoxSecondaryBible->currentIndex()-1);
         ui->comboBoxTrinaryBible->clear();
         ui->comboBoxTrinaryBible->addItem(tr("None"));
         ui->comboBoxTrinaryBible->addItems(trinary_bibles);
@@ -709,7 +727,7 @@ void BibleSettingWidget::updateTrinaryBibleMenu2()
         trinary_bibles.removeOne(sbible);
 
         trinary_id_list2 = secondary_id_list2;
-        trinary_id_list2.removeAt(ui->comboBoxSecondaryBible2->currentIndex()-1);
+        removeIdAt(trinary_id_list2, ui->comboBoxSecondaryBible2->currentIndex()-1);
         ui->comboBoxTrinaryBible2->clear();
         ui->comboBoxTrinaryBible2->addItem(tr("None"));
         ui->comboBoxTrinaryBible2->addItems(trinary_bibles);
@@ -737,7 +755,7 @@ void BibleSettingWidget::updateTrinaryBibleMenu3()
         trinary_bibles.removeOne(sbible);
 
         trinary_id_list3 = secondary_id_list3;
-        trinary_id_list3.removeAt(ui->comboBoxSecondaryBible3->currentIndex()-1);
+        removeIdAt(trinary_id_list3, ui->comboBoxSecondaryBible3->currentIndex()-1);
         ui->comboBoxTrinaryBible3->clear();
         ui->comboBoxTrinaryBible3->addItem(tr("None"));
         ui->comboBoxTrinaryBible3->addItems(trinary_bibles);
@@ -765,7 +783,7 @@ void BibleSettingWidget::updateTrinaryBibleMenu4()
         trinary_bibles.removeOne(sbible);
 
         trinary_id_list4 = secondary_id_list4;
-        trinary_id_list4.removeAt(ui->comboBoxSecondaryBible4->currentIndex()-1);
+        removeIdAt(trinary_id_list4, ui->comboBoxSecondaryBible4->currentIndex()-1);
         ui->comboBoxTrinaryBible4->clear();
         ui->comboBoxTrinaryBible4->addItem(tr("None"));
         ui->comboBoxTrinaryBible4->addItems(trinary_bibles);
@@ -785,7 +803,7 @@ void BibleSettingWidget::updateOperatorBibleMenu()
     operator_bibles.removeOne(pbible);
 
     operator_id_list = bible_id_list;
-    operator_id_list.removeAt(ui->comboBoxPrimaryBible->currentIndex());
+    removeIdAt(operator_id_list, ui->comboBoxPrimaryBible->currentIndex());
     ui->comboBoxOperatorBible->clear();
     ui->comboBoxOperatorBible->addItem(tr("Same as primary Bible"));
     ui->comboBoxOperatorBible->addItems(operator_bibles);
@@ -811,46 +829,46 @@ void BibleSettingWidget::setDispScreen4Visible(bool visible)
     ui->groupBoxUseDisp4->setVisible(visible);
 }
 
-void BibleSettingWidget::on_comboBoxPrimaryBible_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxPrimaryBible_activated(int)
 {
     updateSecondaryBibleMenu();
     updateOperatorBibleMenu();
 }
 
-void BibleSettingWidget::on_comboBoxPrimaryBible2_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxPrimaryBible2_activated(int)
 {
     updateSecondaryBibleMenu2();
     updateTrinaryBibleMenu2();
 }
 
-void BibleSettingWidget::on_comboBoxPrimaryBible3_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxPrimaryBible3_activated(int)
 {
     updateSecondaryBibleMenu3();
     updateTrinaryBibleMenu3();
 }
 
-void BibleSettingWidget::on_comboBoxPrimaryBible4_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxPrimaryBible4_activated(int)
 {
     updateSecondaryBibleMenu4();
     updateTrinaryBibleMenu4();
 }
 
-void BibleSettingWidget::on_comboBoxSecondaryBible_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxSecondaryBible_activated(int)
 {
     updateTrinaryBibleMenu();
 }
 
-void BibleSettingWidget::on_comboBoxSecondaryBible2_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxSecondaryBible2_activated(int)
 {
     updateTrinaryBibleMenu2();
 }
 
-void BibleSettingWidget::on_comboBoxSecondaryBible3_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxSecondaryBible3_activated(int)
 {
     updateTrinaryBibleMenu3();
 }
 
-void BibleSettingWidget::on_comboBoxSecondaryBible4_activated(const QString &arg1)
+void BibleSettingWidget::on_comboBoxSecondaryBible4_activated(int)
 {
     updateTrinaryBibleMenu4();
 }

@@ -111,8 +111,9 @@ void AnnounceWidget::setAnnounceList()
         a.color = QColor(sq.value(9).toUInt());
         QString str = sq.value(10).toString().trimmed();
         QStringList l = str.split(",");
-        a.alignmentV = l.at(0).toInt();
-        a.alignmentH = l.at(1).toInt();
+        // An empty/malformed alignment column falls back to the defaults (top, center)
+        a.alignmentV = (l.count() > 0) ? l.at(0).toInt() : 0;
+        a.alignmentH = (l.count() > 1) ? l.at(1).toInt() : 1;
         a.idNum = sq.value(11).toInt();
 
         announceList.append(a);
@@ -155,19 +156,33 @@ void AnnounceWidget::deleteAnnouncement()
 {
     if(previewAnnounce.idNum>0)
     {
+        int deleted_id = previewAnnounce.idNum;
         previewAnnounce.deleteAnnouce();
         previewAnnounce = Announcement();
         ui->listWidgetAnnouncement->clear();
         ui->labelAnnounceTitle->clear();
-        int row = ui->tableViewAnnouncements->currentIndex().row();
-        announceModel->removeRow(row);
+
+        // Remove the deleted announcement's own row. The table shows a sortable proxy, so its
+        // current row is not the source row; that removed a different announcement from the list.
+        for(int row = 0; row < announceModel->rowCount(); ++row)
+        {
+            if(announceModel->getAnnounce(row).idNum == deleted_id)
+            {
+                announceModel->removeRow(row);
+                break;
+            }
+        }
     }
 }
 
 void AnnounceWidget::addNewAnnouncement(Announcement announce)
 {
     announceModel->addAnnouncement(announce);
-    ui->tableViewAnnouncements->selectRow(announceModel->rowCount()-1);
+
+    // The new announcement is the last row of the source model, but the (sorted) proxy can show it elsewhere
+    QModelIndex new_index = announceProxy->mapFromSource(announceModel->index(announceModel->rowCount()-1, 0));
+    if(new_index.isValid())
+        ui->tableViewAnnouncements->selectRow(new_index.row());
 }
 
 void AnnounceWidget::updateAnnouncement()

@@ -39,7 +39,8 @@ void Announcement::readData()
     sq.exec("SELECT title, text, usePrivate, useAuto, loop, slideTime, useBackground, backgoundPath, "
             "font, color, alignment FROM Announcements WHERE id = " + QString::number(idNum));
     //          8     9     10
-    sq.first();
+    if(!sq.first())
+        return; // The announcement is not in the database (any more): keep the current values
     title = sq.value(0).toString().trimmed();
     text = sq.value(1).toString().trimmed();
     usePrivateSettings = sq.value(2).toBool();
@@ -52,8 +53,9 @@ void Announcement::readData()
     color = QColor(sq.value(9).toUInt());
     QString str = sq.value(10).toString().trimmed();
     QStringList l = str.split(",");
-    alignmentV = l.at(0).toInt();
-    alignmentH = l.at(1).toInt();
+    // An empty/malformed alignment column falls back to the defaults (top, center)
+    alignmentV = (l.count() > 0) ? l.at(0).toInt() : 0;
+    alignmentH = (l.count() > 1) ? l.at(1).toInt() : 1;
 }
 
 QStringList Announcement::getAnnounceList()
@@ -65,7 +67,8 @@ QStringList Announcement::getAnnounceList()
     {
         if(isAnnounceTitle(s))
         {
-            if(!anPart.isEmpty())
+            // Skip blank lines in front of the first title, they would make an empty first slide
+            if(!anPart.trimmed().isEmpty())
                 alist.append(anPart.trimmed());
             anPart.clear();
         }
@@ -306,7 +309,8 @@ bool AnnounceProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sour
         return true;
 
     QRegularExpression rx;
-    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+    // UseUnicodeProperties: otherwise \W only knows ASCII letters (breaks Cyrillic and umlauts)
+    rx.setPatternOptions(QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
     QString fs = filterString;
     fs.replace(" ","\\W");
     if(matchExact)
