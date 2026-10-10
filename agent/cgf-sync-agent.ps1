@@ -14,10 +14,13 @@
 #  - If CGFProjector.exe is running, leaves the verified file staged and exits
 #    (next run while the app is closed completes the swap). Projection is
 #    never disturbed; the app never sees a half-written file.
-#  - Carry-forward (needs sqlite3): local Settings rows and local quick-add
-#    songs (id > 500000 - the reserved client band) are copied into the new
-#    snapshot before the swap. Without sqlite3 the swap still proceeds; local
-#    quick-adds remain recoverable from the .prev files.
+#  - Carry-forward (needs sqlite3): local Settings rows, local quick-add
+#    songs (id > 500000 - the reserved client band), and the operators' own
+#    Media library entries and slideshows (Media, SlideShows, Slides) are
+#    copied into the new snapshot before the swap, in one transaction. The
+#    published snapshot never contains media or slideshows; rows it does
+#    contain are kept and same-id local rows are skipped. Without sqlite3 the
+#    swap still proceeds; local data remains recoverable from the .prev files.
 #  - Rotates spData.prev-1..keep, then atomically replaces spData.sqlite.
 #  - Stamps version.txt and appends to sync.log. All failures leave the
 #    current database untouched.
@@ -64,6 +67,9 @@ try {
     $ok = (Test-Path $staged) -and ((Get-FileHash $staged -Algorithm SHA256).Hash.ToLower() -eq $man.sha256.ToLower())
     if (-not $ok) {
         Log "downloading v$($man.content_version) ($([math]::Round($man.bytes/1MB)) MB)"
+        # A journal left by an interrupted carry-forward must never be applied
+        # to a freshly downloaded file.
+        Remove-Item "$staged-journal" -Force -ErrorAction SilentlyContinue
         Fetch $man.file $staged
         $hash = (Get-FileHash $staged -Algorithm SHA256).Hash.ToLower()
         if ($hash -ne $man.sha256.ToLower()) {
@@ -83,18 +89,40 @@ try {
 
     # 4. Carry forward local state into the staged snapshot (before swap)
     if ((Test-Path $db) -and $cfg.sqlite3 -and (Test-Path $cfg.sqlite3)) {
-        $dbSql = $db -replace '\\','/'
+        $dbSql = ($db -replace '\\','/') -replace "'", "''"  # SQL string literal
         $sql = @"
 ATTACH DATABASE '$dbSql' AS old;
+BEGIN;
 DELETE FROM Settings;
 INSERT INTO Settings SELECT * FROM old.Settings;
 INSERT INTO Songs SELECT * FROM old.Songs WHERE id > 500000;
+INSERT INTO Media SELECT o.* FROM old.Media o
+  WHERE NOT EXISTS (SELECT 1 FROM main.Media m WHERE m.long_path IS o.long_path);
+INSERT INTO SlideShows SELECT o.* FROM old.SlideShows o
+  WHERE NOT EXISTS (SELECT 1 FROM main.SlideShows s WHERE s.id = o.id);
+INSERT INTO Slides SELECT o.* FROM old.Slides o
+  WHERE NOT EXISTS (SELECT 1 FROM main.Slides s WHERE s.id = o.id);
+COMMIT;
 DETACH DATABASE old;
 "@
-        $sql | & $cfg.sqlite3 $staged
-        if ($LASTEXITCODE -ne 0) { throw "carry-forward failed (sqlite3 exit $LASTEXITCODE)" }
-        $carried = "select count(*) from Songs where id > 500000;" | & $cfg.sqlite3 $staged
-        Log "carry-forward OK (local settings kept, $carried local quick-adds preserved)"
+        # Run the SQL from a BOM-free UTF-8 file. Piping the text into sqlite3
+        # let Windows PowerShell prepend a byte-order mark, which broke the
+        # first line (the ATTACH): the merge then failed on every run and no
+        # new snapshot could ever be installed. -bail stops at the first error
+        # with the transaction uncommitted.
+        $sqlFile = Join-Path $staging "carry-forward.sql"
+        [System.IO.File]::WriteAllText($sqlFile, $sql, (New-Object System.Text.UTF8Encoding $false))
+        Push-Location $staging
+        try { & $cfg.sqlite3 -bail $staged ".read carry-forward.sql" } finally { Pop-Location }
+        $exit = $LASTEXITCODE
+        Remove-Item $sqlFile -Force -ErrorAction SilentlyContinue
+        if ($exit -ne 0) {
+            # Discard the possibly half-written copy so the next run starts clean.
+            Remove-Item $staged, "$staged-journal" -Force -ErrorAction SilentlyContinue
+            throw "carry-forward failed (sqlite3 exit $exit) - staged copy discarded"
+        }
+        $carried = & $cfg.sqlite3 $staged "select (select count(*) from Songs where id > 500000) || ' local quick-adds, ' || (select count(*) from Media) || ' media files, ' || (select count(*) from SlideShows) || ' slideshows';"
+        Log "carry-forward OK (local settings kept; $carried preserved)"
     } elseif (Test-Path $db) {
         Log "WARN no sqlite3 configured - swapping without carry-forward (old DB kept as .prev-1)"
     }
