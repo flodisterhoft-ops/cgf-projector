@@ -346,7 +346,7 @@ void ManageDataDialog::importSongbook(QString path)
             while(!xml.atEnd())
             {
                 xml.readNext();
-                if(xml.StartElement && xml.name() == "spSongBook"_L1)
+                if(xml.isStartElement() && xml.name() == "spSongBook"_L1)
                 {
                     double sb_version = xml.attributes().value("version").toString().toDouble();
                     if(sb_version == 2.0) // check supported songbook version
@@ -362,7 +362,7 @@ void ManageDataDialog::importSongbook(QString path)
                         while(xml.tokenString() != "EndElement" && xml.name() != "spSongBook"_L1)
                         {
                             xml.readNext();
-                            if(xml.StartElement && xml.name() == "SongBook"_L1)
+                            if(xml.isStartElement() && xml.name() == "SongBook"_L1)
                             {
                                 QString xtitle,xinfo;
                                 // Read songbook data
@@ -370,12 +370,12 @@ void ManageDataDialog::importSongbook(QString path)
                                 while(xml.tokenString() != "EndElement")
                                 {
                                     xml.readNext();
-                                    if(xml.StartElement && xml.name() == "title"_L1)
+                                    if(xml.isStartElement() && xml.name() == "title"_L1)
                                     {
                                         xtitle = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "info"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "info"_L1)
                                     {
                                         xinfo = xml.readElementText();
                                         xml.readNext();
@@ -397,7 +397,7 @@ void ManageDataDialog::importSongbook(QString path)
 
                                 xml.readNext();
                             }
-                            else if (xml.StartElement && xml.name() == "Song"_L1)
+                            else if (xml.isStartElement() && xml.name() == "Song"_L1)
                             {
                                 QString xnum,xtitle,xcat,xtune,xwords,xmusic,xtext,xnotes,
                                         xuse,xalign,xcolor,xfont,xback,xcount,xdate;
@@ -407,72 +407,72 @@ void ManageDataDialog::importSongbook(QString path)
                                 while(xml.tokenString() != "EndElement")
                                 {
                                     xml.readNext();
-                                    if(xml.StartElement && xml.name() == "title"_L1)
+                                    if(xml.isStartElement() && xml.name() == "title"_L1)
                                     {
                                         xtitle = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "category"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "category"_L1)
                                     {
                                         xcat = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "tune"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "tune"_L1)
                                     {
                                         xtune = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "words"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "words"_L1)
                                     {
                                         xwords = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "music"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "music"_L1)
                                     {
                                         xmusic = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "song_text"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "song_text"_L1)
                                     {
                                         xtext = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "notes"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "notes"_L1)
                                     {
                                         xnotes = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "use_private"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "use_private"_L1)
                                     {
                                         xuse = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "alignment"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "alignment"_L1)
                                     {
                                         xalign = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "color"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "color"_L1)
                                     {
                                         xcolor = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "font"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "font"_L1)
                                     {
                                         xfont = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "background"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "background"_L1)
                                     {
                                         xback = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "count"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "count"_L1)
                                     {
                                         xcount = xml.readElementText();
                                         xml.readNext();
                                     }
-                                    else if(xml.StartElement && xml.name() == "date"_L1)
+                                    else if(xml.isStartElement() && xml.name() == "date"_L1)
                                     {
                                         xdate = xml.readElementText();
                                         xml.readNext();
@@ -703,11 +703,13 @@ void ManageDataDialog::exportSongbook(QString path)
                           "Please try again with different file name."));
             mb.setIcon(QMessageBox::Information);
             mb.setStandardButtons(QMessageBox::Ok);
+            setArrowCursor(); // was left as the wait cursor
             mb.exec();
             return;
         }
     }
 
+    bool exported = false;
     {
         // Prepare SQLite songbook database file
         QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE","sps");
@@ -768,7 +770,7 @@ void ManageDataDialog::exportSongbook(QString path)
                 q.addBindValue(sq.record().value("date"));
                 q.exec();
             }
-            db.commit();
+            exported = db.commit();
         }
     }
     QSqlDatabase::removeDatabase("sps");
@@ -776,9 +778,18 @@ void ManageDataDialog::exportSongbook(QString path)
     setArrowCursor();
 
     QMessageBox mb(this);
-    mb.setWindowTitle(tr("Export complete"));
-    mb.setText(tr("The songbook \"") + title + tr("\"\nHas been saved to:\n     ") + path);
-    mb.setIcon(QMessageBox::Information);
+    if(exported)
+    {
+        mb.setWindowTitle(tr("Export complete"));
+        mb.setText(tr("The songbook \"") + title + tr("\"\nHas been saved to:\n     ") + path);
+        mb.setIcon(QMessageBox::Information);
+    }
+    else // used to report success even when the file could not be written
+    {
+        mb.setWindowTitle(tr("Export failed"));
+        mb.setText(tr("The songbook could not be saved to:\n     ") + path);
+        mb.setIcon(QMessageBox::Warning);
+    }
     mb.exec();
 }
 
@@ -794,7 +805,7 @@ void ManageDataDialog::on_delete_songbook_pushButton_clicked()
     ms.setInformativeText(tr("This action will permanently delete this songbook"));
     ms.setIcon(QMessageBox::Question);
     ms.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    ms.setDefaultButton(QMessageBox::Yes);
+    ms.setDefaultButton(QMessageBox::No); // a stray Enter must not delete a whole book
     int ret = ms.exec();
 
     switch (ret) {
@@ -818,12 +829,16 @@ void ManageDataDialog::deleteSongbook(Songbook songbook)
     QSqlQuery sq;
     QString id = songbook.songbookId.trimmed();
 
+    // One transaction: either the book and its songs go, or nothing does.
+    QSqlDatabase::database().transaction();
+
     // Delete from Songbook Table
     sq.exec("DELETE FROM Songbooks WHERE id = '" + id + "'");
     sq.clear();
 
     // Delete from Songs Table
     sq.exec("DELETE FROM Songs WHERE songbook_id = '" + id +"'");
+    QSqlDatabase::database().commit();
 
     load_songbooks();
     updateSongbookButtons();
@@ -877,12 +892,13 @@ void ManageDataDialog::importBible(QString path)
                 mb.exec();
             }
             file.close();
+            setArrowCursor(); // was left as the wait cursor
             return;
         }
         else if (line.startsWith("##spData")) //New bible format version
         {
             split = line.split("\t");
-            version = split.at(1);
+            version = split.value(1); // value(): a header without a tab crashed at(1)
             if (version.trimmed() != "1") // Version 1
             {
                 QString errorm = tr("The Bible format you are importing is of an new version.\n"
@@ -899,24 +915,26 @@ void ManageDataDialog::importBible(QString path)
                     mb.exec();
                 }
                 file.close();
+                setArrowCursor();
                 return;
             }
         }
         else
         {
             file.close();
+            setArrowCursor();
             return;
         }
 
         line = QString::fromUtf8(file.readLine()); // read title
         split = line.split("\t");
-        title = split.at(1);
+        title = split.value(1);
         line = QString::fromUtf8(file.readLine()); // read abbreviation
         split = line.split("\t");
-        abbr = split.at(1);
+        abbr = split.value(1);
         line = QString::fromUtf8(file.readLine()); // read info
         split = line.split("\t");
-        info = split.at(1);
+        info = split.value(1);
         // Convert bible information from single line to multiple line
         QStringList info_list = info.split("@%");
         info.clear();
@@ -1102,19 +1120,31 @@ void ManageDataDialog::exportBible(QString path, Bibles bible)
 
     QFile ofile;
     ofile.setFileName(path);
-    if (ofile.open(QIODevice::WriteOnly))
+    bool exported = ofile.open(QIODevice::WriteOnly);
+    if (exported)
     {
         QTextStream out(&ofile);
         out.setEncoding(QStringConverter::Utf8);
         out << to_file;
+        out.flush();
+        exported = (out.status() == QTextStream::Ok);
     }
     ofile.close();
     setArrowCursor();
 
     QMessageBox mb(this);
-    mb.setWindowTitle(tr("Bible has been exported"));
-    mb.setText(tr("Bible:\n     ") + bible.title + tr("\nHas been saved to:\n     " )+ path);
-    mb.setIcon(QMessageBox::Information);
+    if(exported)
+    {
+        mb.setWindowTitle(tr("Bible has been exported"));
+        mb.setText(tr("Bible:\n     ") + bible.title + tr("\nHas been saved to:\n     " )+ path);
+        mb.setIcon(QMessageBox::Information);
+    }
+    else // used to report success even when the file could not be written
+    {
+        mb.setWindowTitle(tr("Export failed"));
+        mb.setText(tr("The Bible could not be saved to:\n     ") + path);
+        mb.setIcon(QMessageBox::Warning);
+    }
     mb.exec();
 }
 
@@ -1130,7 +1160,7 @@ void ManageDataDialog::on_delete_bible_pushButton_clicked()
     ms.setInformativeText(tr("This action will permanently delete this Bible"));
     ms.setIcon(QMessageBox::Question);
     ms.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    ms.setDefaultButton(QMessageBox::Yes);
+    ms.setDefaultButton(QMessageBox::No); // a stray Enter must not delete a whole book
     int ret = ms.exec();
 
     switch (ret) {
@@ -1154,6 +1184,9 @@ void ManageDataDialog::deleteBible(Bibles bible)
     QSqlQuery sq;
     QString id = bible.bibleId.trimmed();
 
+    // One transaction: either the whole Bible goes, or nothing does.
+    QSqlDatabase::database().transaction();
+
     // Delete from BibleBooks Table
     sq.exec("DELETE FROM BibleBooks WHERE bible_id = '" + id + "'");
     sq.clear();
@@ -1165,6 +1198,7 @@ void ManageDataDialog::deleteBible(Bibles bible)
     // Delete from BibleVersions Table
     sq.clear();
     sq.exec("DELETE FROM BibleVersions WHERE id = '" + id +"'");
+    QSqlDatabase::database().commit();
 
     load_bibles();
     setArrowCursor();
@@ -1587,7 +1621,9 @@ void ManageDataDialog::exportTheme(QString path, bool all)
                      "'ending_color' INTEGER, 'ending_font' TEXT, 'ending_type' INTEGER, 'ending_position' INTEGER, "
                      "'use_background' BOOL, 'background_name' TEXT, 'background' BLOB, 'text_font' TEXT, "
                      "'text_color' INTEGER, 'text_align_v' INTEGER, 'text_align_h' INTEGER, "
-                     "'screen_use' INTEGER, 'screen_position' INTEGER, 'use_disp_1' BOOL)");
+                     "'screen_use' INTEGER, 'screen_position' INTEGER, 'use_disp_1' BOOL, "
+                     "'add_background_color_to_text' BOOL, 'text_rec_background_color' INTEGER, "
+                     "'text_gen_background_color' INTEGER)");
             sqt.exec("CREATE TABLE 'Themes' ('id' INTEGER , 'name' TEXT, 'comment' TEXT)");
 
             if(all)
@@ -1654,6 +1690,18 @@ void ManageDataDialog::exportTheme(QString path, bool all)
     setArrowCursor();
 }
 
+// Theme files from SoftProjector 2.x store "display N has its own settings"
+// (use_disp_2); this version stores the opposite (use_disp_1). Convert when
+// importing such a file, as the start-up migration does for the database.
+static QVariant useDisp1Value(const QSqlRecord &r)
+{
+    if(r.indexOf("use_disp_1") >= 0)
+        return r.value("use_disp_1");
+    if(r.indexOf("use_disp_2") >= 0)
+        return !r.value("use_disp_2").toBool();
+    return true;
+}
+
 void ManageDataDialog::transferTheme(QSqlQuery &sqf, QSqlQuery &sqt)
 {
     sqt.prepare("INSERT INTO Themes (id, name, comment) VALUES(:id, :na, :co)");
@@ -1690,7 +1738,7 @@ void ManageDataDialog::transferThemeAnnounce(QSqlQuery &sqf, QSqlQuery &sqt, int
         sqt.bindValue(":tc",sqf.record().value("text_color"));
         sqt.bindValue(":av",sqf.record().value("text_align_v"));
         sqt.bindValue(":ah",sqf.record().value("text_align_h"));
-        sqt.bindValue(":ud",sqf.record().value("use_disp_1"));
+        sqt.bindValue(":ud",useDisp1Value(sqf.record()));
         sqt.exec();
     }
 }
@@ -1728,7 +1776,7 @@ void ManageDataDialog::transferThemeBible(QSqlQuery &sqf, QSqlQuery &sqt, int tm
         sqt.bindValue(":ua",sqf.record().value("use_abbr"));
         sqt.bindValue(":su",sqf.record().value("screen_use"));
         sqt.bindValue(":sp",sqf.record().value("screen_position"));
-        sqt.bindValue(":ud",sqf.record().value("use_disp_1"));
+        sqt.bindValue(":ud",useDisp1Value(sqf.record()));
         sqt.bindValue(":ab",sqf.record().value("add_background_color_to_text"));
         sqt.bindValue(":rc",sqf.record().value("text_rec_background_color"));
         sqt.bindValue(":gc",sqf.record().value("text_gen_background_color"));
@@ -1751,7 +1799,7 @@ void ManageDataDialog::transferThemePassive(QSqlQuery &sqf, QSqlQuery &sqt, int 
         sqt.bindValue(":ub",sqf.record().value("use_background"));
         sqt.bindValue(":bn",sqf.record().value("background_name"));
         sqt.bindValue(":ba",sqf.record().value("background"));
-        sqt.bindValue(":ud",sqf.record().value("use_disp_1"));
+        sqt.bindValue(":ud",useDisp1Value(sqf.record()));
         sqt.exec();
     }
 }
@@ -1761,9 +1809,10 @@ void ManageDataDialog::transferThemeSong(QSqlQuery &sqf, QSqlQuery &sqt, int tmI
     sqt.prepare("INSERT INTO ThemeSong (theme_id, disp, use_shadow, use_fading, use_blur_shadow, show_stanza_title, "
                 "show_key, show_number, info_color, info_font, info_align, show_song_ending, ending_color, ending_font, "
                 "ending_type, ending_position, use_background, background_name, background, text_font, text_color, "
-                "text_align_v, text_align_h, screen_use, screen_position, use_disp_1) "
+                "text_align_v, text_align_h, screen_use, screen_position, use_disp_1, "
+                "add_background_color_to_text, text_rec_background_color, text_gen_background_color) "
                 "VALUES(:id, :di, :us, :uf, :uu, :ss, :sk, :sn, :ic, :if, :ia, :se, :ec, :ef, :et, :ep, "
-                ":ub, :bn, :ba, :tf, :tc, :av, :ah, :su, :sp, :ud)");
+                ":ub, :bn, :ba, :tf, :tc, :av, :ah, :su, :sp, :ud, :ab, :rc, :gc)");
 
     while(sqf.next())
     {
@@ -1795,7 +1844,11 @@ void ManageDataDialog::transferThemeSong(QSqlQuery &sqf, QSqlQuery &sqt, int tmI
         sqt.bindValue(":ah",sqf.record().value("text_align_h"));
         sqt.bindValue(":su",sqf.record().value("screen_use"));
         sqt.bindValue(":sp",sqf.record().value("screen_position"));
-        sqt.bindValue(":ud",sqf.record().value("use_disp_1"));
+        sqt.bindValue(":ud",useDisp1Value(sqf.record()));
+        // Like ThemeBible; these were missing, so song colours were lost on export/import
+        sqt.bindValue(":ab",sqf.record().value("add_background_color_to_text"));
+        sqt.bindValue(":rc",sqf.record().value("text_rec_background_color"));
+        sqt.bindValue(":gc",sqf.record().value("text_gen_background_color"));
         sqt.exec();
     }
 }
@@ -1812,7 +1865,7 @@ void ManageDataDialog::on_pushButtonThemeDelete_clicked()
     ms.setInformativeText(tr("This action will permanently delete this theme"));
     ms.setIcon(QMessageBox::Question);
     ms.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    ms.setDefaultButton(QMessageBox::Yes);
+    ms.setDefaultButton(QMessageBox::No); // a stray Enter must not delete a whole book
     int ret = ms.exec();
 
     switch (ret) {
@@ -1836,6 +1889,9 @@ void ManageDataDialog::deleteTheme(ThemeInfo tme)
     int id = tme.themeId;
     reloadThemes = true;
 
+    // One transaction: either the theme and its settings go, or nothing does.
+    QSqlDatabase::database().transaction();
+
     // Delete from Themes Table
     sq.exec("DELETE FROM Themes WHERE id = " + QString::number(id));
     sq.clear();
@@ -1845,6 +1901,7 @@ void ManageDataDialog::deleteTheme(ThemeInfo tme)
     sq.exec("DELETE FROM ThemeBible WHERE theme_id = " + QString::number(id));
     sq.exec("DELETE FROM ThemeSong WHERE theme_id = " + QString::number(id));
     sq.exec("DELETE FROM ThemeAnnounce WHERE theme_id = " + QString::number(id));
+    QSqlDatabase::database().commit();
 
     loadThemes();
     updateThemeButtons();

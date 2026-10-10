@@ -1055,5 +1055,15 @@ void Settings::saveNewSettings()
 
 QByteArray Settings::textToByt(QString text)
 {
-    return text.toUtf8();
+    // Splitter states are saved as hex (see saveSettings). The Qt 6 port dropped
+    // this decode, so the hex text itself was handed to restoreState (always
+    // rejected) and hex-encoded again on save, doubling the stored value on
+    // every launch.
+    QByteArray b = QByteArray::fromHex(text.toLatin1());
+    // A QSplitter state starts with the 0x000000ff marker and is a few dozen
+    // bytes. Drop anything else (including values inflated by the old bug) so
+    // the splitter falls back to its default layout.
+    if(b.size() > 1024 || !b.startsWith(QByteArray::fromHex("000000ff")))
+        return QByteArray();
+    return b;
 }

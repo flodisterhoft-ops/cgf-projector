@@ -203,7 +203,8 @@ void PrintPreviewDialog::on_comboBox_currentIndexChanged(int index)
     }
     else if(index == 2)
     {
-    margins = printer->pageLayout().margins(QPageLayout::Point);
+        // "Pixel": QPageLayout has no pixel unit; use the printer resolution
+        margins = QMarginsF(printer->pageLayout().marginsPixels(printer->resolution()));
     }
     else if(index == 3)
     {
@@ -250,14 +251,15 @@ void PrintPreviewDialog::updateMargins()
     double t = ui->doubleSpinBoxTop->value();
     double r = ui->doubleSpinBoxRight->value();
     double b = ui->doubleSpinBoxBottom->value();
-    QMargins margins(l,t,r,b);
+    // QMarginsF: the integer QMargins truncated the default 0.5 inch to 0.
+    QMarginsF margins(l,t,r,b);
 
     if(ui->comboBox->currentIndex() == 0)
         printer->setPageMargins(margins,QPageLayout::Inch);
     else if(ui->comboBox->currentIndex() == 1)
         printer->setPageMargins(margins,QPageLayout::Millimeter);
     else if(ui->comboBox->currentIndex() == 2)
-        printer->setPageMargins(margins,QPageLayout::Point);
+        printer->setPageMargins(margins * (72.0 / printer->resolution()),QPageLayout::Point); // pixels to points
     else if(ui->comboBox->currentIndex() == 3)
         printer->setPageMargins(margins,QPageLayout::Point);
 }

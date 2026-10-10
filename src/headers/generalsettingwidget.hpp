@@ -60,7 +60,7 @@ private slots:
     void on_pushButtonDefault_clicked();
     void loadThemes();
     void loadSettings();
-    void on_comboBoxDisplayScreen_activated(const QString &arg1);
+    void on_comboBoxDisplayScreen_activated(int);
     void on_comboBoxDisplayScreen_2_activated(int index);
     void on_comboBoxDisplayScreen_3_activated(int index);
     void on_comboBoxDisplayScreen_4_activated(int index);

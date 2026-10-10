@@ -267,7 +267,7 @@ void GeneralSettingWidget::updateSecondaryDisplayScreen()
     }
 }
 
-void GeneralSettingWidget::on_comboBoxDisplayScreen_activated(const QString &arg1)
+void GeneralSettingWidget::on_comboBoxDisplayScreen_activated(int)
 {
     updateSecondaryDisplayScreen();
 }

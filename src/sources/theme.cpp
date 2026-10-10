@@ -249,12 +249,10 @@ void Theme::saveAnnounceNew(int screen, TextSettings &settings)
 
 void Theme::saveThemeUpdate()
 {
-    QSqlQuery sq;
-    sq.prepare("UPDATE Themes SET name = ?, comments = ? WHERE id = ?");
-    sq.addBindValue(m_info.name);
-    sq.addBindValue(m_info.comments);
-    sq.addBindValue(m_info.themeId);
-    sq.exec();
+    // No Themes row update here. The old statement named a column that does not
+    // exist ("comments"; the column is "comment") and so never ran, in 2.1 as
+    // well. Fixing it would overwrite names edited in Manage Database with this
+    // object's possibly stale copy.
 
     savePassiveUpdate(1,passive);
     savePassiveUpdate(2,passive2);
@@ -445,7 +443,15 @@ void Theme::loadPassive(int screen, TextSettings &settings)
     QSqlQuery sq;
     QSqlRecord sr;
     sq.exec(QString("SELECT * FROM ThemePassive WHERE theme_id = %1 and disp = %2").arg(m_info.themeId).arg(screen));
-    sq.first();
+    if(!sq.first())
+    {
+        // No row for this display (2.1 databases only have displays 1 and 2,
+        // and themes created while saving was broken have none). Reading the
+        // empty record zeroed every setting; keep the current values instead
+        // and store them so later updates have a row to change.
+        savePassiveNew(screen, settings);
+        return;
+    }
     sr = sq.record();
     settings.useBackground = sr.field("use_background").value().toBool();
     settings.backgroundName = sr.field("background_name").value().toString();
@@ -458,7 +464,11 @@ void Theme::loadBible(int screen, BibleSettings &settings)
     QSqlQuery sq;
     QSqlRecord sr;
     sq.exec(QString("SELECT * FROM ThemeBible WHERE theme_id = %1 and disp = %2").arg(m_info.themeId).arg(screen));
-    sq.first();
+    if(!sq.first())
+    {
+        saveBibleNew(screen, settings); // missing row: keep defaults (see loadPassive)
+        return;
+    }
     sr = sq.record();
     settings.useShadow = sr.field("use_shadow").value().toBool();
     settings.useFading = sr.field("use_fading").value().toBool();
@@ -488,7 +498,11 @@ void Theme::loadSong(int screen, SongSettings &settings)
     QSqlQuery sq;
     QSqlRecord sr;
     sq.exec(QString("SELECT * FROM ThemeSong WHERE theme_id = %1 and disp = %2").arg(m_info.themeId).arg(screen));
-    sq.first();
+    if(!sq.first())
+    {
+        saveSongNew(screen, settings); // missing row: keep defaults (see loadPassive)
+        return;
+    }
     sr = sq.record();
     settings.useShadow = sr.field("use_shadow").value().toBool();
     settings.useFading = sr.field("use_fading").value().toBool();
@@ -524,7 +538,11 @@ void Theme::loadAnnounce(int screen, TextSettings &settings)
     QSqlQuery sq;
     QSqlRecord sr;
     sq.exec(QString("SELECT * FROM ThemeAnnounce WHERE theme_id = %1 and disp = %2").arg(m_info.themeId).arg(screen));
-    sq.first();
+    if(!sq.first())
+    {
+        saveAnnounceNew(screen, settings); // missing row: keep defaults (see loadPassive)
+        return;
+    }
     sr = sq.record();
     settings.useShadow = sr.field("use_shadow").value().toBool();
     settings.useFading = sr.field("use_fading").value().toBool();

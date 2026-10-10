@@ -30,6 +30,61 @@
 // 990xxx - Development release. ex: 990206 - for SoftProjector 2 Development Build 6 (2db6)
 int const dbVer = 2;
 
+static QStringList columnNames(const QString &table)
+{
+    QStringList cols;
+    QSqlQuery q(QString("PRAGMA table_info('%1')").arg(table));
+    while(q.next())
+        cols << q.value(1).toString();
+    return cols;
+}
+
+// Bring theme tables from the SoftProjector 2.1 layout (every church database,
+// and every snapshot exported from it) to the layout this code reads and
+// writes. Without it every theme save failed silently and new themes had no
+// settings rows. Safe to run on every start: tables already migrated are left
+// alone.
+static void migrateThemeTables()
+{
+    const QStringList themeTables = {"ThemePassive", "ThemeBible", "ThemeSong", "ThemeAnnounce"};
+    QSqlDatabase db = QSqlDatabase::database();
+    db.transaction();
+    QSqlQuery q;
+    bool ok = true;
+    for(const QString &t : themeTables)
+    {
+        QStringList cols = columnNames(t);
+        if(cols.isEmpty())
+            continue; // table missing; nothing to migrate
+        if(!cols.contains("use_disp_1") && cols.contains("use_disp_2"))
+        {
+            // 2.1 stored "display N has its own settings" (use_disp_2); this
+            // code stores the opposite, "display N mirrors display 1".
+            ok &= q.exec(QString("ALTER TABLE %1 RENAME COLUMN use_disp_2 TO use_disp_1").arg(t));
+            ok &= q.exec(QString("UPDATE %1 SET use_disp_1 = CASE WHEN use_disp_1 THEN 0 ELSE 1 END").arg(t));
+        }
+        else if(!cols.contains("use_disp_1"))
+            ok &= q.exec(QString("ALTER TABLE %1 ADD COLUMN use_disp_1 BOOL DEFAULT 1").arg(t));
+
+        if((t == "ThemeBible" || t == "ThemeSong") && !cols.contains("add_background_color_to_text"))
+        {
+            // Same defaults as Settings: off, black box colour, green general colour.
+            ok &= q.exec(QString("ALTER TABLE %1 ADD COLUMN add_background_color_to_text BOOL DEFAULT 0").arg(t));
+            ok &= q.exec(QString("ALTER TABLE %1 ADD COLUMN text_rec_background_color INTEGER DEFAULT %2")
+                         .arg(t).arg(QColor(Qt::black).rgb()));
+            ok &= q.exec(QString("ALTER TABLE %1 ADD COLUMN text_gen_background_color INTEGER DEFAULT %2")
+                         .arg(t).arg(QColor(Qt::green).rgb()));
+        }
+    }
+    if(ok)
+        db.commit();
+    else
+    {
+        qWarning() << "Theme table migration failed, left unchanged:" << q.lastError().text();
+        db.rollback();
+    }
+}
+
 bool connect(QString database_file)
 {
     database_file += "spData.sqlite";
@@ -104,6 +159,7 @@ bool connect(QString database_file)
             //sq.exec("CREATE TABLE 'ThemeData' ('theme_id' INTEGER, 'type' TEXT, 'sets' TEXT)");
             sq.exec("CREATE TABLE 'Themes' ('id' INTEGER PRIMARY KEY  AUTOINCREMENT  NOT NULL , 'name' TEXT, 'comment' TEXT)");
         }
+        migrateThemeTables();
         return true;
     }
 }
