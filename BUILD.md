@@ -40,7 +40,9 @@ The resulting `bin/` folder (~106 MB) is portable. The app reads
 - `3rdparty/headers/qmediaplaylist.h` — removed `#include <qmediaenumdebug.h>`
   and the two `Q_MEDIA_ENUM_DEBUG(...)` lines. That header was removed in newer
   Qt 6 releases; it only provided debug pretty-printing for enums. No
-  functional impact.
+  functional impact. (Since 2026-10-08 the whole vendored `3rdparty/`
+  QMediaPlaylist is gone: its only use was two Qt 5 loop enums, which meant
+  the wrong thing to Qt 6 and were replaced by `QMediaPlayer::Infinite`/`Once`.)
 
 ## Build-gate log (2026-07-26)
 
@@ -78,3 +80,65 @@ Numbers:
 Kept as inert data types so old schedules still load: `VideoInfo`, `SlideShow`.
 Deliberately deferred to pass 2 (needs sync + fixed CGF themes to exist first):
 Database manager gutting, settings-machinery reduction, quick-add upload flow.
+
+## Restore log — branch `restore-media-pictures` (2026-10-08)
+
+User decision: bring back Media and Pictures. The operators had avoided them
+because they were broken, not unwanted. Restored by reverting 86edd9d (keeping
+the build-dir `.gitignore` fix and dropping the downloader/translations again),
+then fixing the Qt 5 → Qt 6 port damage:
+
+- Media tab: no `QAudioOutput` (silent); string connects to signals and slots
+  Qt 6 removed (`videoAvailableChanged`, `stateChanged`, `error`, `setVolume`,
+  `setMuted`), so Go Live never enabled and play/pause could not pause; going
+  live from the schedule busy-waited on the GUI thread (froze the app); stale
+  "loaded" status after `stop()` and a queued `pause()` overriding `play()`;
+  library paths reloaded as URL scheme `c:`; SQL broke on apostrophes;
+  infinite recursion in `VideoPlayerWidget::setFullScreen`.
+- Projector screen (`DisplayArea.qml`): `MediaPlayer` had no `videoOutput` or
+  `audioOutput` (black, silent video); volume/mute/seek used removed APIs; no
+  end-of-video signal; frozen last frame under later slides; Qt 5 playlist
+  enums passed as Qt 6 `loops` (background video played 3 times, others kept
+  the previous count). Vendored `3rdparty/` QMediaPlaylist removed.
+- Pictures: empty slideshows loaded a blank slide; manual sort dropped slides;
+  unreadable images became blank slides.
+- Sync agent: carries local `Media`, `SlideShows` and `Slides` into new
+  snapshots; runs the SQL from a BOM-free file (piping into sqlite3 prepended a
+  byte-order mark that broke the ATTACH, so no new snapshot could ever install);
+  `-bail` + one transaction; discards a half-merged staged copy and its journal.
+
+Bug review of the rest of the code, by area, then fixes. The headline items:
+theme tables migrated at start-up from the 2.1 layout (`use_disp_2`, inverted
+meaning, missing colour columns), without which every theme save failed;
+splitter settings decoded from hex again (the stored value doubled on every
+launch); text layout loops can no longer freeze the app; uninitialised
+"colour box" flags; schedule save with apostrophes, empty-schedule deletes and
+failed saves; display windows follow monitors being connected/disconnected and
+a missing screen number no longer crashes start-up; Unicode-aware search
+(Cyrillic/umlauts); songs without verse headers are projected; Bible
+Go Live/selection fixes; announcement delete mapping; print and database
+manager fixes. Remaining known issues are listed at the end of this section.
+
+Verification (2026-10-08): clean build with no errors (compiler warnings 83 →
+51, all unused-parameter or deprecated-but-working). A scratch test harness
+driving the real classes passes 42 media/picture/display checks and 18
+main-window/schedule/settings/song checks. Song parsing was compared old vs
+new on all 10,312 songs: 1,801 songs went from no slides to their full text,
+and no song lost a distinct lyric line. The app was run twice on a copy of the
+church database: migration applied, theme saves persist, startup log clean
+(the ~9,600 font warnings are gone). Deployed app is ~106 MB again (FFmpeg
+multimedia back).
+
+Known remaining issues (not fixed in this round):
+- Monitor connect/disconnect handling is untested on real hardware (needs the
+  projector chain). Test it before relying on it in a service.
+- Data: songs 794 ("Chorushine.") and 860 ("Verser 3") have typo'd stanza
+  labels; fix them in the master library.
+- The sync agent does not carry local themes or announcements forward; a new
+  snapshot replaces them with the published ones (decide: central or local?).
+- Bible "colour box behind text" is painted during measurement, so the box is
+  sized for the first, largest font (only matters if a theme turns it on).
+- `isAnnounceTitle` lacks German "Dia"; `BibleVerse` has no index (17-20 ms
+  per lookup); the `Settings` table has no unique key, so rows can duplicate.
+- Theme fonts are now stored in Qt 6's format; SoftProjector 2.1 (Qt 5) may not
+  read them, so never open a CGF Projector database with 2.1.

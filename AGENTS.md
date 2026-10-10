@@ -112,13 +112,19 @@ stripping what they never used and wiring the app into a central CGF library.
 
 ## Feature decisions from the operators' actual data
 
-- Removed: Media player (0 media rows ever), Pictures/slideshows (1 slide in
-  10 years), HTTP module downloader (insecure, upstream-disabled), UI
+- Removed: HTTP module downloader (insecure, upstream-disabled), UI
   translations, Donate/dead links, forced dark theme (upstream bug — checked a
   registry value that never exists; now forced light).
-- Kept: Bible (F6) / Songs (F7) / Announcements (F8), schedule, song editor
-  (future quick-add-that-uploads), **printing (user decision)**, usage counter
-  (feeds analytics; counts should merge across machines via sync later).
+- **Restored 2026-10-08 (user decision): Media and Pictures/slideshows.** They
+  were cut on 2026-07-26 for having almost no use (0 media rows, 1 slide), but
+  the operators avoided them because they were broken. The Qt 6 port had left
+  them silent, black and freezing; the restore fixed and tested them (see
+  BUILD.md "Restore log"). The sync agent now carries local Media, SlideShows
+  and Slides rows into each new snapshot.
+- Kept: Bible (F6) / Songs (F7) / Pictures / Media / Announcements (F8),
+  schedule, song editor (future quick-add-that-uploads), **printing (user
+  decision)**, usage counter (feeds analytics; counts should merge across
+  machines via sync later).
 - Planned add: **Share button** — song/setlist as link or PDF, possibly via
   Telegram (operators use Telegram).
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
