@@ -18,6 +18,7 @@
 ***************************************************************************/
 
 import QtQuick
+import QtMultimedia
 
 Rectangle {
     id: dispArea
@@ -39,6 +40,51 @@ Rectangle {
     signal exitClicked()
     signal nextClicked()
     signal prevClicked()
+
+    // Video signals
+    signal positionChanged(int position)
+    signal durationChanged(int duration)
+    signal playbackStateChanged(int state)
+    signal playbackStopped()
+
+    // Qt 6: the player must be told where to draw (videoOutput) and where to
+    // send sound (audioOutput); without these, video stayed black and silent.
+    MediaPlayer
+    {
+        id: player
+        objectName: "player"
+        videoOutput: vidOut
+        audioOutput: AudioOutput { id: audioOut }
+        onPositionChanged:
+        {
+            dispArea.positionChanged(player.position)
+        }
+        onDurationChanged:
+        {
+            dispArea.durationChanged(player.duration)
+        }
+        onPlaybackStateChanged:
+        {
+            dispArea.playbackStateChanged(player.playbackState)
+        }
+        // Qt 6 has no "stopped" signal. Report only a natural end of the file:
+        // stop() is also called whenever the screen switches to a song, and
+        // must not be reported as the video finishing.
+        onMediaStatusChanged:
+        {
+            if(player.mediaStatus === MediaPlayer.EndOfMedia)
+                dispArea.playbackStopped()
+        }
+    }
+
+    VideoOutput
+    {
+        id: vidOut
+        objectName: "vidOut"
+        anchors.fill: parent
+        // Hide when stopped so a frozen last frame never shows under later slides.
+        visible: player.playbackState !== MediaPlayer.StoppedState
+    }
 
     Image
     {
@@ -642,6 +688,59 @@ Rectangle {
             backImage1.y = parent.y
             backImage2.x = parent.x
             backImage2.y = parent.y
+        }
+    }
+
+    // loopCount: MediaPlayer.Infinite (-1) or a play count (1 = once).
+    // fill: VideoOutput fill mode (0 = stretch, 1 = keep aspect, 2 = crop).
+    function loadVideo(source, loopCount, volume, fill)
+    {
+        player.stop()
+        player.source = source
+        player.loops = loopCount
+        audioOut.volume = volume
+        vidOut.fillMode = fill
+    }
+
+    function playVideo()
+    {
+        if(player.playbackState === MediaPlayer.StoppedState
+                || player.playbackState === MediaPlayer.PausedState)
+        {
+            player.play()
+        }
+
+    }
+
+    function stopVideo()
+    {
+        if(player.playbackState === MediaPlayer.PlayingState
+                || player.playbackState === MediaPlayer.PausedState)
+        {
+            player.stop()
+        }
+    }
+
+    function setVideoVolume(level)
+    {
+        audioOut.volume = level
+    }
+
+    function setVideoMuted(toMute)
+    {
+        audioOut.muted = toMute
+    }
+
+    function setVideoPosition(position)
+    {
+        player.setPosition(position)
+    }
+
+    function pauseVideo()
+    {
+        if(player.playbackState === MediaPlayer.PlayingState)
+        {
+            player.pause()
         }
     }
 

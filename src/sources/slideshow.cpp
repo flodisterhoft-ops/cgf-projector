@@ -39,27 +39,33 @@ void SlideShow::loadSlideShow(int id)
     slides.clear();
     slideShowId = id;
     QSqlQuery sq;
-    sq.exec(QString("SELECT name, info FROM SlideShows WHERE id = %1").arg(slideShowId));
-    sq.first();
-    name = sq.value(0).toString();
-    info = sq.value(1).toString();
+    sq.prepare("SELECT name, info FROM SlideShows WHERE id = ?");
+    sq.addBindValue(slideShowId);
+    sq.exec();
+    if(sq.first())
+    {
+        name = sq.value(0).toString();
+        info = sq.value(1).toString();
+    }
+
+    sq.prepare("SELECT COUNT(*) FROM Slides WHERE ss_id = ?");
+    sq.addBindValue(slideShowId);
+    sq.exec();
+    int max = sq.first() ? sq.value(0).toInt() : 0;
 
     QProgressDialog progress;
-    progress.setMaximum(100);
-    progress.setValue(1);
-    sq.exec(QString("SELECT id, p_order, name, path, pix, pix_small, pix_prev FROM Slides WHERE ss_id = %1").arg(slideShowId));
-
-    int max(0);
-    while(sq.next())
-        ++max;
-
-    sq.first();
     progress.setLabelText("Loading Slides...");
     progress.setMaximum(max+1);
     int ct(0);
 
-    QList<SlideShowItem> ss;
-    do
+    // Let SQLite sort by p_order. The old loop ran its body once even when the
+    // slideshow had no slides (adding a blank slide), and its manual sort
+    // silently dropped any slide whose p_order was not exactly 0..n-1.
+    sq.prepare("SELECT id, p_order, name, path, pix, pix_small, pix_prev FROM Slides "
+               "WHERE ss_id = ? ORDER BY p_order, id");
+    sq.addBindValue(slideShowId);
+    sq.exec();
+    while(sq.next())
     {
         SlideShowItem si;
         si.slideId = sq.value(0).toInt();
@@ -70,22 +76,9 @@ void SlideShow::loadSlideShow(int id)
         si.imageSmall.loadFromData(sq.value(5).toByteArray());
         si.imagePreview.loadFromData(sq.value(6).toByteArray());
 
-        ss.append(si);
+        slides.append(si);
         ++ct;
         progress.setValue(ct);
-    }while(sq.next());
-
-    // Sort to proper oder number
-    for(int i(0);i<ss.count();++i)
-    {
-        foreach(const SlideShowItem &ssi, ss)
-        {
-            if(ssi.order == i)
-            {
-                slides.append(ssi);
-                break;
-            }
-        }
     }
 
     ++ct;

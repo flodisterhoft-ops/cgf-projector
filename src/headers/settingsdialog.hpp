@@ -28,6 +28,7 @@
 #include "biblesettingwidget.hpp"
 #include "songsettingwidget.hpp"
 #include "announcementsettingwidget.hpp"
+#include "picturesettingwidget.hpp"
 
 namespace Ui {
 class SettingsDialog;
@@ -75,6 +76,7 @@ private:
     PassiveSettingWidget *passiveSettingwidget;
     BibleSettingWidget *bibleSettingswidget;
     SongSettingWidget *songSettingswidget;
+    PictureSettingWidget *pictureSettingWidget;
     AnnouncementSettingWidget *announcementSettingswidget;
 
     QPushButton *btnOk;

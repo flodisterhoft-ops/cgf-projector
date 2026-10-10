@@ -39,6 +39,12 @@ ProjectorDisplayScreen::ProjectorDisplayScreen(QWidget *parent) :
     connect(dispObj,SIGNAL(nextClicked()),this,SLOT(nextSlideClicked()));
     connect(dispObj,SIGNAL(prevClicked()),this,SLOT(prevSlideClicked()));
 
+    // Connect Media Player objects
+    connect(dispObj,SIGNAL(positionChanged(int)),this,SLOT(videoPositionChanged(int)));
+    connect(dispObj,SIGNAL(durationChanged(int)),this,SLOT(videoDurationChanged(int)));
+    connect(dispObj,SIGNAL(playbackStateChanged(int)),this,SLOT(videoPlaybackStateChanged(int)));
+    connect(dispObj,SIGNAL(playbackStopped()),this,SLOT(playbackStopped()));
+
     backImSwitch1 = backImSwitch2 = textImSwitch1 = textImSwitch2 = false;
     back1to2 = text1to2 = isNewBack = true;
     m_color.setRgb(0,0,0,0);// = QColor(QColor::black());
@@ -164,11 +170,37 @@ void ProjectorDisplayScreen::setTextPixmap(QPixmap p)
     }
 }
 
+void ProjectorDisplayScreen::setBackVideo(QString path)
+{
+    // Silent background loop. Qt 6 MediaPlayer.loops is a play count
+    // (Infinite = -1); the Qt 5 playlist enum passed before (Loop = 3) meant
+    // "play three times".
+    QUrl source = path.contains("://") ? QUrl(path) : QUrl::fromLocalFile(path);
+    loadVideo(source, QMediaPlayer::Infinite, 0.0, Qt::IgnoreAspectRatio);
+}
+
+void ProjectorDisplayScreen::loadVideo(const QUrl &source, int loops, double volume, Qt::AspectRatioMode fill)
+{
+    QMetaObject::invokeMethod(dispView->rootObject(), "loadVideo",
+                              Q_ARG(QVariant, source), Q_ARG(QVariant, loops),
+                              Q_ARG(QVariant, volume), Q_ARG(QVariant, int(fill)));
+}
+
 void ProjectorDisplayScreen::updateScreen()
 {
     QObject *root = dispView->rootObject();
     QMetaObject::invokeMethod(root,"stopTransitions");
     //    QString tranType = "seq";
+
+    // if background is a video, play video, else stop it.
+    if(backType == B_VIDEO)
+    {
+        QMetaObject::invokeMethod(root,"playVideo");
+    }
+    else
+    {
+        QMetaObject::invokeMethod(root,"stopVideo");
+    }
 
     if(text1to2 && back1to2)
     {
@@ -209,6 +241,21 @@ void ProjectorDisplayScreen::nextSlideClicked()
 void ProjectorDisplayScreen::prevSlideClicked()
 {
     emit prevSlide();
+}
+
+void ProjectorDisplayScreen::videoPositionChanged(int position)
+{
+    emit videoPositionChanged((qint64)position);
+}
+
+void ProjectorDisplayScreen::videoDurationChanged(int duration)
+{
+    emit videoDurationChanged((qint64)duration);
+}
+
+void ProjectorDisplayScreen::videoPlaybackStateChanged(int state)
+{
+    emit videoPlaybackStateChanged((QMediaPlayer::PlaybackState)state);
 }
 
 void ProjectorDisplayScreen::keyReleaseEvent(QKeyEvent *event)
@@ -380,6 +427,62 @@ void ProjectorDisplayScreen::renderSlideShow(QPixmap slide, SlideShowSettings &s
         setBackPixmap(slide,3);
     updateScreen();
 
+}
+
+void ProjectorDisplayScreen::renderVideo(VideoInfo videoDetails)
+{
+    backType = B_VIDEO;
+    setTextPixmap(imGen.generateEmptyImage());
+    setBackPixmap(imGen.generateColorImage(m_color),0);
+
+    // Play once. The Qt 5 enum used before (CurrentItemOnce = 0) is ignored by
+    // Qt 6, so a video kept whatever loop count the previous one had set.
+    loadVideo(videoDetails.filePath, QMediaPlayer::Once, 1.0, Qt::KeepAspectRatio);
+
+    updateScreen();
+}
+
+void ProjectorDisplayScreen::playVideo()
+{
+    QObject *root = dispView->rootObject();
+    QMetaObject::invokeMethod(root,"playVideo");
+}
+
+void ProjectorDisplayScreen::pauseVideo()
+{
+    QObject *root = dispView->rootObject();
+    QMetaObject::invokeMethod(root,"pauseVideo");
+}
+
+void ProjectorDisplayScreen::stopVideo()
+{
+    QObject *root = dispView->rootObject();
+    QMetaObject::invokeMethod(root,"stopVideo");
+}
+
+void ProjectorDisplayScreen::playbackStopped()
+{
+    emit videoStopped();
+}
+
+void ProjectorDisplayScreen::setVideoVolume(int level)
+{
+    float vol = 1.0*level/100;
+    QObject *root = dispView->rootObject();
+    QMetaObject::invokeMethod(root,"setVideoVolume",Q_ARG(QVariant,vol));
+}
+
+void ProjectorDisplayScreen::setVideoMuted(bool muted)
+{
+    QObject *root = dispView->rootObject();
+    // Was calling "setVideoVolume" with !muted, so un-muting jumped to full volume.
+    QMetaObject::invokeMethod(root,"setVideoMuted",Q_ARG(QVariant,muted));
+}
+
+void ProjectorDisplayScreen::setVideoPosition(qint64 position)
+{
+    QObject *root = dispView->rootObject();
+    QMetaObject::invokeMethod(root,"setVideoPosition",Q_ARG(QVariant,position));
 }
 
 void ProjectorDisplayScreen::positionControls(DisplayControlsSettings &dSettings)
