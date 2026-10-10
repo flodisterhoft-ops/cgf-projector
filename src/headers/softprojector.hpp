@@ -115,6 +115,11 @@ private:
     bool hasDisplayScreen2;
     bool hasDisplayScreen3;
     bool hasDisplayScreen4;
+    // The projector screen disappeared while running with several screens
+    // (e.g. a splitter/extender link dropped); display windows stay hidden
+    // until it comes back.
+    bool displayScreenLost;
+    QTimer *screenChangeTimer;
 
     // shortcuts
     QShortcut *shpgUP;
@@ -137,6 +142,8 @@ private:
 
 private slots:
     void showDisplayScreen(bool show);
+    void screensChanged();
+    void applyScreenChange();
 
     void applySetting(GeneralSettings &g, Theme &t, SlideShowSettings &s,
                       BibleVersionSettings &b1, BibleVersionSettings &b2,
@@ -218,14 +225,17 @@ private slots:
     void on_actionSaveScheduleAs_triggered();
     void on_actionCloseSchedule_triggered();
     void openSchedule();
-    void saveSchedule(bool overWrite);
-    void saveScheduleNew(QSqlQuery &q);
-    void saveScheduleItemNew(QSqlQuery &q, int scid, const BibleHistory &b);
-    void saveScheduleItemNew(QSqlQuery &q, int scid, const Song &s);
-    void saveScheduleItemNew(QSqlQuery &q, int scid, const SlideShow &s);
-    void saveScheduleItemNew(QSqlQuery &q, int scid, const VideoInfo &v);
-    void saveScheduleItemNew(QSqlQuery &q, int scid, const Announcement &a);
-    void saveScheduleUpdate(QSqlQuery &q);
+    bool saveScheduleToFile();
+    bool saveScheduleAsFile();
+    bool saveSchedule(bool overWrite);
+    bool saveScheduleNew(QSqlQuery &q, QList<Schedule> &items);
+    bool insertScheduleRow(QSqlQuery &q, Schedule &sc, int order);
+    bool saveScheduleItemNew(QSqlQuery &q, int scid, const BibleHistory &b);
+    bool saveScheduleItemNew(QSqlQuery &q, int scid, const Song &s);
+    bool saveScheduleItemNew(QSqlQuery &q, int scid, const SlideShow &s);
+    bool saveScheduleItemNew(QSqlQuery &q, int scid, const VideoInfo &v);
+    bool saveScheduleItemNew(QSqlQuery &q, int scid, const Announcement &a);
+    bool saveScheduleUpdate(QSqlQuery &q, QList<Schedule> &items);
     void saveScheduleItemUpdate(QSqlQuery &q, int scid, const BibleHistory &b);
     void saveScheduleItemUpdate(QSqlQuery &q, int scid, const Song &s);
     void saveScheduleItemUpdate(QSqlQuery &q, int scid, const SlideShow &s);

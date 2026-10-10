@@ -378,7 +378,7 @@
     <string>E&amp;xit</string>
    </property>
    <property name="toolTip">
-    <string>Exit SoftProjector</string>
+    <string>Exit CGF Projector</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Q</string>

@@ -71,7 +71,32 @@ SoftProjector::SoftProjector(QWidget *parent)
     // Apply Settings
     applySetting(mySettings.general, theme, mySettings.slideSets, mySettings.bibleSets, mySettings.bibleSets2, mySettings.bibleSets3, mySettings.bibleSets4);
 
+    // Read before they are first set: the Shift+F5 / Ctrl+Shift+B shortcuts can
+    // reach updateScreen() right after start-up.
+    pType = SONG;
+    showing = false;
+    new_list = false;
+    current_song_verse = 0;
+    is_schedule_saved = true;
+    isSingleScreen = true;
+    hasDisplayScreen2 = hasDisplayScreen3 = hasDisplayScreen4 = false;
+    displayScreenLost = false;
+
     positionDisplayWindow();
+
+    // Follow monitors being connected and disconnected while running, so a
+    // dropped HDMI/extender link no longer needs a restart.
+    screenChangeTimer = new QTimer(this);
+    screenChangeTimer->setSingleShot(true);
+    screenChangeTimer->setInterval(800);
+    connect(screenChangeTimer, &QTimer::timeout, this, &SoftProjector::applyScreenChange);
+    connect(qApp, &QGuiApplication::screenAdded, this, [this](QScreen *s) {
+        connect(s, &QScreen::geometryChanged, this, &SoftProjector::screensChanged, Qt::UniqueConnection);
+        screensChanged();
+    });
+    connect(qApp, &QGuiApplication::screenRemoved, this, &SoftProjector::screensChanged);
+    for(QScreen *s : QGuiApplication::screens())
+        connect(s, &QScreen::geometryChanged, this, &SoftProjector::screensChanged, Qt::UniqueConnection);
 
     showing = false;
 
@@ -207,6 +232,26 @@ SoftProjector::~SoftProjector()
     delete ui;
 }
 
+// Screen for a saved settings index, or nullptr when that monitor is not
+// connected. Indexes follow QGuiApplication::screens(), as in the Settings dialog.
+static QScreen *screenAt(int index)
+{
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    if(index < 0 || index >= screens.count())
+        return nullptr;
+    return screens.at(index);
+}
+
+// Move a display window to a screen. A full-screen window cannot be moved while
+// shown, so it is hidden first; callers show it again as needed.
+static void placeOnScreen(QWidget *w, QScreen *screen)
+{
+    w->hide();
+    if(w->windowHandle())
+        w->windowHandle()->setScreen(screen);
+    w->setGeometry(screen->geometry());
+}
+
 void SoftProjector::positionDisplayWindow()
 {
     // Position the display window as needed (including setting "always on top" flag,
@@ -227,104 +272,93 @@ void SoftProjector::positionDisplayWindow()
         // pds4->setWindowFlags(Qt::WindowStaysOnBottomHint); // Do not show always on top
     }
 
-    qDebug()<< "Screen Count: " << QApplication::primaryScreen()->virtualSiblings().count();
-
-    if(QApplication::primaryScreen()->virtualSiblings().count() > 1)
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    if(screens.count() > 1)
     {
+        // Turn the outputs on at start-up (setting) or when a projector appears
+        // while something is live; otherwise keep the operator's on/off state.
+        // Moving windows between screens hides them, so they are re-shown here.
+        const bool turnOn = isSingleScreen ? (mySettings.general.displayOnStartUp || showing)
+                                           : ui->actionCloseDisplay->isChecked();
 
-        // if (desktop->isVirtualDesktop())
+        // The saved screen number can be missing (a monitor or extender link
+        // is down): use the first screen that is not the operator's instead.
+        // Indexing the screen list directly crashed the app at start-up.
+        QScreen *screen1 = screenAt(mySettings.general.displayScreen);
+        if(!screen1)
         {
-            // Move the display widget to screen 1 (secondary screen):
-            pds1->setGeometry(QApplication::primaryScreen()->virtualSiblings().at(mySettings.general.displayScreen)->geometry());
+            for(QScreen *s : screens)
+            {
+                if(s != QGuiApplication::primaryScreen())
+                {
+                    screen1 = s;
+                    break;
+                }
+            }
         }
-
+        placeOnScreen(pds1, screen1);
         pds1->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
         pds1->resetImGenSize();
         pds1->renderPassiveText(theme.passive.backgroundPix,theme.passive.useBackground);
         pds1->setControlsVisible(false);
 
-        if(mySettings.general.displayOnStartUp)
-        {
+        ui->actionCloseDisplay->setEnabled(true);
+        ui->actionCloseDisplay->setChecked(turnOn);
+        updateCloseDisplayButtons(turnOn);
+        if(turnOn)
             pds1->showFullScreen();
 
-            ui->actionCloseDisplay->setChecked(true);
-            updateCloseDisplayButtons(true);
-
-        }
-
         // check if to display secondary display screen
-        if(mySettings.general.displayScreen2>=0)
+        QScreen *screen2 = screenAt(mySettings.general.displayScreen2);
+        hasDisplayScreen2 = (mySettings.general.displayScreen2 >= 0 && screen2);
+        if(hasDisplayScreen2)
         {
-            hasDisplayScreen2 = true;
-            // if (desktop->isVirtualDesktop())
-            {
-                // Move the display widget to screen 1 (secondary screen):
-                pds2->setGeometry(QApplication::primaryScreen()->virtualSiblings().at(mySettings.general.displayScreen2)->geometry());
-                pds2->resetImGenSize();
-
-            }
-
+            placeOnScreen(pds2, screen2);
+            pds2->resetImGenSize();
             pds2->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
             pds2->renderPassiveText(theme.passive2.backgroundPix,theme.passive2.useBackground);
             pds2->setControlsVisible(false);
-            if(mySettings.general.displayOnStartUp)
-            {
+            if(turnOn)
                 pds2->showFullScreen();
-            }
         }
         else
         {
-            hasDisplayScreen2 = false;
             pds2->hide();
         }
 
         // check if to display tertiary display screen
-        if(mySettings.general.displayScreen3>=0)
+        QScreen *screen3 = screenAt(mySettings.general.displayScreen3);
+        hasDisplayScreen3 = (mySettings.general.displayScreen3 >= 0 && screen3);
+        if(hasDisplayScreen3)
         {
-            hasDisplayScreen3 = true;
-            // if (desktop->isVirtualDesktop())
-            {
-                // Move the display widget to screen 1 (tertiary screen):
-                pds3->setGeometry(QApplication::primaryScreen()->virtualSiblings().at(mySettings.general.displayScreen3)->geometry());
-                pds3->resetImGenSize();
-
-            }
+            placeOnScreen(pds3, screen3);
+            pds3->resetImGenSize();
             pds3->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
             pds3->renderPassiveText(theme.passive3.backgroundPix,theme.passive3.useBackground);
             pds3->setControlsVisible(false);
-            if(mySettings.general.displayOnStartUp)
-            {
+            if(turnOn)
                 pds3->showFullScreen();
-            }
         }
         else
         {
-            hasDisplayScreen3 = false;
             pds3->hide();
         }
 
         // check if to display quaternary display screen
-        if(mySettings.general.displayScreen4>=0)
+        QScreen *screen4 = screenAt(mySettings.general.displayScreen4);
+        hasDisplayScreen4 = (mySettings.general.displayScreen4 >= 0 && screen4);
+        if(hasDisplayScreen4)
         {
-            hasDisplayScreen4 = true;
-            // if (desktop->isVirtualDesktop())
-            {
-                // Move the display widget to screen 1 (quaternary screen):
-                pds4->setGeometry(QApplication::primaryScreen()->virtualSiblings().at(mySettings.general.displayScreen4)->geometry());
-                pds4->resetImGenSize();
-
-            }
+            placeOnScreen(pds4, screen4);
+            pds4->resetImGenSize();
             pds4->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
             pds4->renderPassiveText(theme.passive4.backgroundPix,theme.passive4.useBackground);
             pds4->setControlsVisible(false);
-            if(mySettings.general.displayOnStartUp)
-            {
+            if(turnOn)
                 pds4->showFullScreen();
-            }
         }
         else
         {
-            hasDisplayScreen4 = false;
             pds4->hide();
         }
 
@@ -335,14 +369,46 @@ void SoftProjector::positionDisplayWindow()
     {
         // Single monitor only: Do not show on strat up.
         // Will be shown only when items were sent to the projector.
-        qDebug()<< "Setting Primary screen";
-        pds1->setGeometry(QApplication::primaryScreen()->virtualSiblings().at(0)->geometry());
+        placeOnScreen(pds1, QGuiApplication::primaryScreen());
         pds1->resetImGenSize();
         showDisplayScreen(false);
         isSingleScreen = true;
         hasDisplayScreen2 = false;
         hasDisplayScreen3 = false;
         hasDisplayScreen4 = false;
+        pds2->hide();
+        pds3->hide();
+        pds4->hide();
+    }
+}
+
+void SoftProjector::screensChanged()
+{
+    if(QGuiApplication::screens().count() < 2 && !isSingleScreen && !displayScreenLost)
+    {
+        // The projector screen is gone. Windows moves its display windows onto
+        // the operator's screen, so hide them at once; the on/off state and
+        // the live content are kept for when it comes back.
+        displayScreenLost = true;
+        pds1->hide();
+        pds2->hide();
+        pds3->hide();
+        pds4->hide();
+    }
+    // A loose link can drop and return several times a second: re-arrange once
+    // things have settled.
+    screenChangeTimer->start();
+}
+
+void SoftProjector::applyScreenChange()
+{
+    if(QGuiApplication::screens().count() > 1)
+    {
+        // Projector connected (again): put the display windows back on their
+        // screens and re-draw what is live.
+        displayScreenLost = false;
+        positionDisplayWindow();
+        updateScreen();
     }
 }
 
@@ -439,8 +505,13 @@ void SoftProjector::closeEvent(QCloseEvent *event)
         switch (ret)
         {
         case QMessageBox::Save:
-            // Save Schedule and close
-            on_actionSaveSchedule_triggered();
+            // Save Schedule and close; stay open if the save failed or Save As
+            // was cancelled, instead of discarding the schedule
+            if(!saveScheduleToFile())
+            {
+                event->ignore();
+                break;
+            }
             QCoreApplication::exit(0);
             event->accept();
             break;
@@ -576,8 +647,17 @@ void SoftProjector::setChapterList(QStringList chapter_list, QString caption, QI
     else
         ui->rbMultiVerse->setChecked(false);
 
-    ui->listShow->setCurrentRow(selectedItems.first().top());
-    ui->listShow->selectionModel()->select(selectedItems,QItemSelectionModel::Select);
+    // selectedItems indexes the Bible tab's preview list. Selecting them here
+    // tied the live selection to that list, so browsing the preview to another
+    // chapter collapsed a multi-verse passage to its first verse. Rebuild the
+    // same rows on this list's own model.
+    QItemSelection liveSelection;
+    QAbstractItemModel *showModel = ui->listShow->model();
+    for(const QItemSelectionRange &r : selectedItems)
+        liveSelection.select(showModel->index(r.top(), 0), showModel->index(r.bottom(), 0));
+
+    ui->listShow->setCurrentRow(selectedItems.isEmpty() ? 0 : selectedItems.first().top());
+    ui->listShow->selectionModel()->select(liveSelection,QItemSelectionModel::Select);
     ui->listShow->setFocus();
     new_list = false;
     updateScreen();
@@ -793,12 +873,15 @@ void SoftProjector::updateScreen()
             if(pds1->isHidden())
                 showDisplayScreen(true);
         }
-        else
+        else if(!displayScreenLost)
         {
-            if(pds1->isHidden() || !ui->actionCloseDisplay->isChecked())
-            {
+            // trigger() toggles: calling it while the output was on but a window
+            // was hidden turned the output off. Turn on only when off, else just
+            // re-show the windows.
+            if(!ui->actionCloseDisplay->isChecked())
                 ui->actionCloseDisplay->trigger();
-            }
+            else if(pds1->isHidden())
+                on_actionCloseDisplay_triggered();
         }
 
         ui->actionShow->setEnabled(false);
@@ -1072,6 +1155,13 @@ void SoftProjector::on_actionCloseDisplay_triggered()
 {
     if(ui->actionCloseDisplay->isChecked())
     {
+        // While the projector screen is disconnected, showing would cover the
+        // operator's screen; the windows come back when it reconnects.
+        if(displayScreenLost)
+        {
+            updateCloseDisplayButtons(true);
+            return;
+        }
         pds1->showFullScreen();
         if(hasDisplayScreen2)
         {
@@ -1663,13 +1753,13 @@ void SoftProjector::updateWindowText()
     {
         file.remove(".spsc");
         if(is_schedule_saved)
-            this->setWindowTitle(file + " - SoftProjector " + version_string);
+            this->setWindowTitle(file + " - CGF Projector " + version_string);
         else
-            this->setWindowTitle(file + "* - SoftProjector " + version_string);
+            this->setWindowTitle(file + "* - CGF Projector " + version_string);
     }
     else
     {
-        this->setWindowTitle("SoftProjector " + version_string);
+        this->setWindowTitle("CGF Projector " + version_string);
     }
 }
 
@@ -1687,9 +1777,25 @@ void SoftProjector::on_actionPrint_triggered()
     p = new PrintPreviewDialog(this);
     if(ui->projectTab->currentIndex() == 0)
     {
-        p->setText(mySettings.bibleSets.operatorBible + "," + mySettings.bibleSets.primaryBible,
-                   bibleWidget->getCurrentBook(),bibleWidget->getCurrentChapter());
-        p->exec();
+        // No book/chapter is selected when the book filter matches nothing; that
+        // used to crash. getCurrentBook() then returns an empty string.
+        QString book = bibleWidget->getCurrentBook();
+        int chapter = bibleWidget->getCurrentChapter();
+        if(!book.isEmpty() && chapter > 0)
+        {
+            p->setText(mySettings.bibleSets.operatorBible + "," + mySettings.bibleSets.primaryBible,
+                       book,chapter);
+            p->exec();
+        }
+        else
+        {
+            QMessageBox ms(this);
+            ms.setWindowTitle(tr("No chapter selected"));
+            ms.setText(tr("No Bible chapter has been selected to be printed."));
+            ms.setInformativeText(tr("Please select a book and chapter to be printed."));
+            ms.setIcon(QMessageBox::Information);
+            ms.exec();
+        }
     }
     else if (ui->projectTab->currentIndex() == 1)
     {
@@ -2046,7 +2152,8 @@ void SoftProjector::on_actionNewSchedule_triggered()
         {
         case QMessageBox::Yes:
             // Yes to save unsaved schedule and contiue creating new schedule
-            on_actionSaveSchedule_triggered();
+            if(!saveScheduleToFile())
+                return; // not saved: keep the current schedule
             break;
         case QMessageBox::No:
             // No to save unsaved schedule and continue to create new schedule
@@ -2083,7 +2190,8 @@ void SoftProjector::on_actionOpenSchedule_triggered()
         {
         case QMessageBox::Yes:
             // Yes to save unsaved schedule and contiue opening new schedule
-            on_actionSaveSchedule_triggered();
+            if(!saveScheduleToFile())
+                return; // not saved: keep the current schedule
             break;
         case QMessageBox::No:
             // No to save unsaved schedule and continue opening new schedule
@@ -2110,15 +2218,29 @@ void SoftProjector::on_actionOpenSchedule_triggered()
 
 void SoftProjector::on_actionSaveSchedule_triggered()
 {
-    if(schedule_file_path.isEmpty() || schedule_file_path.startsWith("untitled"))
-        on_actionSaveScheduleAs_triggered();
-    else
-        saveSchedule(false);
-    updateWindowText();
+    saveScheduleToFile();
 }
 
 void SoftProjector::on_actionSaveScheduleAs_triggered()
 {
+    saveScheduleAsFile();
+}
+
+// Returns false when the schedule was not saved (error, or Save As cancelled).
+bool SoftProjector::saveScheduleToFile()
+{
+    bool saved;
+    if(schedule_file_path.isEmpty() || schedule_file_path.startsWith("untitled"))
+        saved = saveScheduleAsFile();
+    else
+        saved = saveSchedule(false);
+    updateWindowText();
+    return saved;
+}
+
+bool SoftProjector::saveScheduleAsFile()
+{
+    bool saved = false;
     QString path = QFileDialog::getSaveFileName(this,tr("Save SoftProjector schedule as:"),".",
                                                 tr("SoftProjector schedule file ") + "(*.spsc)");
     if(!path.isEmpty())
@@ -2127,10 +2249,11 @@ void SoftProjector::on_actionSaveScheduleAs_triggered()
             schedule_file_path = path;
         else
             schedule_file_path = path + ".spsc";
-        saveSchedule(true);
+        saved = saveSchedule(true);
     }
 
     updateWindowText();
+    return saved;
 }
 
 void SoftProjector::on_actionCloseSchedule_triggered()
@@ -2149,7 +2272,8 @@ void SoftProjector::on_actionCloseSchedule_triggered()
         {
         case QMessageBox::Yes:
             // Yes to save unsaved schedule and contiue creating new schedule
-            on_actionSaveSchedule_triggered();
+            if(!saveScheduleToFile())
+                return; // not saved: keep the current schedule
             break;
         case QMessageBox::No:
             // No to save unsaved schedule and continue to create new schedule
@@ -2170,13 +2294,17 @@ void SoftProjector::on_actionCloseSchedule_triggered()
     updateWindowText();
 }
 
-void SoftProjector::saveSchedule(bool overWrite)
+bool SoftProjector::saveSchedule(bool overWrite)
 {
     // Save schedule as s SQLite database file
     QProgressDialog progress;
     progress.setMaximum(0);
     progress.setLabelText(tr("Saving schedule file..."));
     progress.show();
+    // Items get their file ids on this copy, kept only if the save commits.
+    QList<Schedule> items = schedule;
+    bool saved = false;
+    QString error;
     {
         bool db_exist = QFile::exists(schedule_file_path);
         if(db_exist && overWrite)
@@ -2189,7 +2317,7 @@ void SoftProjector::saveSchedule(bool overWrite)
                 mb.setIcon(QMessageBox::Information);
                 mb.setStandardButtons(QMessageBox::Ok);
                 mb.exec();
-                return;
+                return false;
             }
             else
                 db_exist = false;
@@ -2215,53 +2343,90 @@ void SoftProjector::saveSchedule(bool overWrite)
             sq.exec("CREATE TABLE IF NOT EXISTS 'announce' ('scid' INTEGER, 'aId' INTEGER, 'title' TEXT, 'aText' TEXT, "
                     "'usePrivate' BOOL, 'useAuto' BOOL, 'loop' BOOL, 'slideTimer' INTEGER, 'font' TEXT, 'color' INTEGER, "
                     "'useBack' BOOL, 'backImage' BLOB, 'backPath' TEXT, 'alignV' INTEGER, 'alignH' INTEGER)");
-            if(db_exist)
-                saveScheduleUpdate(sq);
+            db.transaction();
+            bool ok = db_exist ? saveScheduleUpdate(sq, items) : saveScheduleNew(sq, items);
+            if(ok && db.commit())
+                saved = true;
             else
-                saveScheduleNew(sq);
+            {
+                error = sq.lastError().text();
+                db.rollback();
+            }
         }
+        else
+            error = db.lastError().text();
     }
     QSqlDatabase::removeDatabase("spsc");
-    is_schedule_saved = true;
     progress.close();
-}
 
-void SoftProjector::saveScheduleNew(QSqlQuery &q)
-{
-    for(int i(0);i < schedule.count();++i)
+    if(saved)
     {
-        Schedule sc =  schedule.at(i);
-        q.exec(QString("INSERT INTO schedule (stype,name,sorder) VALUES('%1','%2',%3)")
-               .arg(sc.stype).arg(sc.name).arg(i+1));
-        q.exec("SELECT seq FROM sqlite_sequence WHERE name = 'schedule'");
-        q.first();
-        sc.scid = q.value(0).toInt();
-        q.clear();
-        if(sc.stype == "bible")
-            saveScheduleItemNew(q,sc.scid,sc.bible);
-        else if(sc.stype == "song")
-            saveScheduleItemNew(q,sc.scid,sc.song);
-        else if(sc.stype == "slideshow")
-            saveScheduleItemNew(q,sc.scid,sc.slideshow);
-        else if(sc.stype == "media")
-            saveScheduleItemNew(q,sc.scid,sc.media);
-        else if(sc.stype == "announce")
-            saveScheduleItemNew(q,sc.scid,sc.announce);
-        schedule.replace(i,sc);
+        schedule = items;
+        is_schedule_saved = true;
     }
+    else
+    {
+        // Used to report success regardless of the outcome.
+        QMessageBox mb(this);
+        mb.setWindowTitle(tr("Schedule not saved"));
+        mb.setText(tr("The schedule could not be saved to:\n%1").arg(schedule_file_path));
+        mb.setInformativeText(error);
+        mb.setIcon(QMessageBox::Warning);
+        mb.exec();
+    }
+    return saved;
 }
 
-void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const BibleHistory &b)
+bool SoftProjector::saveScheduleNew(QSqlQuery &q, QList<Schedule> &items)
+{
+    for(int i(0);i < items.count();++i)
+    {
+        Schedule sc =  items.at(i);
+        if(!insertScheduleRow(q, sc, i+1))
+            return false;
+        items.replace(i,sc);
+    }
+    return true;
+}
+
+// Writes one schedule row plus its item details and sets sc.scid.
+bool SoftProjector::insertScheduleRow(QSqlQuery &q, Schedule &sc, int order)
+{
+    // Bound values and lastInsertId(): the string-built INSERT failed on any name
+    // with an apostrophe (e.g. "You're Worthy Of My Praise"), and the item details
+    // were then saved under the previous row's id, so the item vanished on reopen.
+    q.prepare("INSERT INTO schedule (stype,name,sorder) VALUES(?,?,?)");
+    q.addBindValue(sc.stype);
+    q.addBindValue(sc.name);
+    q.addBindValue(order);
+    if(!q.exec())
+        return false;
+    sc.scid = q.lastInsertId().toInt();
+
+    if(sc.stype == "bible")
+        return saveScheduleItemNew(q,sc.scid,sc.bible);
+    else if(sc.stype == "song")
+        return saveScheduleItemNew(q,sc.scid,sc.song);
+    else if(sc.stype == "slideshow")
+        return saveScheduleItemNew(q,sc.scid,sc.slideshow);
+    else if(sc.stype == "media")
+        return saveScheduleItemNew(q,sc.scid,sc.media);
+    else if(sc.stype == "announce")
+        return saveScheduleItemNew(q,sc.scid,sc.announce);
+    return true;
+}
+
+bool SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const BibleHistory &b)
 {
     q.prepare("INSERT INTO bible (scid,verseIds,caption,captionLong) VALUES(?,?,?,?)");
     q.addBindValue(scid);
     q.addBindValue(b.verseIds);
     q.addBindValue(b.caption);
     q.addBindValue(b.captionLong);
-    q.exec();
+    return q.exec();
 }
 
-void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const Song &s)
+bool SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const Song &s)
 {
     q.prepare("INSERT INTO song (scid,songid,sbid,sbName,number,title,category,tune,wordsBy,musicBy,"
               "songText,notes,usePrivate,alignV,alignH,color,font,infoColor,infoFont,endingColor,"
@@ -2291,17 +2456,18 @@ void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const Song &s)
     q.addBindValue(s.useBackground);
     q.addBindValue(pixToByte(s.background));
     q.addBindValue(s.backgroundName);
-    q.exec();
+    return q.exec();
 }
 
-void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const SlideShow &s)
+bool SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const SlideShow &s)
 {
     q.prepare("INSERT INTO slideshow (scid,ssid,name,info) VALUES (?,?,?,?)");
     q.addBindValue(scid);
     q.addBindValue(s.slideShowId);
     q.addBindValue(s.name);
     q.addBindValue(s.info);
-    q.exec();
+    if(!q.exec())
+        return false;
 
     foreach(const SlideShowItem & si,s.slides)
     {
@@ -2314,21 +2480,23 @@ void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const SlideShow 
         q.addBindValue(pixToByte(si.image));
         q.addBindValue(pixToByte(si.imageSmall));
         q.addBindValue(pixToByte(si.imagePreview));
-        q.exec();
+        if(!q.exec())
+            return false;
     }
+    return true;
 }
 
-void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const VideoInfo &v)
+bool SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const VideoInfo &v)
 {
     q.prepare("INSERT INTO media (scid,name,path,aRatio) VALUES(?,?,?,?)");
     q.addBindValue(scid);
     q.addBindValue(v.fileName);
-    q.addBindValue(v.filePath);
+    q.addBindValue(v.filePath.toString());
     q.addBindValue(v.aspectRatio);
-    q.exec();
+    return q.exec();
 }
 
-void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const Announcement &a)
+bool SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const Announcement &a)
 {
     q.prepare("INSERT INTO announce (scid,aId,title,aText,usePrivate,useAuto,loop,slideTimer,font,"
                         "color,useBack,backImage,backPath,alignV,alignH) "
@@ -2349,37 +2517,24 @@ void SoftProjector::saveScheduleItemNew(QSqlQuery &q, int scid, const Announceme
     q.addBindValue(a.backgroundPath);
     q.addBindValue(a.alignmentV);
     q.addBindValue(a.alignmentH);
-    q.exec();
+    return q.exec();
 }
 
-void SoftProjector::saveScheduleUpdate(QSqlQuery &q)
+bool SoftProjector::saveScheduleUpdate(QSqlQuery &q, QList<Schedule> &items)
 {
-    for(int i(0);i < schedule.count();++i)
+    for(int i(0);i < items.count();++i)
     {
-        Schedule sc =  schedule.at(i);
+        Schedule sc =  items.at(i);
         if(sc.scid == -1)   // Save new schedule item that was not saved yet
         {
-            q.exec(QString("INSERT INTO schedule (stype,name,sorder) VALUES('%1','%2',%3)")
-                   .arg(sc.stype).arg(sc.name).arg(i+1));
-            q.exec("SELECT seq FROM sqlite_sequence WHERE name = 'schedule'");
-            q.first();
-            sc.scid = q.value(0).toInt();
-            q.clear();
-            if(sc.stype == "bible")
-                saveScheduleItemNew(q,sc.scid,sc.bible);
-            else if(sc.stype == "song")
-                saveScheduleItemNew(q,sc.scid,sc.song);
-            else if(sc.stype == "slideshow")
-                saveScheduleItemNew(q,sc.scid,sc.slideshow);
-            else if(sc.stype == "media")
-                saveScheduleItemNew(q,sc.scid,sc.media);
-            else if(sc.stype == "announce")
-                saveScheduleItemNew(q,sc.scid,sc.announce);
-            schedule.replace(i,sc);
+            if(!insertScheduleRow(q, sc, i+1))
+                return false;
+            items.replace(i,sc);
         }
         else    // Update existing schedule item
         {
-            q.exec(QString("UPDATE schedule SET sorder = %1 WHERE id = %2").arg(i+1).arg(sc.scid));
+            if(!q.exec(QString("UPDATE schedule SET sorder = %1 WHERE id = %2").arg(i+1).arg(sc.scid)))
+                return false;
             //if(sc.stype == "bible")
             //    saveScheduleItemUpdate(q,sc.scid,sc.bible);
             //else if(sc.stype == "song")
@@ -2393,33 +2548,41 @@ void SoftProjector::saveScheduleUpdate(QSqlQuery &q)
         }
     }
 
-    // Delete any shcedule items from file that have removed from schedule
-    q.exec("SELECT id,stype FROM schedule");
-    QSqlQuery sq = q;
+    // Delete any shcedule items from file that have removed from schedule.
+    // Every row now starts as "remove" unless it is still in the schedule: the
+    // old loop started as "keep", so a cleared schedule was never removed from
+    // the file and came back on reopen. Rows are collected before deleting.
+    QList<QPair<int,QString>> removed;
+    if(!q.exec("SELECT id,stype FROM schedule"))
+        return false;
     while(q.next())
     {
         int scid = q.value(0).toInt();
-        bool toDelete = false;
-        QString stype = q.value(1).toString();
-        foreach(const Schedule &s,schedule)
+        bool keep = false;
+        foreach(const Schedule &s,items)
         {
             if(scid == s.scid)
             {
-                toDelete = false;
+                keep = true;
                 break;
             }
-            else
-                toDelete = true;
         }
-
-        if(toDelete)
-        {
-            sq.exec("DELETE FROM schedule WHERE id = " + QString::number(scid));
-            sq.exec("DELETE FROM " + stype + " WHERE scid = " + QString::number(scid));
-            if(stype == "slideshow")
-                sq.exec("DELETE FROM slides WHERE scid = " + QString::number(scid));
-        }
+        if(!keep)
+            removed.append(qMakePair(scid, q.value(1).toString()));
     }
+
+    const QStringList itemTables = {"bible", "song", "slideshow", "media", "announce"};
+    for(const QPair<int,QString> &r : removed)
+    {
+        const QString id = QString::number(r.first);
+        if(!q.exec("DELETE FROM schedule WHERE id = " + id))
+            return false;
+        if(itemTables.contains(r.second) && !q.exec("DELETE FROM " + r.second + " WHERE scid = " + id))
+            return false;
+        if(r.second == "slideshow" && !q.exec("DELETE FROM slides WHERE scid = " + id))
+            return false;
+    }
+    return true;
 }
 
 void SoftProjector::saveScheduleItemUpdate(QSqlQuery &q, int scid, const BibleHistory &b)
@@ -2545,7 +2708,7 @@ void SoftProjector::openScheduleItem(QSqlQuery &q, const int scid, BibleHistory 
     q.first();
     b.verseIds = q.value(0).toString();
     b.caption = q.value(1).toString();
-    b.caption = q.value(2).toString();
+    b.captionLong = q.value(2).toString();
 }
 
 void SoftProjector::openScheduleItem(QSqlQuery &q, const int scid, Song &s)
@@ -2606,7 +2769,9 @@ void SoftProjector::openScheduleItem(QSqlQuery &q, const int scid, VideoInfo &v)
     q.exec("SELECT name, path, aRatio FROM media WHERE scid = " + QString::number(scid));
     q.first();
     v.fileName = q.value(0).toString();
-    v.filePath = q.value(1).toString();
+    // Older schedules store a plain path; QUrl("C:/...") would read "C:" as a scheme.
+    QString path = q.value(1).toString();
+    v.filePath = path.contains("://") ? QUrl(path) : QUrl::fromLocalFile(path);
     v.aspectRatio = q.value(2).toInt();
 }
 
