@@ -90,6 +90,7 @@ void ProjectorDisplayScreen::setBackPixmap(QPixmap p, int fillMode)
     }
 
     imProvider->setPixMap(p);
+    shownBack = p;
     back1to2 = (!back1to2);
 
     QObject *item1 = dispView->rootObject()->findChild<QObject*>("backImage1");
@@ -145,6 +146,7 @@ void ProjectorDisplayScreen::setBackPixmap(QPixmap p, QColor c)
 void ProjectorDisplayScreen::setTextPixmap(QPixmap p)
 {
     imProvider->setPixMap(p);
+    shownText = p;
     text1to2 = (!text1to2);
 
     QObject *item1 = dispView->rootObject()->findChild<QObject*>("textImage1");
@@ -226,6 +228,7 @@ void ProjectorDisplayScreen::updateScreen()
             QMetaObject::invokeMethod(root,"transitionBack2to1",Q_ARG(QVariant,tranType));
         QMetaObject::invokeMethod(root,"transitionText2to1",Q_ARG(QVariant,tranType));
     }
+    emit frameShown(shownText, shownBack, imGen.getScreenSize(), tranType != TR_NONE);
 }
 
 void ProjectorDisplayScreen::exitSlideClicked()

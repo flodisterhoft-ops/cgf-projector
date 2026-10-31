@@ -4,6 +4,7 @@
 // sample whenever nothing is live.
 
 import { connectBridge, withDefaults, streamBibles } from './bridge.js';
+import { createVideoPlayer } from './video.js';
 
 const sampleKind = new URLSearchParams(location.search).get('preview');
 const songSample = 'Amazing grace! How sweet the sound\nThat saved a wretch like me!\n'
@@ -12,13 +13,13 @@ const songSample = 'Amazing grace! How sweet the sound\nThat saved a wretch like
 const root = document.documentElement;
 const textLayer = document.getElementById('text');
 const mediaLayer = document.getElementById('media');
+const player = createVideoPlayer(mediaLayer);
 const canBalance = CSS.supports('text-wrap', 'balance');
 
 let style = withDefaults({});
 let hidden = false;
 let hello = null;
 let live = null;
-let video = null;      // last playback state, with the time it arrived
 let online = false;
 let lostTimer = null;
 
@@ -29,10 +30,9 @@ connectBridge({
       style = withDefaults(m.style);
       hidden = !!m.hidden;
     } else if (m.type === 'live') live = m;
-    else if (m.type === 'video') video = Object.assign({ receivedAt: performance.now() }, m);
+    else if (m.type === 'video') player.setState(m);
     else return;
     update();
-    if (m.type === 'video') syncVideo();
   },
   onStatus(up) {
     clearTimeout(lostTimer);
@@ -97,10 +97,12 @@ function viewFor() {
     case 'picture':
       if (!show.picture) return null;
       return { kind: 'picture', url: item.picture.url };
-    case 'video':
+    case 'video': {
       if (!show.video || item.video.audioOnly) return null;
-      if (!video || video.seq !== item.video.seq || video.state === 'stopped') return null;
+      const playback = player.state;
+      if (!playback || playback.seq !== item.video.seq || playback.state === 'stopped') return null;
       return { kind: 'video', url: item.video.url, seq: item.video.seq };
+    }
     default:
       return null;
   }
@@ -152,7 +154,6 @@ async function run() {
     }
     shown = view;
     shownKey = key;
-    if (view.kind === 'video') syncVideo();
     await fade(layerOf(view), true);
   }
   running = false;
@@ -179,14 +180,8 @@ function fade(layer, on) {
 }
 
 function clearLayer(view) {
-  const layer = layerOf(view);
-  const v = layer.querySelector('video');
-  if (v) {
-    v.pause();
-    v.removeAttribute('src');
-    v.load();
-  }
-  layer.replaceChildren();
+  if (view.kind === 'video') player.clear();
+  layerOf(view).replaceChildren();
 }
 
 // ---------------------------------------------------------------------------
@@ -269,60 +264,14 @@ function balance(p) {
 // ---------------------------------------------------------------------------
 // Pictures and video
 
-function settle(promise, ms) {
-  return Promise.race([promise.catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
-}
-
 async function loadMedia(view) {
-  if (view.kind === 'picture') {
-    const img = new Image();
-    img.alt = '';
-    img.src = view.url;
-    await settle(img.decode(), 5000);
-    mediaLayer.replaceChildren(img);
+  if (view.kind === 'video') {
+    await player.load(view.url, view.seq);
     return;
   }
-  const v = document.createElement('video');
-  v.muted = true;              // the sound reaches the stream through the mixer
-  v.playsInline = true;
-  v.preload = 'auto';
-  v.dataset.seq = String(view.seq);
-  v.src = view.url;
-  v.addEventListener('seeked', learnSeekLead);
-  mediaLayer.replaceChildren(v);
-  await settle(new Promise((r) => v.addEventListener('loadeddata', r, { once: true })), 4000);
+  const img = new Image();
+  img.alt = '';
+  img.src = view.url;
+  await Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+  mediaLayer.replaceChildren(img);
 }
-
-// Where the projector's video is now, in seconds.
-function projectorTime() {
-  const playing = video.state === 'playing';
-  return (video.position + (playing ? performance.now() - video.receivedAt : 0)) / 1000;
-}
-
-// A seek takes a moment to land (the file comes over the network), so seeks
-// aim that far ahead; the lead is learned from how far each seek fell short.
-let seekLead = 0.15;
-
-function learnSeekLead(e) {
-  if (!video || video.state !== 'playing') return;
-  const miss = projectorTime() - e.target.currentTime;
-  seekLead = Math.min(1.5, Math.max(0, seekLead + miss));
-}
-
-// Big differences seek; small ones play slightly faster or slower until they
-// close, which is invisible. A paused frame matches exactly.
-function syncVideo() {
-  const v = mediaLayer.querySelector('video');
-  if (!v || !video || Number(v.dataset.seq) !== video.seq) return;
-  const playing = video.state === 'playing';
-  const at = projectorTime();
-  const drift = at - v.currentTime;
-  if (Number.isFinite(at) && !v.seeking && Math.abs(drift) > (playing ? 0.4 : 0.05)) {
-    try { v.currentTime = playing ? at + seekLead : at; } catch { /* not seekable yet */ }
-  }
-  v.playbackRate = playing && Math.abs(drift) > 0.06 && Math.abs(drift) <= 0.4 ? (drift > 0 ? 1.06 : 0.94) : 1;
-  if (playing && v.paused) v.play().catch(() => {});
-  if (!playing && !v.paused) v.pause();
-}
-
-setInterval(syncVideo, 500);

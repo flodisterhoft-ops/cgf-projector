@@ -51,9 +51,16 @@ public slots:
     void videoStateChanged(QMediaPlayer::PlaybackState state);
     void videoPositionChanged(qint64 position);
     void videoDurationChanged(qint64 duration);
+    // The projector's rendered layers, for the back-screen mirror. Only
+    // converted and sent while a mirror page is connected.
+    void frameShown(const QPixmap &text, const QPixmap &back, const QSize &screen, bool fade);
+
+private slots:
+    void setFramesWanted(bool wanted);
 
 private:
     void sendVideo();
+    void sendFrame(bool whole);
 
     QThread thread;
     BridgeServer *server;
@@ -66,6 +73,14 @@ private:
     qint64 videoDuration;
     qint64 positionSent;
     QElapsedTimer sinceVideoSent;
+
+    bool framesWanted = false;
+    QPixmap frameText;
+    QPixmap frameBack;
+    QSize frameSize;
+    bool frameFade = false;
+    qint64 sentTextKey = 0;
+    qint64 sentBackKey = 0;
 };
 
 #endif // LIVEBRIDGE_HPP

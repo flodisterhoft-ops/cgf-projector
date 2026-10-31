@@ -38,6 +38,7 @@ LiveBridge::LiveBridge(QObject *parent)
     server->moveToThread(&thread);
     connect(&thread, &QThread::started, server, &BridgeServer::start);
     connect(&thread, &QThread::finished, server, &QObject::deleteLater);
+    connect(server, &BridgeServer::framesWanted, this, &LiveBridge::setFramesWanted);
     thread.setObjectName(QStringLiteral("Network bridge"));
     thread.start(QThread::LowPriority);
     sinceVideoSent.start();
@@ -100,6 +101,44 @@ void LiveBridge::videoPositionChanged(qint64 position)
             + (videoState == QMediaPlayer::PlayingState ? sinceVideoSent.elapsed() : 0);
     if(qAbs(position - expected) > 750 || sinceVideoSent.elapsed() > 5000)
         sendVideo();
+}
+
+void LiveBridge::frameShown(const QPixmap &text, const QPixmap &back, const QSize &screen, bool fade)
+{
+    frameText = text;
+    frameBack = back;
+    frameSize = screen;
+    frameFade = fade;
+    if(framesWanted)
+        sendFrame(false);
+}
+
+void LiveBridge::setFramesWanted(bool wanted)
+{
+    framesWanted = wanted;
+    if(wanted)
+        sendFrame(true);
+}
+
+void LiveBridge::sendFrame(bool whole)
+{
+    // Convert only the layers that changed; a background often stays.
+    QImage text, back;
+    if(!frameText.isNull() && (whole || frameText.cacheKey() != sentTextKey))
+    {
+        sentTextKey = frameText.cacheKey();
+        text = frameText.toImage();
+    }
+    if(!frameBack.isNull() && (whole || frameBack.cacheKey() != sentBackKey))
+    {
+        sentBackKey = frameBack.cacheKey();
+        back = frameBack.toImage();
+    }
+    if(text.isNull() && back.isNull())
+        return;
+    QMetaObject::invokeMethod(server, [s = server, text, back, size = frameSize, fade = frameFade] {
+        s->setFrame(text, back, size, fade);
+    }, Qt::QueuedConnection);
 }
 
 void LiveBridge::sendVideo()

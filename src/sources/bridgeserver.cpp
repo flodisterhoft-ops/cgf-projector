@@ -28,6 +28,7 @@
 #include <QImageWriter>
 #include <QJsonDocument>
 #include <QNetworkInterface>
+#include <QPainter>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSqlDatabase>
@@ -93,6 +94,19 @@ QString displayBookName(const QString &name)
 QString compact(const QJsonObject &o)
 {
     return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
+}
+
+QByteArray encodeImage(const QImage &image, const char *format)
+{
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    buffer.open(QIODevice::WriteOnly);
+    QImageWriter writer(&buffer, format);
+    if(qstrcmp(format, "jpg") == 0)
+        writer.setQuality(90);
+    if(!writer.write(image))
+        qWarning("Network bridge cannot encode an image: %s", qPrintable(writer.errorString()));
+    return bytes;
 }
 
 } // namespace
@@ -336,14 +350,7 @@ void BridgeServer::setLive(const QJsonObject &incoming, const QImage &picture, c
         if(!picture.isNull())
         {
             const bool alpha = picture.hasAlphaChannel();
-            pictureBytes.clear();
-            QBuffer buffer(&pictureBytes);
-            buffer.open(QIODevice::WriteOnly);
-            QImageWriter writer(&buffer, alpha ? "png" : "jpg");
-            if(!alpha)
-                writer.setQuality(90);
-            if(!writer.write(picture))
-                qWarning("Network bridge cannot encode the picture: %s", qPrintable(writer.errorString()));
+            pictureBytes = encodeImage(picture, alpha ? "png" : "jpg");
             pictureType = alpha ? "image/png" : "image/jpeg";
             pictureSeq = seq;
         }
@@ -380,6 +387,62 @@ void BridgeServer::setVideo(const QJsonObject &state)
     video["seq"] = videoSeq;
     videoAt = clock.elapsed();
     broadcast(video);
+}
+
+// The projector's rendered layers for the back-screen mirror; a null image
+// means that layer did not change.
+void BridgeServer::setFrame(const QImage &text, const QImage &back, const QSize &screen, bool fade)
+{
+    // The projector makes a new pixmap for every change even when it looks
+    // the same (a plain colour background), so compare pixels: an unchanged
+    // layer keeps its address and the mirror does not reload it.
+    const int seqBefore = frameSeq++;
+    const QSize size = screen.isValid() ? screen : (text.isNull() ? back.size() : text.size());
+    if(!text.isNull() && text != frameTextImage)
+    {
+        frameTextImage = text;
+        frameText = encodeImage(text, "png");
+        frameTextSeq = frameSeq;
+    }
+    if(!back.isNull())
+    {
+        // Laid out as the projector lays it out: centred when smaller than
+        // the screen, from the top left when larger.
+        QImage canvas(size, QImage::Format_RGB32);
+        canvas.fill(Qt::black);
+        QPainter painter(&canvas);
+        painter.drawImage(back.width() < size.width() ? (size.width() - back.width()) / 2 : 0,
+                          back.height() < size.height() ? (size.height() - back.height()) / 2 : 0, back);
+        painter.end();
+        if(canvas != frameBackImage)
+        {
+            frameBackImage = canvas;
+            frameBack = encodeImage(canvas, "jpg");
+            frameBackSeq = frameSeq;
+        }
+    }
+    if(frameTextSeq <= seqBefore && frameBackSeq <= seqBefore && !frame.isEmpty())
+        return; // nothing visible changed
+    frame = QJsonObject{{"type", "frame"}, {"seq", frameSeq},
+                        {"text", frameText.isEmpty() ? QString() : QStringLiteral("/frame/text/%1").arg(frameTextSeq)},
+                        {"back", frameBack.isEmpty() ? QString() : QStringLiteral("/frame/back/%1").arg(frameBackSeq)},
+                        {"width", size.width()}, {"height", size.height()},
+                        {"fade", fade}, {"ms", 500}}; // DisplayArea.qml tranTime
+    const QString message = compact(frame);
+    const QList<QWebSocket *> list = clients; // a failed send may drop a client
+    for(QWebSocket *c : list)
+        if(c->property("cgfFrames").toBool())
+            c->sendTextMessage(message);
+}
+
+void BridgeServer::countMirrors()
+{
+    int n = 0;
+    for(QWebSocket *c : std::as_const(clients))
+        n += c->property("cgfFrames").toBool();
+    if((n > 0) != (mirrors > 0))
+        emit framesWanted(n > 0);
+    mirrors = n;
 }
 
 QJsonObject BridgeServer::videoMessage() const
@@ -483,6 +546,8 @@ void BridgeServer::handleRequest(QTcpSocket *s, const Request &r)
         serveStatic(s, "stream.html", headOnly);
     else if(path == "/stream/settings")
         serveStatic(s, "settings.html", headOnly);
+    else if(path == "/screen")
+        serveStatic(s, "screen.html", headOnly);
     else if(path.startsWith("/assets/"))
         serveStatic(s, QString::fromUtf8(path.mid(1)), headOnly);
     else if(path == "/api/state")
@@ -493,6 +558,15 @@ void BridgeServer::handleRequest(QTcpSocket *s, const Request &r)
             respond(s, 404, "text/plain", "Not found\n", headOnly);
         else
             respond(s, 200, pictureType, pictureBytes, headOnly);
+    }
+    else if(path.startsWith("/frame/text/") || path.startsWith("/frame/back/"))
+    {
+        const bool isText = path.startsWith("/frame/text/");
+        const QByteArray &bytes = isText ? frameText : frameBack;
+        if(bytes.isEmpty() || path.mid(12).toInt() != (isText ? frameTextSeq : frameBackSeq))
+            respond(s, 404, "text/plain", "Not found\n", headOnly);
+        else
+            respond(s, 200, isText ? "image/png" : "image/jpeg", bytes, headOnly);
     }
     else if(path.startsWith("/media/video/"))
     {
@@ -641,15 +715,26 @@ void BridgeServer::onWsDisconnected()
     clients.removeAll(c);
     if(c)
         c->deleteLater();
+    countMirrors();
 }
 
 void BridgeServer::onWsMessage(const QString &text)
 {
-    if(QWebSocket *c = qobject_cast<QWebSocket *>(sender()))
+    QWebSocket *c = qobject_cast<QWebSocket *>(sender());
+    if(c)
         c->setProperty("cgfSeen", clock.elapsed());
     const QJsonObject m = QJsonDocument::fromJson(text.toUtf8()).object();
     const QString type = m.value("type").toString();
-    if(type == QLatin1String("setStyle") && m.value("style").isObject())
+    if(type == QLatin1String("subscribe") && c)
+    {
+        // The back-screen mirror asks for rendered frames; others never pay for them.
+        const bool frames = m.value("frames").toBool();
+        c->setProperty("cgfFrames", frames);
+        countMirrors();
+        if(frames && !frame.isEmpty())
+            send(c, frame);
+    }
+    else if(type == QLatin1String("setStyle") && m.value("style").isObject())
     {
         style = m.value("style").toObject();
         saveTimer->start();
@@ -667,7 +752,9 @@ void BridgeServer::tick()
     // Pages reconnect when the ticks stop; clients that stop answering pings
     // (a phone that went to sleep, a dropped Wi-Fi) are let go.
     const QString message = compact(QJsonObject{{"type", "tick"}});
-    for(QWebSocket *c : std::as_const(clients))
+    // A copy: abort() disconnects at once, which removes the client from the list.
+    const QList<QWebSocket *> list = clients;
+    for(QWebSocket *c : list)
     {
         if(clock.elapsed() - c->property("cgfSeen").toLongLong() > clientTimeoutMs)
         {
@@ -709,6 +796,7 @@ void BridgeServer::send(QWebSocket *client, const QJsonObject &message)
 void BridgeServer::broadcast(const QJsonObject &message)
 {
     const QString text = compact(message);
-    for(QWebSocket *c : std::as_const(clients))
+    const QList<QWebSocket *> list = clients; // a failed send may drop a client
+    for(QWebSocket *c : list)
         c->sendTextMessage(text);
 }

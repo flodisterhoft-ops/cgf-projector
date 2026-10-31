@@ -170,7 +170,18 @@ Verification (2026-10-31):
 - The dev exe starts the bridge within 0.5 s against the DB copy and closes
   normally with `taskkill` (no `/F`).
 
-Not yet tested: OBS on the livestream PC over the church network. Windows
-Firewall asks once on the church laptop (admin click). If the host church's
-Wi-Fi isolates devices, the laptop needs Tailscale. Videos a browser can't
-play (WMV, most AVI) and audio-only media don't appear on the stream.
+Back-screen mirror (`/screen`, same day): the front display emits its rendered
+text and background layers after each change (`ProjectorDisplayScreen::frameShown`);
+while a mirror is connected the bridge thread encodes them (PNG text, JPEG
+background), drops repeats by comparing pixels, and the page crossfades them
+with the projector's 500 ms fade. 13 more harness checks (70 in all) cover
+subscribing, frame sizes and types, unchanged backgrounds keeping their
+address, no frames without a mirror. In a browser at 1080p the mirror matched
+the projector's song and three-Bible layouts, and played the live video in
+step (within about 40 ms).
+
+Not yet tested: OBS on the livestream PC over the church network, and a real
+back-screen device. Windows Firewall asks once on the church laptop (admin
+click). If the host church's Wi-Fi isolates devices, the laptop needs
+Tailscale. Videos a browser can't play (WMV, most AVI) and audio-only media
+don't appear on the stream or the mirror.

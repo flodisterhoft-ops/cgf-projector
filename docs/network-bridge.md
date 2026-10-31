@@ -1,8 +1,8 @@
 # Network bridge
 
 CGF Projector shares what the projector shows with browsers on the church
-network. Phase 1 (this) is the OBS stream overlay. The back-screen mirror,
-phone remote and sermon watcher use the same bridge later. The bridge serves
+network: the OBS stream overlay and the back-screen mirror so far. The phone
+remote and sermon watcher use the same bridge later. The bridge serves
 the local network only; the app itself never talks to the internet (see the
 architecture record in CGF Lyrics, `docs/plans/2026-08-09-live-platform-architecture.md`).
 
@@ -14,6 +14,7 @@ One port, default **8770**, on every network interface of the projector laptop:
 |---|---|
 | `http://<laptop>:8770/stream` | OBS Browser Source, 1920×1080, transparent |
 | `http://<laptop>:8770/stream/settings` | Stream settings; an OBS custom dock or any browser |
+| `http://<laptop>:8770/screen` | Back-screen mirror: identical to the front projector |
 | `http://<laptop>:8770/` | Links to the pages |
 | `http://<laptop>:8770/api/state` | Current state as JSON, for debugging |
 | `ws://<laptop>:8770/ws` | The bridge protocol (below) |
@@ -34,6 +35,17 @@ network. Someone with admin rights must click Allow on the church laptop.
 The overlay is transparent when nothing is shown and after the laptop has
 been unreachable for 10 seconds, so a dead laptop never leaves stale text.
 
+### Back screen
+
+Any small PC or laptop at the back projector, on the church network (the
+existing CAT cable can carry Ethernet instead of HDMI): open
+`http://<laptop>:8770/screen` full screen, for example with
+`chrome --kiosk http://<laptop>:8770/screen` started with Windows, and set it
+never to sleep. It shows exactly what the front shows, from the projector's
+own rendered text and background with its fades, plus the live video. If the
+laptop becomes unreachable, the last picture stays and after 10 seconds a
+small grey dot appears in the corner.
+
 ## Files and switches
 
 - `cgf-network.json` beside `spData.sqlite` holds the stream style
@@ -52,6 +64,7 @@ been unreachable for 10 seconds, so a dead laptop never leaves stale text.
 | File | Role |
 |---|---|
 | `src/sources/softprojectorlive.cpp` | Main-window side: `publishLive()` describes the screen; called from `updateScreen()`, Clear and the output button in `softprojector.cpp` |
+| `ProjectorDisplayScreen::frameShown` | The front screen's rendered layers after each change, for the mirror |
 | `src/sources/livebridge.cpp` | GUI-thread facade: drops repeats, converts pictures once, throttles video positions |
 | `src/sources/bridgeserver.cpp` | Own thread: HTTP, WebSocket, Bible lookups (own read-only DB connection), settings file |
 | `src/web/` (`web.qrc`) | The pages; plain HTML/CSS/JS modules, no build step |
@@ -105,7 +118,15 @@ after the kind:
 ```jsonc
 {"type": "video", "seq": 41, "state": "playing", "position": 12345, "duration": 60000}
 {"type": "tick"}   // every 10 s; a client hearing nothing for 25 s reconnects
+// Only to clients that subscribed to frames (the back screen):
+{"type": "frame", "seq": 7, "text": "/frame/text/7", "back": "/frame/back/5",
+ "width": 1920, "height": 1080, "fade": true, "ms": 500}
 ```
+
+A frame is the projector's own rendering: a transparent PNG text layer and a
+JPEG background at the projector's resolution. The background address
+changes only when the background does. The projector converts frames only
+while a mirror is connected.
 
 `video` arrives on play/pause/stop, after a seek, and every 5 s while
 playing; clients play on by themselves in between. Its `seq` matches
@@ -117,7 +138,8 @@ support for video, and 404 once something else went live.
 ```jsonc
 {"type": "setStyle", "style": { /* the whole style object */ }}   // saved, sent to everyone
 {"type": "setHidden", "hidden": true}                              // manual hide for the stream
+{"type": "subscribe", "frames": true}                              // send me rendered frames
 ```
 
-Planned: `command` (next/prev/goto/hide for the phone remote), `suggest`
-(sermon watcher), and rendered layers for the back-screen mirror.
+Planned: `command` (next/prev/goto/hide for the phone remote) and `suggest`
+(sermon watcher).

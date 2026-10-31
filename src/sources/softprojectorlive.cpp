@@ -36,6 +36,7 @@ void SoftProjector::setupLiveBridge()
             liveBridge, &LiveBridge::videoPositionChanged);
     connect(pds1, qOverload<qint64>(&ProjectorDisplayScreen::videoDurationChanged),
             liveBridge, &LiveBridge::videoDurationChanged);
+    connect(pds1, &ProjectorDisplayScreen::frameShown, liveBridge, &LiveBridge::frameShown);
     publishLive();
 }
 

@@ -95,6 +95,10 @@ signals:
     void videoPlaybackStateChanged(QMediaPlayer::PlaybackState state);
     void videoStopped();
 
+    // After every change: the text and background layers as shown (the
+    // background already scaled), for the network mirror (livebridge.cpp).
+    void frameShown(const QPixmap &text, const QPixmap &back, const QSize &screen, bool fade);
+
 protected:
     void keyReleaseEvent(QKeyEvent *event);
 
@@ -110,6 +114,7 @@ private:
    // DisplayControlsSettings mySettings;
 
     QPixmap back;
+    QPixmap shownText, shownBack; // for frameShown()
 };
 
 #endif // PROJECTORDISPLAYSCREEN_HPP

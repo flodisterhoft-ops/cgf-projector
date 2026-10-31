@@ -130,14 +130,15 @@ stripping what they never used and wiring the app into a central CGF library.
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
   quick-add upload flow. CGF logo swap pending logo file from Flo.
-- Next milestones (as of 2026-10-31): back-screen mirror → phone remote →
-  sermon watcher on the network bridge; proposals upload → tier-3 push → web
-  planner.
+- Next milestones (as of 2026-10-31): phone remote → sermon watcher on the
+  network bridge (OBS overlay and back-screen mirror are built; both await a
+  test on the church network); proposals upload → tier-3 push → web planner.
 
 ## Network bridge (built 2026-10-31; see docs/network-bridge.md)
 
 - One port (8770) on the projector laptop serves the OBS overlay (`/stream`),
-  its settings dock (`/stream/settings`) and a WebSocket (`/ws`). Church
+  its settings dock (`/stream/settings`), the back-screen mirror (`/screen`)
+  and a WebSocket (`/ws`). Church
   network only; the app itself never talks to the internet. The code is in its
   own files (`livebridge`, `bridgeserver`, `softprojectorlive`, `src/web/`);
   `softprojector.cpp` only calls `publishLive()`.

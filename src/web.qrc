@@ -5,10 +5,14 @@
         <file alias="index.html">web/index.html</file>
         <file alias="stream.html">web/stream.html</file>
         <file alias="settings.html">web/settings.html</file>
+        <file alias="screen.html">web/screen.html</file>
         <file alias="assets/bridge.js">web/assets/bridge.js</file>
+        <file alias="assets/video.js">web/assets/video.js</file>
         <file alias="assets/stream.js">web/assets/stream.js</file>
         <file alias="assets/stream.css">web/assets/stream.css</file>
         <file alias="assets/settings.js">web/assets/settings.js</file>
         <file alias="assets/settings.css">web/assets/settings.css</file>
+        <file alias="assets/screen.js">web/assets/screen.js</file>
+        <file alias="assets/screen.css">web/assets/screen.css</file>
     </qresource>
 </RCC>

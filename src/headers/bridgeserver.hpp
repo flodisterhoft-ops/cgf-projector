@@ -52,9 +52,11 @@ public slots:
     void start();
     void setLive(const QJsonObject &live, const QImage &picture, const QString &videoPath);
     void setVideo(const QJsonObject &video);
+    void setFrame(const QImage &text, const QImage &back, const QSize &screen, bool fade);
 
 signals:
     void started(quint16 port);
+    void framesWanted(bool wanted); // a back-screen mirror connected, or the last one left
 
 private slots:
     void onTcpConnection();
@@ -93,6 +95,7 @@ private:
     QJsonObject stateObject() const;
     void send(QWebSocket *client, const QJsonObject &message);
     void broadcast(const QJsonObject &message);
+    void countMirrors();
 
     QString dataDir;
     QString dbPath;
@@ -124,6 +127,17 @@ private:
     int pictureSeq;
     QString videoPath;
     int videoSeq;
+
+    // Back-screen mirror: the projector's rendered layers
+    int mirrors = 0;
+    int frameSeq = 0;
+    QJsonObject frame;
+    QImage frameTextImage;
+    QByteArray frameText;
+    int frameTextSeq = 0;
+    QImage frameBackImage;
+    QByteArray frameBack;
+    int frameBackSeq = 0;
 };
 
 #endif // BRIDGESERVER_HPP
