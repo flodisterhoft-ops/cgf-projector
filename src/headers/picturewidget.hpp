@@ -53,8 +53,10 @@ public slots:
     void deleteSlideShow();
     void sendToPreviewFromSchedule(SlideShow &sshow);
     void setSettings(SlideShowSettings &settings){mySettings = settings;}
+    void importPresentation(const QString &file);
 
 private slots:
+    void on_pushButtonImport_clicked();
     void on_listWidgetSlides_doubleClicked(const QModelIndex &index);
     void on_pushButtonAddImages_clicked();
     void on_pushButtonRemoveImage_clicked();

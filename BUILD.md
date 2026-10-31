@@ -187,3 +187,31 @@ Known remaining issues:
   primary-screen changes.
 - Settings > OK while a video is live restarts the video (the redraw reloads
   it).
+
+## PowerPoint and PDF import (2026-10-31)
+
+Pictures tab > "Import PowerPoint or PDF...": each slide becomes a picture,
+saved as a slide show named after the file, selected and ready for Go Live.
+Operators step through it like a song, and it can go in the schedule. It is
+a slide show rather than a Media item because Media plays a file through;
+slides need stepping.
+
+- PowerPoint files (.pptx .ppt .pptm .ppsx .pps .odp) are exported by
+  PowerPoint on the same computer, through COM. Hidden slides are left out.
+  Without PowerPoint the app says so: PDF files import without it.
+- PDF pages are drawn by Windows (`Windows.Data.Pdf`, Windows 8.1 and later),
+  so no Office and no extra Qt module (Qt PDF would have meant a new download
+  and a bigger deployment).
+- The work is in `src/scripts/import-presentation.ps1`, built into the exe as
+  a resource and run with Windows PowerShell 5.1 from a temporary folder; the
+  app stays live meanwhile. Cancel lets the script close PowerPoint's copy of
+  the file before it stops.
+- Slides are drawn at the size Settings > Pictures stores pictures (default:
+  fit 1280x1280), so text isn't blurred by a second scaling. PDF pages come
+  out larger on displays scaled above 100 % and are fitted smoothly.
+
+Verification: the script on a test deck (German and Russian text, a hidden
+slide, a Cyrillic file name) and its PDF; a harness driving the real Pictures
+tab: import, re-import "(2)", PDF, reload from the database, Go Live, broken
+files, cancel (PowerPoint closed afterwards) and a 40-slide deck. Animations,
+videos and sound in slides are not carried over.

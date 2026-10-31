@@ -17,7 +17,10 @@
 //
 ***************************************************************************/
 
+#include <QFileDialog>
+#include <QMessageBox>
 #include "../headers/picturewidget.hpp"
+#include "../headers/presentationimport.hpp"
 #include "ui_picturewidget.h"
 
 PictureWidget::PictureWidget(QWidget *parent) :
@@ -297,4 +300,49 @@ void PictureWidget::on_listWidgetSlideShow_doubleClicked(const QModelIndex &inde
 {
     currentSlideShow.slides = slides;
     emit sendToSchedule(currentSlideShow);
+}
+
+void PictureWidget::on_pushButtonImport_clicked()
+{
+    const QString file = QFileDialog::getOpenFileName(this, tr("Import PowerPoint or PDF"),
+                                                      QString(), PresentationImport::fileFilter());
+    if(!file.isEmpty())
+        importPresentation(file);
+}
+
+void PictureWidget::importPresentation(const QString &file)
+{
+    // Saved as a slide show named after the file, selected and ready to go live.
+    QString error;
+    SlideShow show;
+    ui->pushButtonImport->setEnabled(false);
+    show.slides = PresentationImport::run(file, mySettings, this, error);
+    ui->pushButtonImport->setEnabled(true);
+    if(show.slides.isEmpty())
+    {
+        if(!error.isEmpty())
+            QMessageBox::warning(this, tr("Import PowerPoint or PDF"), error);
+        return;
+    }
+
+    // Importing the same file again keeps the first one: "Name (2)".
+    const QString base = QFileInfo(file).completeBaseName();
+    auto taken = [this](const QString &name) {
+        for(const SlideShowInfo &s : std::as_const(slideShows))
+            if(s.name == name)
+                return true;
+        return false;
+    };
+    show.name = base;
+    for(int n = 2; taken(show.name); ++n)
+        show.name = QString("%1 (%2)").arg(base).arg(n);
+    show.info = QFileInfo(file).fileName();
+    show.saveSideShow(tr("Saving slide show..."), this, QList<int>());
+
+    loadSlideShows();
+    for(int i = 0; i < slideShows.count(); ++i)
+    {
+        if(slideShows.at(i).slideSwId == show.slideShowId)
+            ui->listWidgetSlideShow->setCurrentRow(i);
+    }
 }

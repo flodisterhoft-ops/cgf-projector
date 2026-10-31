@@ -124,6 +124,9 @@ stripping what they never used and wiring the app into a central CGF library.
   schedule, song editor (future quick-add-that-uploads), **printing (user
   decision)**, usage counter (feeds analytics; counts should merge across
   machines via sync later).
+- **Added 2026-10-31: PowerPoint/PDF import** in the Pictures tab. Each slide
+  becomes a picture in a saved slide show, so operators step through it like
+  a song (BUILD.md, "PowerPoint and PDF import").
 - Planned add: **Share button** — song/setlist as link or PDF, possibly via
   Telegram (operators use Telegram).
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
