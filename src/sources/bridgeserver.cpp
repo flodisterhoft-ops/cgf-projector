@@ -128,6 +128,7 @@ BridgeServer::BridgeServer(const QString &dataDir, const QString &dbPath)
       pictureSeq(0),
       videoSeq(0)
 {
+    clock.start();
 }
 
 BridgeServer::~BridgeServer()
@@ -166,7 +167,6 @@ void BridgeServer::start()
     tickTimer->setInterval(tickMs);
     connect(tickTimer, &QTimer::timeout, this, &BridgeServer::tick);
     tickTimer->start();
-    clock.start();
 
     ws = new QWebSocketServer(QStringLiteral("CGF Projector"), QWebSocketServer::NonSecureMode, this);
     connect(ws, &QWebSocketServer::newConnection, this, &BridgeServer::onWsConnection);
