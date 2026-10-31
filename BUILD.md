@@ -174,8 +174,8 @@ Back-screen mirror (`/screen`, same day): the front display emits its rendered
 text and background layers after each change (`ProjectorDisplayScreen::frameShown`);
 while a mirror is connected the bridge thread encodes them (PNG text, JPEG
 background), drops repeats by comparing pixels, and the page crossfades them
-with the projector's 500 ms fade. 13 more harness checks (70 in all) cover
-subscribing, frame sizes and types, unchanged backgrounds keeping their
+with the projector's 500 ms fade. 16 more harness checks (73 in all) cover
+subscribing (also right after start-up), frame sizes and types, unchanged backgrounds keeping their
 address, no frames without a mirror. In a browser at 1080p the mirror matched
 the projector's song and three-Bible layouts, and played the live video in
 step (within about 40 ms).

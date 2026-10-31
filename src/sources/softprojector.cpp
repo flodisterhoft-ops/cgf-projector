@@ -82,6 +82,8 @@ SoftProjector::SoftProjector(QWidget *parent)
     hasDisplayScreen2 = hasDisplayScreen3 = hasDisplayScreen4 = false;
     displayScreenLost = false;
 
+    // Before the first render, so the back-screen mirror gets the passive screen.
+    setupLiveBridge();
     positionDisplayWindow();
 
     // Follow monitors being connected and disconnected while running, so a
@@ -208,8 +210,6 @@ SoftProjector::SoftProjector(QWidget *parent)
 
     version_string = "0.1";
     this->setWindowTitle("CGF Projector " + version_string);
-
-    setupLiveBridge();
 }
 
 SoftProjector::~SoftProjector()
