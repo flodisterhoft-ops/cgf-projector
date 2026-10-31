@@ -1,0 +1,234 @@
+/* Stream settings: an OBS custom dock or any browser on the livestream PC.
+   Dark, like OBS. One column when narrow (a dock), two when wide. */
+
+:root {
+  --bg: #111318;
+  --panel: #1A1D24;
+  --field: #22262F;
+  --line: #2E333D;
+  --line-strong: #3A404B;
+  --text: #E9ECF2;
+  --muted: #A3ABB9;
+  --accent: #F0A63A;
+  --on-accent: #1B1408;
+  --ok: #4CC38A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.4 'Segoe UI', system-ui, sans-serif;
+}
+
+button, select, input { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.page {
+  max-width: 1376px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1 { margin: 0; font-size: 24px; font-weight: 600; }
+
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  color: #C9CFDA;
+  max-width: 100%;
+}
+
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: #6B7280; flex: none; }
+.chip.ok .dot { background: var(--ok); }
+.chip.live { background: #2A2316; border-color: #6B4F24; color: #FFD9A0; }
+.chip.live b { font-weight: 600; letter-spacing: 0.06em; }
+.chip.live span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.btn {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--field);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.btn[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.cols { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.previewCol { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.settingsCol { flex: 1 1 320px; max-width: 480px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+@media (max-width: 720px) {
+  .settingsCol { max-width: none; }
+}
+
+.preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #4A505A;
+}
+
+.preview iframe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  border: 0;
+  transform-origin: 0 0;
+  background: transparent;
+  pointer-events: none;
+  /* Must match the stream page's scheme, or Chromium paints the frame white. */
+  color-scheme: normal;
+}
+
+.badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.addrText { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.addrText code { font: 15px ui-monospace, 'Cascadia Mono', Consolas, monospace; overflow-wrap: anywhere; }
+
+.label { font-size: 13px; color: var(--muted); }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  cursor: pointer;
+}
+
+.check input { accent-color: var(--accent); width: 20px; height: 20px; margin: 0; flex: none; }
+.check.sep { border-top: 1px solid var(--line); padding-top: 8px; }
+
+.seg {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+
+.seg.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg.narrow { align-self: flex-start; min-width: 220px; }
+
+.seg button {
+  min-height: 40px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #D5DAE3;
+  font-weight: 500;
+}
+
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.split { display: flex; justify-content: space-between; gap: 12px; }
+.split output { color: var(--muted); }
+
+select {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+}
+
+input[type="range"] { accent-color: var(--accent); width: 100%; margin: 0; min-height: 28px; }
+
+.swatches { display: flex; gap: 12px; }
+
+.swatches button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid var(--line-strong);
+}
+
+.swatches button[aria-pressed="true"] { border-color: var(--accent); }
+
+.links { max-width: 480px; }
+.links a { color: var(--text); font-size: 17px; padding: 8px 0; }
+.links a:hover { color: var(--accent); }

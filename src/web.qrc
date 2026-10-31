@@ -1,0 +1,14 @@
+<RCC>
+    <!-- Pages served by the network bridge (bridgeserver.cpp). Set CGF_WEB_DIR
+         to src/web to serve them from disk while editing, without rebuilding. -->
+    <qresource prefix="/web">
+        <file alias="index.html">web/index.html</file>
+        <file alias="stream.html">web/stream.html</file>
+        <file alias="settings.html">web/settings.html</file>
+        <file alias="assets/bridge.js">web/assets/bridge.js</file>
+        <file alias="assets/stream.js">web/assets/stream.js</file>
+        <file alias="assets/stream.css">web/assets/stream.css</file>
+        <file alias="assets/settings.js">web/assets/settings.js</file>
+        <file alias="assets/settings.css">web/assets/settings.css</file>
+    </qresource>
+</RCC>

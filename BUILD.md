@@ -9,9 +9,13 @@ Requires Python 3 with pip.
 
 ```
 pip install aqtinstall
-aqt install-qt   windows desktop 6.8.3 win64_mingw --modules qtmultimedia --outputdir C:\Users\<you>\Qt
+aqt install-qt   windows desktop 6.8.3 win64_mingw --modules qtmultimedia qtwebsockets --outputdir C:\Users\<you>\Qt
 aqt install-tool windows desktop tools_mingw1310 qt.tools.win64_mingw1310 --outputdir C:\Users\<you>\Qt
 ```
+
+Qt already installed without WebSockets (needed since 2026-10-31 for the
+network bridge): add just that module with
+`aqt install-qt windows desktop 6.8.3 win64_mingw --modules qtwebsockets --noarchives --outputdir C:\Users\<you>\Qt`.
 
 ## Build
 
@@ -142,3 +146,31 @@ Known remaining issues (not fixed in this round):
   per lookup); the `Settings` table has no unique key, so rows can duplicate.
 - Theme fonts are now stored in Qt 6's format; SoftProjector 2.1 (Qt 5) may not
   read them, so never open a CGF Projector database with 2.1.
+
+## Network bridge (2026-10-31)
+
+Phase 1 of the network outputs: the OBS stream overlay, with pictures and
+video. Design, addresses and protocol: `docs/network-bridge.md`. New Qt
+module: WebSockets (`Qt6WebSockets.dll`, picked up by `windeployqt`).
+
+Verification (2026-10-31):
+- Clean build; no compiler warnings from the new files.
+- A scratch harness drives the real main window offscreen against a copy of
+  the church database and checks what the bridge sends: 57 checks pass. They
+  cover songs, Clear, Hide/Show, Bible lookups in all four Bibles (verse
+  ranges, RST's own psalm numbering, RST book names cut to Russian),
+  announcements, pictures (JPEG, stable address across Hide/Show), video file
+  serving with HTTP ranges (206/416/HEAD), page serving, path traversal,
+  405, the WebSocket Origin check, style saving to `cgf-network.json`,
+  manual hide and junk messages.
+- In a browser (Chromium; OBS 32 ships Chromium 127): lower third and full
+  screen, one to four Bibles stacked, NKJV/RST [supplied words] in italics,
+  pictures pillarboxed full screen, video following play/pause/seek/stop to
+  within about 30-50 ms, settings dock at OBS-dock width.
+- The dev exe starts the bridge within 0.5 s against the DB copy and closes
+  normally with `taskkill` (no `/F`).
+
+Not yet tested: OBS on the livestream PC over the church network. Windows
+Firewall asks once on the church laptop (admin click). If the host church's
+Wi-Fi isolates devices, the laptop needs Tailscale. Videos a browser can't
+play (WMV, most AVI) and audio-only media don't appear on the stream.

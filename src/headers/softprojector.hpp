@@ -42,6 +42,7 @@
 #include "schedule.hpp"
 
 class QActionGroup;
+class LiveBridge;
 
 namespace Ui
 {
@@ -139,6 +140,13 @@ private:
     // Schelude list
     QList<Schedule> schedule;
     QDir appDataDir;
+
+    // Network bridge: shares the live screen with OBS and other browsers on
+    // the church network (softprojectorlive.cpp, livebridge.cpp)
+    LiveBridge *liveBridge = nullptr;
+    bool liveTextCleared = false;
+    void setupLiveBridge();
+    void publishLive(bool textCleared = false);
 
 private slots:
     void showDisplayScreen(bool show);

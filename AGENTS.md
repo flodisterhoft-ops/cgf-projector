@@ -130,8 +130,29 @@ stripping what they never used and wiring the app into a central CGF library.
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
   quick-add upload flow. CGF logo swap pending logo file from Flo.
-- Next milestones (as of the last commit): proposals upload → WebSocket bridge
-  (remote + OBS + tier-3 push) → web planner.
+- Next milestones (as of 2026-10-31): back-screen mirror → phone remote →
+  sermon watcher on the network bridge; proposals upload → tier-3 push → web
+  planner.
+
+## Network bridge (built 2026-10-31; see docs/network-bridge.md)
+
+- One port (8770) on the projector laptop serves the OBS overlay (`/stream`),
+  its settings dock (`/stream/settings`) and a WebSocket (`/ws`). Church
+  network only; the app itself never talks to the internet. The code is in its
+  own files (`livebridge`, `bridgeserver`, `softprojectorlive`, `src/web/`);
+  `softprojector.cpp` only calls `publishLive()`.
+- User decisions 2026-10-31: build order OBS text → pictures and video on the
+  stream → back-screen mirror (tested on any laptop first; device not chosen)
+  → phone remote → sermon watcher. One saved stream style, no profiles. No
+  pairing code: anyone on the church network can control it, but browser pages
+  must come from the bridge itself (Origin check).
+- The stream follows the operator (Show/Hide, the output button), not the
+  cable, so a dropped projector link doesn't blank it. Stream settings live in
+  `cgf-network.json` beside the database, which snapshots replace.
+- Sermon watcher (later): detection runs on the livestream PC beside
+  cgf-translation and reuses its Soniox stream. A suggestion pre-selects the
+  verse and the normal Go Live sends it (Enter already means next slide).
+  Never auto-display.
 
 ## The service order (spec seed for the web planner)
 

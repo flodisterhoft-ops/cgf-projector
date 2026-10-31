@@ -208,6 +208,8 @@ SoftProjector::SoftProjector(QWidget *parent)
 
     version_string = "0.1";
     this->setWindowTitle("CGF Projector " + version_string);
+
+    setupLiveBridge();
 }
 
 SoftProjector::~SoftProjector()
@@ -920,6 +922,7 @@ void SoftProjector::updateScreen()
             break;
         }
     }
+    publishLive();
 }
 
 void SoftProjector::showBible()
@@ -1149,6 +1152,7 @@ void SoftProjector::on_actionClear_triggered()
     ui->actionClear->setEnabled(false);
     ui->actionShow->setEnabled(true);
 //    ui->actionHide->setEnabled(false);
+    publishLive(true);
 }
 
 void SoftProjector::on_actionCloseDisplay_triggered()
@@ -1195,6 +1199,7 @@ void SoftProjector::on_actionCloseDisplay_triggered()
     }
 
     updateCloseDisplayButtons(ui->actionCloseDisplay->isChecked());
+    publishLive(liveTextCleared);
 }
 
 void SoftProjector::updateCloseDisplayButtons(bool isOn)

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stream settings</title>
+<link rel="stylesheet" href="/assets/settings.css">
+</head>
+<body>
+<main class="page">
+  <header class="top">
+    <h1>Stream</h1>
+    <div class="status">
+      <span id="conn" class="chip"><span class="dot" aria-hidden="true"></span><span id="connText">Connecting…</span></span>
+      <span id="liveChip" class="chip live" hidden><b>LIVE</b><span id="liveText"></span></span>
+      <button id="hideBtn" type="button" class="btn" aria-pressed="false">Hide from stream</button>
+    </div>
+  </header>
+
+  <div class="cols">
+    <section class="previewCol" aria-label="Preview">
+      <div class="preview" id="previewBox">
+        <iframe id="preview" title="Stream preview" src="/stream?preview=bible" tabindex="-1"></iframe>
+        <span id="hiddenBadge" class="badge" hidden>Hidden</span>
+      </div>
+      <div class="seg narrow" id="sampleSeg" role="group" aria-label="Sample" hidden>
+        <button type="button" data-sample="bible" aria-pressed="true">Bible</button>
+        <button type="button" data-sample="song" aria-pressed="false">Song</button>
+      </div>
+      <div class="address">
+        <div class="addrText">
+          <span class="label">OBS Browser Source</span>
+          <code id="obsUrl"></code>
+        </div>
+        <button id="copyBtn" type="button" class="btn">Copy</button>
+      </div>
+    </section>
+
+    <div class="settingsCol">
+      <section class="card" aria-labelledby="hShow">
+        <h2 id="hShow">Show</h2>
+        <label class="check"><input type="checkbox" data-show="song">Songs</label>
+        <label class="check"><input type="checkbox" data-show="bible">Bible</label>
+        <label class="check"><input type="checkbox" data-show="announcement">Announcements</label>
+        <label class="check"><input type="checkbox" data-show="picture">Pictures</label>
+        <label class="check"><input type="checkbox" data-show="video">Videos</label>
+      </section>
+
+      <section class="card" aria-labelledby="hBible">
+        <h2 id="hBible">Bible</h2>
+        <div id="bibleList"></div>
+        <label class="check sep"><input type="checkbox" id="reference">Reference</label>
+      </section>
+
+      <section class="card" aria-labelledby="hLayout">
+        <h2 id="hLayout">Layout</h2>
+        <div class="seg" role="group" aria-label="Position" data-key="layout">
+          <button type="button" data-value="lower">Lower third</button>
+          <button type="button" data-value="full">Full screen</button>
+        </div>
+        <span class="label">Line breaks</span>
+        <div class="seg" role="group" aria-label="Line breaks" data-key="lines">
+          <button type="button" data-value="balance">Balanced</button>
+          <button type="button" data-value="keep">As projected</button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="hText">
+        <h2 id="hText">Text</h2>
+        <label class="field"><span>Font</span>
+          <select id="font">
+            <option>Segoe UI</option>
+            <option>Arial</option>
+            <option>Calibri</option>
+            <option>Verdana</option>
+            <option>Tahoma</option>
+            <option>Trebuchet MS</option>
+            <option>Georgia</option>
+            <option>Cambria</option>
+            <option>Times New Roman</option>
+            <option>Palatino Linotype</option>
+          </select>
+        </label>
+        <div class="seg three" role="group" aria-label="Weight" data-key="weight">
+          <button type="button" data-value="400">Regular</button>
+          <button type="button" data-value="600">Semibold</button>
+          <button type="button" data-value="700">Bold</button>
+        </div>
+        <label class="field"><span class="split"><span>Size</span><output id="sizeOut" for="size"></output></span>
+          <input type="range" id="size" min="24" max="96" step="1">
+        </label>
+        <div class="field"><span>Colour</span>
+          <div class="swatches" role="group" aria-label="Colour" data-key="color">
+            <button type="button" data-value="#FFFFFF" aria-label="White" style="background:#FFFFFF"></button>
+            <button type="button" data-value="#FFF3D9" aria-label="Warm white" style="background:#FFF3D9"></button>
+            <button type="button" data-value="#FFE27A" aria-label="Soft yellow" style="background:#FFE27A"></button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="shadow">Shadow</label>
+        <span class="label">Background</span>
+        <div class="seg three" role="group" aria-label="Background" data-key="bar">
+          <button type="button" data-value="none">None</button>
+          <button type="button" data-value="soft">Soft</button>
+          <button type="button" data-value="solid">Solid</button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="hMotion">
+        <h2 id="hMotion">Motion</h2>
+        <label class="field"><span class="split"><span>Fade in</span><output id="fadeInOut" for="fadeIn"></output></span>
+          <input type="range" id="fadeIn" min="0" max="1500" step="50">
+        </label>
+        <label class="field"><span class="split"><span>Fade out</span><output id="fadeOutOut" for="fadeOut"></output></span>
+          <input type="range" id="fadeOut" min="0" max="1500" step="50">
+        </label>
+      </section>
+    </div>
+  </div>
+</main>
+<script type="module" src="/assets/settings.js"></script>
+</body>
+</html>

@@ -161,3 +161,13 @@ RESOURCES += softprojector.qrc
 win32 {
     RC_FILE = softprojector.rc
 }
+
+# Network bridge: the OBS stream overlay and other browser outputs on the
+# church network (docs/network-bridge.md)
+QT += websockets
+SOURCES += sources/livebridge.cpp \
+    sources/bridgeserver.cpp \
+    sources/softprojectorlive.cpp
+HEADERS += headers/livebridge.hpp \
+    headers/bridgeserver.hpp
+RESOURCES += web.qrc
