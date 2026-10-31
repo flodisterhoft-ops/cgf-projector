@@ -47,6 +47,11 @@ Rectangle {
     signal playbackStateChanged(int state)
     signal playbackStopped()
 
+    // Qt 6 keeps a player on the sound device that was the default when it
+    // started. HDMI sound goes away with a dropped projector link, so follow
+    // the Windows default instead of going silent.
+    MediaDevices { id: mediaDevices }
+
     // Qt 6: the player must be told where to draw (videoOutput) and where to
     // send sound (audioOutput); without these, video stayed black and silent.
     MediaPlayer
@@ -54,7 +59,7 @@ Rectangle {
         id: player
         objectName: "player"
         videoOutput: vidOut
-        audioOutput: AudioOutput { id: audioOut }
+        audioOutput: AudioOutput { id: audioOut; device: mediaDevices.defaultAudioOutput }
         onPositionChanged:
         {
             dispArea.positionChanged(player.position)

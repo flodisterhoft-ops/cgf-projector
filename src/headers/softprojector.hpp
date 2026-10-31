@@ -143,6 +143,7 @@ private:
 private slots:
     void showDisplayScreen(bool show);
     void screensChanged();
+    void screenGeometryChanged();
     void applyScreenChange();
 
     void applySetting(GeneralSettings &g, Theme &t, SlideShowSettings &s,

@@ -186,10 +186,16 @@ GeneralSettings GeneralSettingWidget::getSettings()
     else
         mySettings.currentThemeId = 0;
 
-    mySettings.displayScreen = ui->comboBoxDisplayScreen->currentIndex();
-    mySettings.displayScreen2 = monitors.indexOf(ui->comboBoxDisplayScreen_2->currentText());    
-    mySettings.displayScreen3 = monitors.indexOf(ui->comboBoxDisplayScreen_3->currentText());
-    mySettings.displayScreen4 = monitors.indexOf(ui->comboBoxDisplayScreen_4->currentText());
+    // With one screen (e.g. the projector link is down) the choices are greyed
+    // out and show defaults; saving them would move the display onto the
+    // operator's screen once the projector is back. Keep the saved screens.
+    if(ui->groupBoxDisplayScreen->isEnabled())
+    {
+        mySettings.displayScreen = ui->comboBoxDisplayScreen->currentIndex();
+        mySettings.displayScreen2 = monitors.indexOf(ui->comboBoxDisplayScreen_2->currentText());
+        mySettings.displayScreen3 = monitors.indexOf(ui->comboBoxDisplayScreen_3->currentText());
+        mySettings.displayScreen4 = monitors.indexOf(ui->comboBoxDisplayScreen_4->currentText());
+    }
 
     mySettings.displayControls.buttonSize = ui->comboBoxIconSize->currentIndex();
     mySettings.displayControls.alignmentV = ui->comboBoxControlsAlignV->currentIndex();

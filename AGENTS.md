@@ -21,9 +21,8 @@ stripping what they never used and wiring the app into a central CGF library.
 - User-facing install: `C:\Users\Disterhoft\CGF\CGFProjector\CGFProjector.exe`
   (refresh via robocopy after builds).
 - Build: see **BUILD.md** (Qt 6.8.3 + MinGW 13.1 via aqtinstall; ~5 min from a
-  clean machine). The Qt toolchain is not installed on this machine as of
-  2026-10-05 (`C:\Users\Disterhoft\Qt` is gone); reinstall it per BUILD.md before
-  building.
+  clean machine). Installed on this machine at `C:\Users\Disterhoft\Qt`
+  (checked 2026-10-31); a full build takes about 80 s.
 - Status and history: `git log` here, plus the CGF Lyrics exporter/publisher tools
   below. The 2026-07-26 status snapshot is in
   `archive/agent-setup-2026-10-05/AGENTS-status-snapshot-2026-07-26.md`.
@@ -145,6 +144,16 @@ Roles: **Alex** = worship coordinator (collects program items, currently on
 paper); **Flo (user)** plays piano — wants mobile chord view w/ transpose and
 fast song flipping. The planner's default template is this liturgy, with
 typed items and stand/sit cues (congregation view can show "please stand").
+
+## Diagnosing a machine
+
+- `CGFProjector.log` next to the exe: Qt warnings, monitor and sound device
+  changes, and where the app put the display windows. Ask for it first when
+  something went wrong at a service. `sync.log` in the same folder covers the
+  sync agent.
+- Projector hot-plug can be tested without hardware: run the real main window
+  on Qt's offscreen platform and add or remove screens at runtime through the
+  plugin's `setConfiguration` native resource (BUILD.md, "Church test prep").
 
 ## Working conventions
 
