@@ -83,3 +83,6 @@ agent/sqlite3.exe
 
 # Local third-party reference and audit material
 /Reference/SoftProjectorAudit/
+
+# Network bridge test build (tests/bridge/run_tests.py)
+tests/bridge/out/

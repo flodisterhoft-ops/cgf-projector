@@ -143,3 +143,18 @@ support for video, and 404 once something else went live.
 
 Planned: `command` (next/prev/goto/hide for the phone remote) and `suggest`
 (sermon watcher).
+
+## Tests
+
+`tests/bridge/` drives the real main window offscreen and checks what the
+bridge sends (73 checks: live state for every kind, Bible lookups, media
+serving with ranges, the pages, the Origin check, style saving, mirror
+frames). It needs a copy of the CGF church database, which it copies first:
+
+```
+python tests/bridge/run_tests.py --db C:/Users/<you>/CGF/CGFProjector/spData.sqlite
+```
+
+`--serve` keeps the bridge up on port 8779 for a browser instead; write
+commands such as `song 214 0`, `bible B043C003V016`, `video <path>`, `hide`
+or `quit` into `tests/bridge/out/bin/cmd.txt`.
