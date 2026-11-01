@@ -142,3 +142,83 @@ Known remaining issues (not fixed in this round):
   per lookup); the `Settings` table has no unique key, so rows can duplicate.
 - Theme fonts are now stored in Qt 6's format; SoftProjector 2.1 (Qt 5) may not
   read them, so never open a CGF Projector database with 2.1.
+
+## Church test prep (2026-10-31)
+
+Before the first test on the church projector chain (one HDMI output, a
+splitter and CAT extenders to the front and back projectors; the link drops
+when a cable is touched), a second pass over projector link drops:
+
+- A live video kept playing hidden during a drop, but when the link returned
+  it started over from 0:00, and a paused video started playing. Putting the
+  display windows back no longer redraws a live video. An extra output
+  (display 2-4) that connects while a video is live starts the video where
+  display 1 is, muted, and paused if display 1 is (from the review of PR #1).
+  A seek asked for while a video file is still loading is applied once it has
+  loaded; Qt 6 ignored it.
+- Settings > OK while the projector was gone saved the greyed-out defaults:
+  display 1 moved onto the operator's screen when the link returned, and
+  display 2 was cleared. The saved screens are kept while only one screen
+  exists.
+- While the projector is gone, re-placing the display windows no longer
+  switches to one-screen mode, where the next Go Live covers the operator's
+  screen.
+- Video sound follows the Windows default output (projector page and Media tab
+  preview). Qt 6 keeps a player on the device that was the default when it
+  started, so sound over HDMI stayed silent after a drop.
+- `CGFProjector.log` next to the exe records Qt warnings, every monitor
+  added, removed or changed (name, model, resolution, refresh rate, scale),
+  sound output changes, and where the app put the display windows. Above 1 MB
+  at start-up it moves to `CGFProjector-previous.log`; one session stops
+  writing at 4 MB.
+
+Verification: a scratch harness ran the real main window on Qt's offscreen
+platform, with a copy of the home database and a silent test video, and
+unplugged and replugged a fake projector screen through the offscreen plugin's
+runtime screen configuration. 31 checks pass: drop and return, a loose cable
+(five drops in 0.6 s, windows re-arranged once), output left off, Settings > OK
+and Go Live during a drop, and a playing or paused video across a drop. With
+the three fixes reverted, the 6 matching checks fail. A three-screen case
+added after the review (a back screen plugged in while a video plays, then
+replugged while paused) brings it to 37; with the join disabled, its 3 video
+checks fail. On the offscreen
+platform Qt hides windows moved off a removed screen by itself, so "hidden at
+once" can't tell the app's hide from Qt's there. On Windows, Qt moves them to
+the primary screen and the app's `screenRemoved` handler hides them
+(qwindowsscreen.cpp, Qt 6.8.3). Still untested on real projectors.
+
+Known remaining issues:
+- Display screens are stored as indexes into the screen list. If Windows makes
+  the projector primary after a reconnect, the order changes and display 1
+  can land on the operator's screen. Not seen so far; the log records
+  primary-screen changes.
+- Settings > OK while a video is live restarts the video (the redraw reloads
+  it).
+
+## PowerPoint and PDF import (2026-10-31)
+
+Pictures tab > "Import PowerPoint or PDF...": each slide becomes a picture,
+saved as a slide show named after the file, selected and ready for Go Live.
+Operators step through it like a song, and it can go in the schedule. It is
+a slide show rather than a Media item because Media plays a file through;
+slides need stepping.
+
+- PowerPoint files (.pptx .ppt .pptm .ppsx .pps .odp) are exported by
+  PowerPoint on the same computer, through COM. Hidden slides are left out.
+  Without PowerPoint the app says so: PDF files import without it.
+- PDF pages are drawn by Windows (`Windows.Data.Pdf`, Windows 8.1 and later),
+  so no Office and no extra Qt module (Qt PDF would have meant a new download
+  and a bigger deployment).
+- The work is in `src/scripts/import-presentation.ps1`, built into the exe as
+  a resource and run with Windows PowerShell 5.1 from a temporary folder; the
+  app stays live meanwhile. Cancel lets the script close PowerPoint's copy of
+  the file before it stops.
+- Slides are drawn at the size Settings > Pictures stores pictures (default:
+  fit 1280x1280), so text isn't blurred by a second scaling. PDF pages come
+  out larger on displays scaled above 100 % and are fitted smoothly.
+
+Verification: the script on a test deck (German and Russian text, a hidden
+slide, a Cyrillic file name) and its PDF; a harness driving the real Pictures
+tab: import, re-import "(2)", PDF, reload from the database, Go Live, broken
+files, cancel (PowerPoint closed afterwards) and a 40-slide deck. Animations,
+videos and sound in slides are not carried over.

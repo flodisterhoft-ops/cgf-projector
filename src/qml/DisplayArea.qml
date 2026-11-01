@@ -36,6 +36,9 @@ Rectangle {
 
     property int tranTime: 500
 
+    // Qt 6 ignores a seek while the file is still loading; keep it until loaded.
+    property real pendingPosition: -1
+
     // Display Conrol signals
     signal exitClicked()
     signal nextClicked()
@@ -47,6 +50,11 @@ Rectangle {
     signal playbackStateChanged(int state)
     signal playbackStopped()
 
+    // Qt 6 keeps a player on the sound device that was the default when it
+    // started. HDMI sound goes away with a dropped projector link, so follow
+    // the Windows default instead of going silent.
+    MediaDevices { id: mediaDevices }
+
     // Qt 6: the player must be told where to draw (videoOutput) and where to
     // send sound (audioOutput); without these, video stayed black and silent.
     MediaPlayer
@@ -54,7 +62,7 @@ Rectangle {
         id: player
         objectName: "player"
         videoOutput: vidOut
-        audioOutput: AudioOutput { id: audioOut }
+        audioOutput: AudioOutput { id: audioOut; device: mediaDevices.defaultAudioOutput }
         onPositionChanged:
         {
             dispArea.positionChanged(player.position)
@@ -74,6 +82,13 @@ Rectangle {
         {
             if(player.mediaStatus === MediaPlayer.EndOfMedia)
                 dispArea.playbackStopped()
+            else if(dispArea.pendingPosition >= 0
+                    && (player.mediaStatus === MediaPlayer.LoadedMedia
+                        || player.mediaStatus === MediaPlayer.BufferedMedia))
+            {
+                player.setPosition(dispArea.pendingPosition)
+                dispArea.pendingPosition = -1
+            }
         }
     }
 
@@ -696,6 +711,7 @@ Rectangle {
     function loadVideo(source, loopCount, volume, fill)
     {
         player.stop()
+        pendingPosition = -1
         player.source = source
         player.loops = loopCount
         audioOut.volume = volume
@@ -733,7 +749,10 @@ Rectangle {
 
     function setVideoPosition(position)
     {
-        player.setPosition(position)
+        if(player.mediaStatus === MediaPlayer.LoadingMedia)
+            pendingPosition = position
+        else
+            player.setPosition(position)
     }
 
     function pauseVideo()

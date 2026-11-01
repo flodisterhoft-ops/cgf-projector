@@ -18,10 +18,19 @@
 ***************************************************************************/
 
 #include <QWidget>
+#include <QMediaDevices>
+#include <QAudioDevice>
 #include "../headers/softprojector.hpp"
 #include "ui_softprojector.h"
 #include "../headers/aboutdialog.hpp"
 #include "../headers/editannouncementdialog.hpp"
+#include "../headers/applog.hpp"
+
+static QString soundOutputName()
+{
+    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    return device.isNull() ? QString("none") : device.description();
+}
 
 SoftProjector::SoftProjector(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::SoftProjectorClass)
@@ -82,6 +91,10 @@ SoftProjector::SoftProjector(QWidget *parent)
     hasDisplayScreen2 = hasDisplayScreen3 = hasDisplayScreen4 = false;
     displayScreenLost = false;
 
+    for(QScreen *s : QGuiApplication::screens())
+        AppLog::write("Screen: " + AppLog::describe(s));
+    AppLog::write("Sound output: " + soundOutputName());
+
     positionDisplayWindow();
 
     // Follow monitors being connected and disconnected while running, so a
@@ -91,12 +104,25 @@ SoftProjector::SoftProjector(QWidget *parent)
     screenChangeTimer->setInterval(800);
     connect(screenChangeTimer, &QTimer::timeout, this, &SoftProjector::applyScreenChange);
     connect(qApp, &QGuiApplication::screenAdded, this, [this](QScreen *s) {
-        connect(s, &QScreen::geometryChanged, this, &SoftProjector::screensChanged, Qt::UniqueConnection);
+        AppLog::write("Screen added: " + AppLog::describe(s));
+        connect(s, &QScreen::geometryChanged, this, &SoftProjector::screenGeometryChanged, Qt::UniqueConnection);
         screensChanged();
     });
-    connect(qApp, &QGuiApplication::screenRemoved, this, &SoftProjector::screensChanged);
+    connect(qApp, &QGuiApplication::screenRemoved, this, [this](QScreen *s) {
+        AppLog::write("Screen removed: " + AppLog::describe(s));
+        screensChanged();
+    });
+    connect(qApp, &QGuiApplication::primaryScreenChanged, this, [](QScreen *s) {
+        AppLog::write("Primary screen: " + AppLog::describe(s));
+    });
     for(QScreen *s : QGuiApplication::screens())
-        connect(s, &QScreen::geometryChanged, this, &SoftProjector::screensChanged, Qt::UniqueConnection);
+        connect(s, &QScreen::geometryChanged, this, &SoftProjector::screenGeometryChanged, Qt::UniqueConnection);
+
+    // HDMI sound disappears with a dropped projector link. Video sound follows
+    // the Windows default output (DisplayArea.qml); log where it goes.
+    connect(new QMediaDevices(this), &QMediaDevices::audioOutputsChanged, this, [] {
+        AppLog::write("Sound output: " + soundOutputName());
+    });
 
     showing = false;
 
@@ -280,6 +306,11 @@ void SoftProjector::positionDisplayWindow()
         // Moving windows between screens hides them, so they are re-shown here.
         const bool turnOn = isSingleScreen ? (mySettings.general.displayOnStartUp || showing)
                                            : ui->actionCloseDisplay->isChecked();
+        // A live video keeps playing while its windows move; drawing the
+        // passive screen would stop it. Extra outputs that were not active
+        // until now join it instead.
+        const bool videoLive = showing && pType == VIDEO;
+        const bool had2 = hasDisplayScreen2, had3 = hasDisplayScreen3, had4 = hasDisplayScreen4;
 
         // The saved screen number can be missing (a monitor or extender link
         // is down): use the first screen that is not the operator's instead.
@@ -299,7 +330,8 @@ void SoftProjector::positionDisplayWindow()
         placeOnScreen(pds1, screen1);
         pds1->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
         pds1->resetImGenSize();
-        pds1->renderPassiveText(theme.passive.backgroundPix,theme.passive.useBackground);
+        if(!videoLive)
+            pds1->renderPassiveText(theme.passive.backgroundPix,theme.passive.useBackground);
         pds1->setControlsVisible(false);
 
         ui->actionCloseDisplay->setEnabled(true);
@@ -307,6 +339,8 @@ void SoftProjector::positionDisplayWindow()
         updateCloseDisplayButtons(turnOn);
         if(turnOn)
             pds1->showFullScreen();
+        AppLog::write(QString("Display 1 on %1, output %2")
+                      .arg(AppLog::describe(screen1), turnOn ? "on" : "off"));
 
         // check if to display secondary display screen
         QScreen *screen2 = screenAt(mySettings.general.displayScreen2);
@@ -316,10 +350,14 @@ void SoftProjector::positionDisplayWindow()
             placeOnScreen(pds2, screen2);
             pds2->resetImGenSize();
             pds2->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
-            pds2->renderPassiveText(theme.passive2.backgroundPix,theme.passive2.useBackground);
+            if(!videoLive)
+                pds2->renderPassiveText(theme.passive2.backgroundPix,theme.passive2.useBackground);
+            else if(!had2)
+                joinLiveVideo(pds2);
             pds2->setControlsVisible(false);
             if(turnOn)
                 pds2->showFullScreen();
+            AppLog::write("Display 2 on " + AppLog::describe(screen2));
         }
         else
         {
@@ -334,10 +372,14 @@ void SoftProjector::positionDisplayWindow()
             placeOnScreen(pds3, screen3);
             pds3->resetImGenSize();
             pds3->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
-            pds3->renderPassiveText(theme.passive3.backgroundPix,theme.passive3.useBackground);
+            if(!videoLive)
+                pds3->renderPassiveText(theme.passive3.backgroundPix,theme.passive3.useBackground);
+            else if(!had3)
+                joinLiveVideo(pds3);
             pds3->setControlsVisible(false);
             if(turnOn)
                 pds3->showFullScreen();
+            AppLog::write("Display 3 on " + AppLog::describe(screen3));
         }
         else
         {
@@ -352,10 +394,14 @@ void SoftProjector::positionDisplayWindow()
             placeOnScreen(pds4, screen4);
             pds4->resetImGenSize();
             pds4->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
-            pds4->renderPassiveText(theme.passive4.backgroundPix,theme.passive4.useBackground);
+            if(!videoLive)
+                pds4->renderPassiveText(theme.passive4.backgroundPix,theme.passive4.useBackground);
+            else if(!had4)
+                joinLiveVideo(pds4);
             pds4->setControlsVisible(false);
             if(turnOn)
                 pds4->showFullScreen();
+            AppLog::write("Display 4 on " + AppLog::describe(screen4));
         }
         else
         {
@@ -365,6 +411,15 @@ void SoftProjector::positionDisplayWindow()
         // specify that there is more than one diplay screen(monitor) availbale
         isSingleScreen = false;
     }
+    else if(displayScreenLost)
+    {
+        // Waiting for the projector to come back. One-screen mode would put
+        // the next live item over the operator's screen, so stay hidden.
+        pds1->hide();
+        pds2->hide();
+        pds3->hide();
+        pds4->hide();
+    }
     else
     {
         // Single monitor only: Do not show on strat up.
@@ -372,6 +427,7 @@ void SoftProjector::positionDisplayWindow()
         placeOnScreen(pds1, QGuiApplication::primaryScreen());
         pds1->resetImGenSize();
         showDisplayScreen(false);
+        AppLog::write("One screen only: display 1 shows on it while something is live");
         isSingleScreen = true;
         hasDisplayScreen2 = false;
         hasDisplayScreen3 = false;
@@ -394,10 +450,17 @@ void SoftProjector::screensChanged()
         pds2->hide();
         pds3->hide();
         pds4->hide();
+        AppLog::write("Projector screen lost: display windows hidden");
     }
     // A loose link can drop and return several times a second: re-arrange once
     // things have settled.
     screenChangeTimer->start();
+}
+
+void SoftProjector::screenGeometryChanged()
+{
+    AppLog::write("Screen changed: " + AppLog::describe(qobject_cast<QScreen*>(sender())));
+    screensChanged();
 }
 
 void SoftProjector::applyScreenChange()
@@ -405,10 +468,16 @@ void SoftProjector::applyScreenChange()
     if(QGuiApplication::screens().count() > 1)
     {
         // Projector connected (again): put the display windows back on their
-        // screens and re-draw what is live.
+        // screens and re-draw what is live. A live video is left playing where
+        // it is; re-drawing it would start it over.
         displayScreenLost = false;
         positionDisplayWindow();
-        updateScreen();
+        if(!(showing && pType == VIDEO))
+            updateScreen();
+    }
+    else if(displayScreenLost)
+    {
+        AppLog::write("Still one screen: display windows stay hidden");
     }
 }
 
@@ -1117,6 +1186,18 @@ void SoftProjector::showVideo()
         pds4->setVideoMuted(true);
         pds4->renderVideo(currentVideo);
     }
+}
+
+void SoftProjector::joinLiveVideo(ProjectorDisplayScreen *pds)
+{
+    // An extra output that connects while a video is live starts it where
+    // display 1 is, muted like the other extra outputs, and paused if it is.
+    pds->setVideoVolume(0);
+    pds->setVideoMuted(true);
+    pds->renderVideo(currentVideo);
+    pds->setVideoPosition(pds1->videoPosition());
+    if(pds1->isVideoPaused())
+        pds->pauseVideo();
 }
 
 void SoftProjector::on_actionShow_triggered()

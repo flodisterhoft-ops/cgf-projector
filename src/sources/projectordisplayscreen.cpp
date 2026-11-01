@@ -465,6 +465,18 @@ void ProjectorDisplayScreen::playbackStopped()
     emit videoStopped();
 }
 
+qint64 ProjectorDisplayScreen::videoPosition()
+{
+    QObject *player = dispView->rootObject()->findChild<QObject*>("player");
+    return player ? player->property("position").toLongLong() : 0;
+}
+
+bool ProjectorDisplayScreen::isVideoPaused()
+{
+    QObject *player = dispView->rootObject()->findChild<QObject*>("player");
+    return player && player->property("playbackState").toInt() == QMediaPlayer::PausedState;
+}
+
 void ProjectorDisplayScreen::setVideoVolume(int level)
 {
     float vol = 1.0*level/100;
