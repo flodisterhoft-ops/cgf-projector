@@ -151,7 +151,11 @@ when a cable is touched), a second pass over projector link drops:
 
 - A live video kept playing hidden during a drop, but when the link returned
   it started over from 0:00, and a paused video started playing. Putting the
-  display windows back no longer redraws a live video.
+  display windows back no longer redraws a live video. An extra output
+  (display 2-4) that connects while a video is live starts the video where
+  display 1 is, muted, and paused if display 1 is (from the review of PR #1).
+  A seek asked for while a video file is still loading is applied once it has
+  loaded; Qt 6 ignored it.
 - Settings > OK while the projector was gone saved the greyed-out defaults:
   display 1 moved onto the operator's screen when the link returned, and
   display 2 was cleared. The saved screens are kept while only one screen
@@ -174,7 +178,10 @@ unplugged and replugged a fake projector screen through the offscreen plugin's
 runtime screen configuration. 31 checks pass: drop and return, a loose cable
 (five drops in 0.6 s, windows re-arranged once), output left off, Settings > OK
 and Go Live during a drop, and a playing or paused video across a drop. With
-the three fixes reverted, the 6 matching checks fail. On the offscreen
+the three fixes reverted, the 6 matching checks fail. A three-screen case
+added after the review (a back screen plugged in while a video plays, then
+replugged while paused) brings it to 37; with the join disabled, its 3 video
+checks fail. On the offscreen
 platform Qt hides windows moved off a removed screen by itself, so "hidden at
 once" can't tell the app's hide from Qt's there. On Windows, Qt moves them to
 the primary screen and the app's `screenRemoved` handler hides them

@@ -46,6 +46,8 @@ class ProjectorDisplayScreen : public QWidget
 public:
     explicit ProjectorDisplayScreen(QWidget *parent = 0);
     ~ProjectorDisplayScreen();
+    qint64 videoPosition();
+    bool isVideoPaused();
 
 public slots:
     void resetImGenSize();

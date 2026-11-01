@@ -307,8 +307,10 @@ void SoftProjector::positionDisplayWindow()
         const bool turnOn = isSingleScreen ? (mySettings.general.displayOnStartUp || showing)
                                            : ui->actionCloseDisplay->isChecked();
         // A live video keeps playing while its windows move; drawing the
-        // passive screen would stop it.
+        // passive screen would stop it. Extra outputs that were not active
+        // until now join it instead.
         const bool videoLive = showing && pType == VIDEO;
+        const bool had2 = hasDisplayScreen2, had3 = hasDisplayScreen3, had4 = hasDisplayScreen4;
 
         // The saved screen number can be missing (a monitor or extender link
         // is down): use the first screen that is not the operator's instead.
@@ -350,6 +352,8 @@ void SoftProjector::positionDisplayWindow()
             pds2->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
             if(!videoLive)
                 pds2->renderPassiveText(theme.passive2.backgroundPix,theme.passive2.useBackground);
+            else if(!had2)
+                joinLiveVideo(pds2);
             pds2->setControlsVisible(false);
             if(turnOn)
                 pds2->showFullScreen();
@@ -370,6 +374,8 @@ void SoftProjector::positionDisplayWindow()
             pds3->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
             if(!videoLive)
                 pds3->renderPassiveText(theme.passive3.backgroundPix,theme.passive3.useBackground);
+            else if(!had3)
+                joinLiveVideo(pds3);
             pds3->setControlsVisible(false);
             if(turnOn)
                 pds3->showFullScreen();
@@ -390,6 +396,8 @@ void SoftProjector::positionDisplayWindow()
             pds4->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
             if(!videoLive)
                 pds4->renderPassiveText(theme.passive4.backgroundPix,theme.passive4.useBackground);
+            else if(!had4)
+                joinLiveVideo(pds4);
             pds4->setControlsVisible(false);
             if(turnOn)
                 pds4->showFullScreen();
@@ -1178,6 +1186,18 @@ void SoftProjector::showVideo()
         pds4->setVideoMuted(true);
         pds4->renderVideo(currentVideo);
     }
+}
+
+void SoftProjector::joinLiveVideo(ProjectorDisplayScreen *pds)
+{
+    // An extra output that connects while a video is live starts it where
+    // display 1 is, muted like the other extra outputs, and paused if it is.
+    pds->setVideoVolume(0);
+    pds->setVideoMuted(true);
+    pds->renderVideo(currentVideo);
+    pds->setVideoPosition(pds1->videoPosition());
+    if(pds1->isVideoPaused())
+        pds->pauseVideo();
 }
 
 void SoftProjector::on_actionShow_triggered()

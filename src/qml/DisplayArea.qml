@@ -36,6 +36,9 @@ Rectangle {
 
     property int tranTime: 500
 
+    // Qt 6 ignores a seek while the file is still loading; keep it until loaded.
+    property real pendingPosition: -1
+
     // Display Conrol signals
     signal exitClicked()
     signal nextClicked()
@@ -79,6 +82,13 @@ Rectangle {
         {
             if(player.mediaStatus === MediaPlayer.EndOfMedia)
                 dispArea.playbackStopped()
+            else if(dispArea.pendingPosition >= 0
+                    && (player.mediaStatus === MediaPlayer.LoadedMedia
+                        || player.mediaStatus === MediaPlayer.BufferedMedia))
+            {
+                player.setPosition(dispArea.pendingPosition)
+                dispArea.pendingPosition = -1
+            }
         }
     }
 
@@ -701,6 +711,7 @@ Rectangle {
     function loadVideo(source, loopCount, volume, fill)
     {
         player.stop()
+        pendingPosition = -1
         player.source = source
         player.loops = loopCount
         audioOut.volume = volume
@@ -738,7 +749,10 @@ Rectangle {
 
     function setVideoPosition(position)
     {
-        player.setPosition(position)
+        if(player.mediaStatus === MediaPlayer.LoadingMedia)
+            pendingPosition = position
+        else
+            player.setPosition(position)
     }
 
     function pauseVideo()
