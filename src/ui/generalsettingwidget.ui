@@ -190,7 +190,7 @@
       <item row="4" column="0" colspan="3">
        <widget class="QCheckBox" name="checkBoxDisplayOnStartUp">
         <property name="text">
-         <string>Show Display Screen on SoftProjector Startup</string>
+         <string>Show Display Screen on Startup</string>
         </property>
        </widget>
       </item>

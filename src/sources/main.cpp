@@ -23,6 +23,7 @@
 #include <QtSql>
 #include <QStyleFactory>
 #include "../headers/softprojector.hpp"
+#include "../headers/applog.hpp"
 
 // Definitions for database versions 'dbVer' numbers
 // x - Official release. ex: 2 - for SoftProjector 2
@@ -256,6 +257,8 @@ int main(int argc, char *argv[])
 #else
     database_dir = a.applicationDirPath() + QDir::separator();
 #endif
+    AppLog::start(database_dir);
+
 // CGF: force the classic light appearance. Upstream's Qt6 port applied a
     // dark Fusion palette on every Windows machine (it checked a registry value
     // that never exists), overriding the user's Windows theme choice.
@@ -264,6 +267,7 @@ int main(int argc, char *argv[])
     // Try to connect to database
     if( !connect(database_dir) )
     {
+        AppLog::write("Failed to open " + database_dir + "spData.sqlite");
         QMessageBox mb;
         mb.setText("Failed to connect to database 'spData.sqlite'");
         mb.setWindowTitle("Database File Error");

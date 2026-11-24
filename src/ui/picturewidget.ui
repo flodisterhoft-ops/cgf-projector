@@ -31,6 +31,17 @@
        <item>
         <widget class="QListWidget" name="listWidgetSlideShow"/>
        </item>
+       <item>
+        <widget class="QPushButton" name="pushButtonImport">
+         <property name="text">
+          <string>Import PowerPoint or PDF...</string>
+         </property>
+         <property name="icon">
+          <iconset resource="softprojector.qrc">
+           <normaloff>:/icons/icons/add.png</normaloff>:/icons/icons/add.png</iconset>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="layoutWidget1">

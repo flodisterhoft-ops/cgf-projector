@@ -103,4 +103,7 @@
     <qresource prefix="/qml">
         <file>qml/DisplayArea.qml</file>
     </qresource>
+    <qresource prefix="/scripts">
+        <file>scripts/import-presentation.ps1</file>
+    </qresource>
 </RCC>

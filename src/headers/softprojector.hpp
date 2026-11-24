@@ -159,6 +159,7 @@ private:
 private slots:
     void showDisplayScreen(bool show);
     void screensChanged();
+    void screenGeometryChanged();
     void applyScreenChange();
 
     void applySetting(GeneralSettings &g, Theme &t, SlideShowSettings &s,
@@ -177,6 +178,7 @@ private slots:
     void showAnnounce(int currentRow);
     void showPicture(int currentRow);
     void showVideo();
+    void joinLiveVideo(ProjectorDisplayScreen *pds);
 
     void on_action_Help_triggered();
     void on_actionManage_Database_triggered();

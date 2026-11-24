@@ -18,6 +18,8 @@
 ***************************************************************************/
 
 #include <QMediaMetaData>
+#include <QMediaDevices>
+#include <QAudioDevice>
 
 #include "../headers/mediawidget.hpp"
 #include "ui_mediawidget.h"
@@ -33,6 +35,11 @@ MediaWidget::MediaWidget(QWidget *parent) :
     // Qt 6 plays nothing audible unless the player has an audio output.
     audioOutput = new QAudioOutput(this);
     player->setAudioOutput(audioOutput);
+    // It also stays on the device that was the default at start-up; follow
+    // the Windows default (HDMI sound goes away with the projector link).
+    connect(new QMediaDevices(this), &QMediaDevices::audioOutputsChanged, this, [this] {
+        audioOutput->setDevice(QMediaDevices::defaultAudioOutput());
+    });
 
     mediaControls = new MediaControl(this);
      ui->horizontalLayoutControls->addWidget(mediaControls);
