@@ -107,16 +107,16 @@ def sign(key, payload):
 # ---------------------------------------------------------------------------
 # Server calls
 
-def request(cfg, method, path, body=None):
+def request(cfg, method, path, body=None, raw=None):
     url = cfg["server"].rstrip("/") + f"/v1/{cfg['church']}{path}"
-    data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
+    data = raw if raw is not None else (None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8"))
     req = urllib.request.Request(url, data=data, method=method, headers={
         "Authorization": f"Bearer {cfg['token']}",
-        "Content-Type": "application/json",
+        "Content-Type": "application/octet-stream" if raw is not None else "application/json",
         "User-Agent": "cgf-push/1",
     })
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=300) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:300]
@@ -387,6 +387,90 @@ def cmd_push(args):
     print(f"PUSH OK: server at v{r['latest']}, sent to {r['connected']} connected laptop(s)")
 
 
+# ---------------------------------------------------------------------------
+# App releases (docs/song-push.md, "App updates")
+
+# Files in a build folder that belong to a laptop, never to a release.
+LOCAL_FILE = re.compile(r"(?i)^(spData.*|.*\.sqlite.*|version\.txt|cgf-(cloud|network|versions|healthy)\..*|"
+                        r".*\.log|releases\.json|.*\.tmp)$")
+LOCAL_DIRS = {"staging"}
+APP_FOLDER = re.compile(r"^app-[A-Za-z0-9._-]{1,40}$")
+REQUIRED = ["CGFProjector.exe", "cgf-companion.exe", "Qt6Core.dll", "tls/qschannelbackend.dll"]
+
+
+def app_files(build_dir):
+    """Every program file of a deployed build (windeployqt output), as
+    (relative path with '/', absolute path)."""
+    build_dir = Path(build_dir)
+    out = []
+    for p in sorted(build_dir.rglob("*")):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(build_dir).as_posix()
+        parts = rel.split("/")
+        if parts[0] in LOCAL_DIRS or (len(parts) == 1 and LOCAL_FILE.match(parts[0])):
+            continue
+        out.append((rel, p))
+    return out
+
+
+def qt_compress(data):
+    """The format Qt's qUncompress reads: original size (4 bytes, big-endian) + zlib."""
+    import struct
+    import zlib
+    return struct.pack(">I", len(data)) + zlib.compress(data, 9)
+
+
+def build_app_release(files, church, seq, version, notes, key, launcher=None):
+    payload = {
+        "kind": "cgf-app", "v": 1, "church": church, "seq": seq, "version": version,
+        "folder": f"app-{version}", "notes": notes,
+        "published_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "files": [{"path": rel, "sha256": sha, "bytes": size} for rel, sha, size in files],
+    }
+    if launcher:
+        payload["launcher"] = {"sha256": launcher[0], "bytes": launcher[1]}
+    text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return {"type": "app", "payload": text, "sig": sign(key, text), "key": key_id(key)}
+
+
+def cmd_app_release(args):
+    cfg = load_config()
+    build = Path(args.build_dir)
+    for r in REQUIRED:
+        if not (build / r).exists():
+            raise SystemExit(f"{build} has no {r}: build and deploy first (BUILD.md)")
+    if not APP_FOLDER.match(f"app-{args.version}"):
+        raise SystemExit("A version may hold letters, digits, dots, dashes and underscores only")
+    notes = Path(args.notes_file).read_text("utf-8").strip() if args.notes_file else (args.notes or "")
+    files = []
+    blobs = {}
+    for rel, path in app_files(build):
+        data = path.read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        files.append((rel, sha, len(data)))
+        blobs[sha] = path
+    launcher = None
+    if args.launcher:
+        data = Path(args.launcher).read_bytes()
+        sha = hashlib.sha256(data).hexdigest()
+        launcher = (sha, len(data))
+        blobs[sha] = Path(args.launcher)
+
+    status = request(cfg, "GET", "/status")
+    seq = ((status.get("app") or {}).get("seq") or 0) + 1
+    missing = request(cfg, "POST", "/app/files/missing", {"sha256": sorted(blobs)})["missing"]
+    total = sum(blobs[s].stat().st_size for s in missing)
+    print(f"app-{args.version}: {len(files)} files, {len(missing)} to upload ({total / 1e6:.1f} MB before compression)")
+    for i, sha in enumerate(missing, 1):
+        request(cfg, "PUT", f"/app/files/{sha}", raw=qt_compress(blobs[sha].read_bytes()))
+        if i % 20 == 0 or i == len(missing):
+            print(f"  uploaded {i}/{len(missing)}")
+    release = build_app_release(files, cfg["church"], seq, args.version, notes, load_key(), launcher)
+    r = request(cfg, "POST", "/app/releases", {"release": release})
+    print(f"APP RELEASE OK: app-{args.version} is release {r['seq']}, sent to {r['connected']} connected laptop(s)")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -399,6 +483,13 @@ def main(argv=None):
     p = sub.add_parser("push"); p.add_argument("--publish-dir", required=True); p.set_defaults(fn=cmd_push)
     p = sub.add_parser("status"); p.set_defaults(fn=cmd_status)
     p = sub.add_parser("diff"); p.add_argument("old"); p.add_argument("new"); p.set_defaults(fn=cmd_diff)
+    p = sub.add_parser("app-release", help="publish a new app build to the laptops")
+    p.add_argument("--build-dir", required=True, help="the deployed build (src/win32_build/bin)")
+    p.add_argument("--version", required=True, help="for example 0.2.1; the laptop folder becomes app-<version>")
+    p.add_argument("--notes", help="what changed, shown in the app")
+    p.add_argument("--notes-file", help="the same, from a text file")
+    p.add_argument("--launcher", help="the launcher exe (src/win32_build/launcher/CGFProjector.exe)")
+    p.set_defaults(fn=cmd_app_release)
     args = ap.parse_args(argv)
     args.fn(args)
 

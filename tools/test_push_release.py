@@ -124,6 +124,34 @@ class DeltaTests(unittest.TestCase):
             verify(pr.public_key_b64(self.key), tampered, parts[0]["sig"])
 
 
+class AppReleaseTests(unittest.TestCase):
+    def test_app_files_leave_out_the_laptops_data(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for name in ["CGFProjector.exe", "Qt6Core.dll", "spData.sqlite", "spData.sqlite.prev-1", "version.txt",
+                         "cgf-cloud.json", "cgf-network.json", "CGFProjector.log", "platforms/qwindows.dll",
+                         "staging/manifest.json", "translations/qt_de.qm"]:
+                (d / name).parent.mkdir(parents=True, exist_ok=True)
+                (d / name).write_bytes(b"x")
+            self.assertEqual([r for r, _ in pr.app_files(d)],
+                             ["CGFProjector.exe", "platforms/qwindows.dll", "Qt6Core.dll", "translations/qt_de.qm"])
+
+    def test_files_travel_as_qt_compress(self):
+        import struct
+        import zlib
+        data = b"program bytes " * 100
+        packed = pr.qt_compress(data)
+        self.assertEqual(struct.unpack(">I", packed[:4])[0], len(data))
+        self.assertEqual(zlib.decompress(packed[4:]), data)
+
+    def test_an_app_release_is_signed(self):
+        key = ec.generate_private_key(ec.SECP256R1())
+        r = pr.build_app_release([("CGFProjector.exe", "a" * 64, 10)], "c", 3, "0.2.1", "notes", key, ("b" * 64, 5))
+        verify(pr.public_key_b64(key), r["payload"], r["sig"])
+        body = json.loads(r["payload"])
+        self.assertEqual((body["seq"], body["folder"], body["launcher"]["sha256"]), (3, "app-0.2.1", "b" * 64))
+
+
 class PlanTests(unittest.TestCase):
     def test_plans_consecutive_steps_the_server_lacks(self):
         files = {1: "a", 2: "b", 3: "c", 4: "d"}
