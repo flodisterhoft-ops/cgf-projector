@@ -490,3 +490,8 @@ form, and saves the settings: 34 checks pass. With the old number-only rule,
 and the first one is the operator's, hence the names "0 Laptop", "1 Front",
 "2 Back". Also bridge 73 and push 30 checks pass. Not yet tried on the real
 projectors.
+
+Published (Florian's go-ahead) as app 0.2.6, release 7, from 13ce2d3 with the
+launcher: 106 files, 1 uploaded (the app). The church laptop reported
+app-0.2.6 installed 5 s later. It still has one picture for both projectors
+until the DisplayLink adapter is in.
