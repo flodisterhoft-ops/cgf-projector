@@ -185,3 +185,54 @@ back-screen device. Windows Firewall asks once on the church laptop (admin
 click). If the host church's Wi-Fi isolates devices, the laptop needs
 Tailscale. Videos a browser can't play (WMV, most AVI) and audio-only media
 don't appear on the stream or the mirror.
+
+## Library push (2026-11-23)
+
+New and edited songs reach the laptops seconds after a publish. Design,
+protocol and the going-live steps: `docs/song-push.md`. New pieces:
+
+- The companion, a second small program beside the app. Build it after the
+  app (same Git Bash PATH as above), then deploy it into the same folder:
+
+  ```
+  cd src/companion
+  qmake companion.pro -spec win32-g++
+  mingw32-make -j8 release
+  windeployqt --no-translations ../win32_build/bin/cgf-companion.exe
+  ```
+
+  `windeployqt` adds the TLS plugin (`tls/qschannelbackend.dll`) it needs for
+  `wss://`. The app links `bcrypt` (Windows) to check release signatures.
+- The push server in `push-server/` (Node): `npm install`, `npm test`,
+  `npm run check`; `npm run dev` serves it locally on port 8787.
+- The publisher side, `tools/push_release.py`, needs Python with
+  `cryptography`.
+
+Verification (2026-11-23):
+- Clean builds of the app and the companion; no compiler warnings from the
+  new files.
+- Push server: 14 tests (access, replay in order, the snapshot fallback for
+  broken chains, live broadcast and acks, keep-alives, retention, connections
+  kept across hibernation, device removal and token rotation, and that the
+  entry module exports only what the Workers runtime accepts).
+- Publisher: 8 tests (changed/added/removed songs, quick-adds and usage counts
+  never travel, other tables flagged, parts split and signed, a changed
+  payload fails the signature).
+- App (`tests/push/run_tests.py`, offscreen against a copy of the v3
+  snapshot): 30 checks. Python-made signatures verify in the app and a
+  tampered one is refused; parts in any order; the database, song list,
+  search, preview (same verse) and schedule update; the live song and the
+  schedule's saved flag stay; quick-adds and usage counts stay; duplicates,
+  gaps, a new songbook, and a release touching a quick-add id (refused,
+  rolled back).
+- End to end (`--e2e`): `wrangler dev`, the companion started by the app, and
+  `push_release.py push` brought the app from v3 to v4; the companion log
+  shows the release passed on and applied in the same second as the push.
+  The server recorded the laptop at v4.
+- The network bridge's 73 checks still pass (its runner now links `LIBS`
+  from the project file too).
+
+Deployed 2026-11-23: Worker `cgf-projector-push` at https://push.cgfvernon.ca
+(version `4f8c7fe7`), `PUBLISH_TOKEN` set. Not yet done: hosting snapshots
+for laptops outside Florian's network, a test on the church laptop and
+network.

@@ -141,6 +141,10 @@ support for video, and 404 once something else went live.
 {"type": "subscribe", "frames": true}                              // send me rendered frames
 ```
 
+Programs on the laptop itself (the companion) may also send signed library
+`release` messages; `hello` then carries `library.version`. See
+`docs/song-push.md`.
+
 Planned: `command` (next/prev/goto/hide for the phone remote) and `suggest`
 (sermon watcher).
 

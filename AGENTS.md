@@ -130,9 +130,12 @@ stripping what they never used and wiring the app into a central CGF library.
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
   quick-add upload flow. CGF logo swap pending logo file from Flo.
-- Next milestones (as of 2026-10-31): phone remote → sermon watcher on the
-  network bridge (OBS overlay and back-screen mirror are built; both await a
-  test on the church network); proposals upload → tier-3 push → web planner.
+- Next milestones (as of 2026-11-23): put CGF Projector with the companion
+  on the church laptop (the push server is live) and host snapshots for
+  remote laptops; phone
+  remote → sermon watcher on the network bridge (OBS overlay and back-screen
+  mirror are built; both await a test on the church network); app updates
+  over the push connection; proposals upload → web planner.
 
 ## Network bridge (built 2026-10-31; see docs/network-bridge.md)
 
@@ -154,6 +157,32 @@ stripping what they never used and wiring the app into a central CGF library.
   cgf-translation and reuses its Soniox stream. A suggestion pre-selects the
   verse and the normal Go Live sends it (Enter already means next slide).
   Never auto-display.
+
+## Library push (built 2026-11-23; see docs/song-push.md)
+
+- Florian asked (2026-11-23) for new songs to reach the laptops "instantly"
+  instead of on the sync agent's 10-minute poll. This is the tier-3 push
+  above. Publishing (`publish_snapshot.py`) now calls `tools/push_release.py`,
+  which diffs consecutive snapshots, signs the changed songs/songbooks and
+  posts them to the push server.
+- Push server: a separate Worker, `cgf-projector-push` (`push-server/`), in
+  the CGF Vernon Cloudflare account, one SQLite Durable Object per church
+  (`church_id` on every table). Kept apart from the Hub (`cgf-hub`) and its
+  deploy runbook. Deployed 2026-11-23 (Florian's go-ahead) at
+  https://push.cgfvernon.ca; redeploys need his go-ahead too.
+- The app still never talks to the internet: `cgf-companion.exe` (Qt, built
+  from `src/companion/`, started by the app) holds the connection and hands
+  releases to the bridge on 127.0.0.1. The 2026-08-09 plan said "Python
+  companion"; it is Qt so the church laptop needs no Python install and
+  shares the app's Qt libraries.
+- Safety: ECDSA P-256 signatures checked in the app (server and companion
+  only relay); the projected song is never changed; quick-add ids >500000 and
+  usage counts stay local; one transaction per release. The library version
+  is max(`version.txt`, table `CgfSync`). Snapshots stay the source of truth:
+  Bibles and other tables, and laptops offline for more than 200 releases,
+  catch up through the sync agent's snapshot install.
+- Secrets: publisher key and token in `%USERPROFILE%\.cgf-publish\`; each
+  laptop's device token in its `cgf-cloud.json` (git-ignored, never commit).
 
 ## The service order (spec seed for the web planner)
 
