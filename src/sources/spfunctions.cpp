@@ -18,6 +18,7 @@
 ***************************************************************************/
 
 #include "../headers/spfunctions.hpp"
+#include <QScreen>
 //spFunctions::spFunctions()
 //{
 //}
@@ -47,6 +48,51 @@ QIcon cgfAppIcon()
     for(int px : {16, 20, 24, 32, 40, 48, 64, 256})
         icon.addFile(QStringLiteral(":/icons/icons/app-%1.png").arg(px), QSize(px, px));
     return icon;
+}
+
+static QString screenPosition(const QScreen *screen)
+{
+    const QRect g = screen->geometry();
+    return QString::number(g.x()) + QLatin1Char(',') + QString::number(g.y());
+}
+
+QString screenIdentity(const QScreen *screen)
+{
+    if(!screen)
+        return QString();
+    const QString raw = screen->name() + QLatin1Char('\n') + screen->serialNumber()
+            + QLatin1Char('\n') + screenPosition(screen);
+    return QString::fromLatin1(raw.toUtf8().toPercentEncoding());
+}
+
+static QStringList identityParts(const QString &identity)
+{
+    // name, serial number, position
+    return QString::fromUtf8(QByteArray::fromPercentEncoding(identity.toLatin1())).split(QLatin1Char('\n'));
+}
+
+int screenMatches(const QString &identity, const QScreen *screen)
+{
+    if(identity.isEmpty() || !screen)
+        return 0;
+    const QStringList want = identityParts(identity);
+    const QString name = want.value(0), serial = want.value(1), position = want.value(2);
+    const QString hasSerial = screen->serialNumber();
+    // Two devices that both report a serial number are told apart by it.
+    if(!serial.isEmpty() && !hasSerial.isEmpty() && serial != hasSerial)
+        return 0;
+    const bool sameSerial = !serial.isEmpty() && serial == hasSerial;
+    const bool sameName = !name.isEmpty() && name == screen->name();
+    if(!sameSerial && !sameName)
+        return 0;
+    // Two projectors of the same model: the position Windows gives each one
+    // tells them apart while both are connected.
+    return (sameSerial ? 4 : 0) + (sameName ? 2 : 0) + (position == screenPosition(screen) ? 1 : 0);
+}
+
+QString screenIdentityName(const QString &identity)
+{
+    return identityParts(identity).value(0);
 }
 
 bool isAnnounceTitle(QString string)

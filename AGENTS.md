@@ -136,6 +136,13 @@ stripping what they never used and wiring the app into a central CGF library.
   look the operators know; the splash says "CGF Projector", the icon shows
   "CGF" on a cloud. Drawn by `tools/branding/make_branding.py` (BUILD.md,
   "Splash and icon"). The church logo stays out of the public repo.
+- **Front and back projectors (user decision 2026-11-24):** the back screen
+  is display 2 and shows the same live item plus the time (Settings >
+  General, "Show the time"). Displays remember their projector by name,
+  serial number and position, so link drops can't swap front and back
+  (BUILD.md, "Front and back projectors"; `tests/screens`). Needs a second
+  video output: the church laptop's USB-C has no video, so a DisplayLink USB
+  adapter feeds the back extender.
 - **Classic Windows style (user decision 2026-11-23):** `main.cpp` sets Qt's
   "windowsvista" style, the look of SoftProjector 2.1. Qt 6's Windows 11
   style made the selected verse nearly invisible (faint grey, thin accent

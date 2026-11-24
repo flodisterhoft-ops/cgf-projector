@@ -52,6 +52,10 @@ own rendered text and background with its fades, plus the live video. If the
 laptop becomes unreachable, the last picture stays and after 10 seconds a
 small grey dot appears in the corner.
 
+The other way, chosen for the church in 2026-11 (BUILD.md, "Front and back
+projectors"): a second video output on the laptop drives the back projector
+as display 2, with the time in a corner. The mirror never shows the time.
+
 ## Files and switches
 
 - `cgf-network.json` beside `spData.sqlite` holds the stream style

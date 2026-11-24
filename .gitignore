@@ -91,6 +91,8 @@ tests/bridge/out/
 # state, and each laptop's settings (they hold its device token)
 tests/push/out/
 tests/update/out/
+# Front/back projector checks (tests/screens/run_tests.py)
+tests/screens/out/
 push-server/node_modules/
 push-server/.wrangler/
 push-server/worker-configuration.d.ts

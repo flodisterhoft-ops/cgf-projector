@@ -303,6 +303,15 @@ public:
     int displayScreen2; // stores secondary display screen location
     int displayScreen3; // stores Tertiary display screen location
     int displayScreen4; // stores Quaternary display screen location
+    // The projector each display uses (screenIdentity() in spfunctions):
+    // name, serial number and position, so a projector that drops and comes
+    // back keeps its own display. Empty in settings from before 0.2.6, where
+    // only the screen number above counts.
+    QString displayScreenId;
+    QString displayScreen2Id;
+    QString displayScreen3Id;
+    QString displayScreen4Id;
+    bool displayClock2; // the time of day in a corner of display 2 (the back screen)
     DisplayControlsSettings displayControls;
     int currentThemeId;
     bool displayOnStartUp;

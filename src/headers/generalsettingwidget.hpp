@@ -42,6 +42,9 @@ private:
     GeneralSettings mySettings;
     Settings allSetings;
     QStringList monitors;
+    // The screen each display's box showed when the form opened (-1 = None).
+    int shownScreen[4] = {-1, -1, -1, -1};
+    void takeDisplayChoice(int display, int chosen, int &index, QString &id);
     QStringList themes;
     QList<int> themeIdList;
 

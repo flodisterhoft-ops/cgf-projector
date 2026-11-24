@@ -446,3 +446,47 @@ window captured in the background, showed the classic style.
 Published (Florian's go-ahead) as app 0.2.5, release 6, from f367967 with the
 launcher: 106 files, 1 uploaded (the app; the launcher was unchanged). The
 church laptop reported app-0.2.5 installed 5 s later.
+
+## Front and back projectors (2026-11-24)
+
+Florian asked for separate control of the front projector and the back one
+(for the people preaching), as ProPresenter does in the host church. The back
+screen shows what the front shows, plus the time (his choice).
+
+Wiring: the laptop's one HDMI output went into a CAT extender set to copy the
+signal to both projectors, so both showed one picture and no setting could
+change that. The church laptop (Lenovo LOQ 15IAX9E) has a single video output: its
+USB-C port is data-only (Lenovo PSREF), so a USB-C-to-HDMI adapter shows
+nothing. A second output needs a DisplayLink USB-to-HDMI adapter (its own
+driver; any USB 3 port). Then laptop HDMI → front extender, the adapter → back
+extender, Windows set to "Extend these displays", and in CGF Projector
+Settings > General: Primary Display Screen = front, Secondary = back, "Show
+the time".
+
+The app could already show on up to four screens, each with its own look
+(display 2 settings in the Bible, Songs, Announcements and Passive pages).
+Added:
+
+- The time of day in the top right corner of display 2 (`DisplayArea.qml`,
+  6.5% of the screen height, white on a dark box, the laptop's time format).
+  The stream and the back-screen mirror don't show it.
+- Each display remembers its projector by name, serial number and position
+  (`screenIdentity` in `spfunctions.cpp`), besides the screen number. Qt lists
+  a screen that drops and comes back last, so with numbers alone a loose link
+  could put display 1 on the back and the time on the front until the app
+  restarted. A display keeps its projector while that stays connected; a
+  display whose projector is missing waits, hidden (display 1 still takes any
+  free projector, as before); settings from before 0.2.6 use the number once
+  and remember the projector it finds. The log says which projector each
+  display is waiting for.
+- Settings shows the projectors' names ("2 - EPSON ... (1920x1080)"). OK
+  without changes, or while a projector is unplugged, keeps the saved ones.
+
+Checks: `python tests/screens/run_tests.py --db <CGF database>` runs the real
+main window offscreen with a fake laptop, front and back and unplugs and
+replugs them (front, back, both, back first), changes them in the Settings
+form, and saves the settings: 34 checks pass. With the old number-only rule,
+13 fail, among them the swap. The offscreen plugin adds screens in name order
+and the first one is the operator's, hence the names "0 Laptop", "1 Front",
+"2 Back". Also bridge 73 and push 30 checks pass. Not yet tried on the real
+projectors.

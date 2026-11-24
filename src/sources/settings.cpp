@@ -736,6 +736,7 @@ GeneralSettings::GeneralSettings()
     displayScreen2 = -1; // interger "-1" mean "None" or not to display
     displayScreen3 = -1;
     displayScreen4 = -1;
+    displayClock2 = false;
     currentThemeId = 0;
     displayOnStartUp = false;
     settingsChangedAll = false;
@@ -822,6 +823,16 @@ void Settings::loadSettings()
                     general.displayScreen3 = v.toInt();
                 else if (n == "displayScreen4")
                     general.displayScreen4 = v.toInt();
+                else if (n == "displayScreenId")
+                    general.displayScreenId = v;
+                else if (n == "displayScreen2Id")
+                    general.displayScreen2Id = v;
+                else if (n == "displayScreen3Id")
+                    general.displayScreen3Id = v;
+                else if (n == "displayScreen4Id")
+                    general.displayScreen4Id = v;
+                else if (n == "displayClock2")
+                    general.displayClock2 = (v == "true");
                 else if (n == "dcIconSize")
                     general.displayControls.buttonSize = v.toInt();
                 else if (n == "dcAlignment")
@@ -981,6 +992,12 @@ void Settings::saveSettings()
     gset += "\ndisplayScreen2 = " + QString::number(general.displayScreen2);
     gset += "\ndisplayScreen3 = " + QString::number(general.displayScreen3);
     gset += "\ndisplayScreen4 = " + QString::number(general.displayScreen4);
+    // Percent-encoded (screenIdentity), so no "=", quote or line break.
+    gset += "\ndisplayScreenId = " + general.displayScreenId;
+    gset += "\ndisplayScreen2Id = " + general.displayScreen2Id;
+    gset += "\ndisplayScreen3Id = " + general.displayScreen3Id;
+    gset += "\ndisplayScreen4Id = " + general.displayScreen4Id;
+    gset += QString("\ndisplayClock2 = ") + (general.displayClock2 ? "true" : "false");
     gset += "\ndcIconSize = " + QString::number(general.displayControls.buttonSize);
     gset += QString("\ndcAlignment = %1,%2").arg(general.displayControls.alignmentV).arg(general.displayControls.alignmentH);
     gset += "\ndcOpacity = " + QString::number(general.displayControls.opacity);

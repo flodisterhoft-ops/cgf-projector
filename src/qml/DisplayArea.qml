@@ -285,6 +285,45 @@ Rectangle {
         }
     }
 
+    // The time of day in the top right corner: on the back screen only
+    // (General settings, "Show the time"), for the people preaching. The
+    // stream and the back-screen mirror don't show it.
+    property bool clockVisible: false
+
+    Rectangle
+    {
+        id: clockBox
+        objectName: "clockBox"
+        visible: dispArea.clockVisible
+        z: 10
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: dispArea.height * 0.025
+        width: clockText.implicitWidth + dispArea.height * 0.05
+        height: clockText.implicitHeight + dispArea.height * 0.012
+        radius: height * 0.18
+        color: "#b3000000"
+
+        Text
+        {
+            id: clockText
+            objectName: "clockText"
+            anchors.centerIn: parent
+            color: "#ffffff"
+            font.pixelSize: Math.max(16, dispArea.height * 0.065)
+            font.bold: true
+        }
+
+        Timer
+        {
+            interval: 1000
+            repeat: true
+            running: clockBox.visible
+            triggeredOnStart: true
+            onTriggered: clockText.text = new Date().toLocaleTimeString(Qt.locale(), Locale.ShortFormat)
+        }
+    }
+
     SequentialAnimation
     {
         id:seqFade1to2

@@ -21,6 +21,8 @@
 #define SOFTPROJECTOR_HPP
 
 #include <QMainWindow>
+#include <QPointer>
+#include <QScreen>
 #include "songwidget.hpp"
 #include "biblewidget.hpp"
 #include "announcewidget.hpp"
@@ -98,6 +100,8 @@ public slots:
                        BibleVersionSettings &bsets3, BibleVersionSettings &bsets4);
     void saveSettings();
     void positionDisplayWindow();
+    // Settings chose other projectors: forget where the displays were.
+    void displaySettingsChanged();
     void updateScreen();
 
     void setWaitCursor();
@@ -124,6 +128,15 @@ private:
     // until it comes back.
     bool displayScreenLost;
     QTimer *screenChangeTimer;
+    // The screen each display (1-4) is on now; see resolveDisplayScreens().
+    // Fallback: display 1 is on a screen other than its own projector's.
+    QPointer<QScreen> displayScreenNow[4];
+    bool displayScreenFallback[4] = {false, false, false, false};
+    // Display 1 has a screen. It has none while its projector is missing and
+    // display 2-4 have the other projectors.
+    bool hasDisplayScreen1 = false;
+    void resolveDisplayScreens();
+    void showClock();
 
     // shortcuts
     QShortcut *shpgUP;

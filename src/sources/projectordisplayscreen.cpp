@@ -556,3 +556,8 @@ void ProjectorDisplayScreen::setControlsVisible(bool visible)
     QObject *root = dispView->rootObject();
     QMetaObject::invokeMethod(root,"setControlsVisible",Q_ARG(QVariant,visible));
 }
+
+void ProjectorDisplayScreen::setClockVisible(bool visible)
+{
+    dispView->rootObject()->setProperty("clockVisible", visible);
+}

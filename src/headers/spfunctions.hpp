@@ -35,6 +35,16 @@ QPixmap cgfSplashPixmap(const QSize &size, qreal devicePixelRatio);
 // The window and taskbar icon, with each size drawn on its own
 // (tools/branding/make_branding.py).
 QIcon cgfAppIcon();
+
+class QScreen;
+// A projector as settings remember it: its name, serial number and position
+// on the Windows desktop, percent-encoded for the settings text.
+QString screenIdentity(const QScreen *screen);
+// How well a connected screen fits a remembered projector: 0 = another
+// device; higher = more of name, serial number and position agree.
+int screenMatches(const QString &identity, const QScreen *screen);
+// The projector's name in a remembered identity, for the log.
+QString screenIdentityName(const QString &identity);
 bool isAnnounceTitle(QString string);
 QString getSupportedImageFormats();
 //class spFunctions

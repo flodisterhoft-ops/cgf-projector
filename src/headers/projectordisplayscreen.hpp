@@ -69,6 +69,8 @@ public slots:
 
     void positionControls(DisplayControlsSettings & dSettings);
     void setControlsVisible(bool visible);
+    // The time of day in a corner (the back screen, for the people preaching).
+    void setClockVisible(bool visible);
 
 private slots:
     void setBackPixmap(QPixmap p,int fillMode); // 0 = Strech, 1 = keep aspect, 2 = keep aspect by expanding

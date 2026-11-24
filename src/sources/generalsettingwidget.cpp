@@ -18,6 +18,7 @@
 ***************************************************************************/
 
 #include "../headers/generalsettingwidget.hpp"
+#include "../headers/spfunctions.hpp"
 #include "ui_generalsettingwidget.h"
 
 GeneralSettingWidget::GeneralSettingWidget(QWidget *parent) :
@@ -71,9 +72,13 @@ void GeneralSettingWidget::loadSettings()
     int screen_count = QApplication::screens().count();
     int i = 1;
     ui->comboBoxDisplayScreen->clear();
+    // The projector's name (from the screen itself), so the front and back
+    // can be told apart; the number keeps two of the same model apart.
     for(QScreen * s: QApplication::screens())
     {
-        monitors << QString("%1 - %2x%3").arg(i).arg(s->geometry().width()).arg(s->geometry().height());
+        const QString size = QString("%1x%2").arg(s->geometry().width()).arg(s->geometry().height());
+        monitors << (s->name().isEmpty() ? QString("%1 - %2").arg(i).arg(size)
+                                         : QString("%1 - %2 (%3)").arg(i).arg(s->name(), size));
         ++i;
     }
 
@@ -147,6 +152,13 @@ void GeneralSettingWidget::loadSettings()
         ui->comboBoxDisplayScreen_4->setToolTip("Display unavailable");
     }
     updateSecondaryDisplayScreen();
+    shownScreen[0] = ui->comboBoxDisplayScreen->currentIndex();
+    shownScreen[1] = monitors.indexOf(ui->comboBoxDisplayScreen_2->currentText());
+    shownScreen[2] = monitors.indexOf(ui->comboBoxDisplayScreen_3->currentText());
+    shownScreen[3] = monitors.indexOf(ui->comboBoxDisplayScreen_4->currentText());
+    ui->checkBoxClock2->setChecked(mySettings.displayClock2);
+    ui->checkBoxClock2->setEnabled(ui->comboBoxDisplayScreen_2->isEnabled()
+                                   && ui->comboBoxDisplayScreen_2->currentIndex() > 0);
 
     // Set Display Controls
     if(screen_count>1)
@@ -191,11 +203,16 @@ GeneralSettings GeneralSettingWidget::getSettings()
     // operator's screen once the projector is back. Keep the saved screens.
     if(ui->groupBoxDisplayScreen->isEnabled())
     {
-        mySettings.displayScreen = ui->comboBoxDisplayScreen->currentIndex();
-        mySettings.displayScreen2 = monitors.indexOf(ui->comboBoxDisplayScreen_2->currentText());
-        mySettings.displayScreen3 = monitors.indexOf(ui->comboBoxDisplayScreen_3->currentText());
-        mySettings.displayScreen4 = monitors.indexOf(ui->comboBoxDisplayScreen_4->currentText());
+        takeDisplayChoice(0, ui->comboBoxDisplayScreen->currentIndex(),
+                          mySettings.displayScreen, mySettings.displayScreenId);
+        takeDisplayChoice(1, monitors.indexOf(ui->comboBoxDisplayScreen_2->currentText()),
+                          mySettings.displayScreen2, mySettings.displayScreen2Id);
+        takeDisplayChoice(2, monitors.indexOf(ui->comboBoxDisplayScreen_3->currentText()),
+                          mySettings.displayScreen3, mySettings.displayScreen3Id);
+        takeDisplayChoice(3, monitors.indexOf(ui->comboBoxDisplayScreen_4->currentText()),
+                          mySettings.displayScreen4, mySettings.displayScreen4Id);
     }
+    mySettings.displayClock2 = ui->checkBoxClock2->isChecked();
 
     mySettings.displayControls.buttonSize = ui->comboBoxIconSize->currentIndex();
     mySettings.displayControls.alignmentV = ui->comboBoxControlsAlignV->currentIndex();
@@ -205,6 +222,20 @@ GeneralSettings GeneralSettingWidget::getSettings()
     mySettings.displayControls.opacity = r;
 
     return mySettings;
+}
+
+// One display's choice in the form. The saved projector stays when the box is
+// unavailable (fewer projectors connected now) or still shows what it showed
+// on opening, so a disconnected projector isn't forgotten; otherwise the
+// chosen screen is taken and its projector remembered.
+void GeneralSettingWidget::takeDisplayChoice(int display, int chosen, int &index, QString &id)
+{
+    QComboBox *boxes[4] = {ui->comboBoxDisplayScreen, ui->comboBoxDisplayScreen_2,
+                           ui->comboBoxDisplayScreen_3, ui->comboBoxDisplayScreen_4};
+    if(!boxes[display]->isEnabled() || chosen == shownScreen[display])
+        return;
+    index = chosen;
+    id = chosen >= 0 ? screenIdentity(QGuiApplication::screens().value(chosen)) : QString();
 }
 
 void GeneralSettingWidget::on_pushButtonDefault_clicked()
@@ -281,6 +312,7 @@ void GeneralSettingWidget::on_comboBoxDisplayScreen_activated(int)
 void GeneralSettingWidget::on_comboBoxDisplayScreen_2_activated(int index)
 {
     updateSecondaryDisplayScreen();
+    ui->checkBoxClock2->setEnabled(index > 0);
     int screen_count = QGuiApplication::screens().count();
     if(index<=0)
     {

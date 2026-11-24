@@ -164,7 +164,7 @@ SoftProjector::SoftProjector(QWidget *parent)
             this,SLOT(updateSetting(GeneralSettings&,Theme&,SlideShowSettings&,
                                     BibleVersionSettings&,BibleVersionSettings&,
                                     BibleVersionSettings&,BibleVersionSettings&)));
-    connect(settingsDialog,SIGNAL(positionsDisplayWindow()),this,SLOT(positionDisplayWindow()));
+    connect(settingsDialog,SIGNAL(positionsDisplayWindow()),this,SLOT(displaySettingsChanged()));
     connect(settingsDialog,SIGNAL(updateScreen()),this,SLOT(updateScreen()));
     connect(songWidget,SIGNAL(addToSchedule(Song&)),this,SLOT(addToShcedule(Song&)));
     connect(announceWidget,SIGNAL(addToSchedule(Announcement&)),this,SLOT(addToShcedule(Announcement&)));
@@ -284,6 +284,105 @@ static void placeOnScreen(QWidget *w, QScreen *screen)
     w->setGeometry(screen->geometry());
 }
 
+// Which screen each display (1-4) uses. Settings remember each display's
+// projector by name, serial number and position (screenIdentity) besides its
+// screen number. Qt lists a screen that drops and comes back last, so the
+// numbers alone could swap the front and back projectors after a loose link.
+//  - Each display goes to the screen that best fits its projector; one that
+//    is still connected keeps its display when the fit is equal.
+//  - Settings from before 0.2.6 have only the number: it is used once and
+//    the projector it finds is remembered from then on.
+//  - Display 1 shows on any free screen that is not the operator's if its
+//    own projector is missing (as before); displays 2-4 stay dark until
+//    theirs is back.
+void SoftProjector::resolveDisplayScreens()
+{
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    GeneralSettings &g = mySettings.general;
+    const int index[4] = {g.displayScreen, g.displayScreen2, g.displayScreen3, g.displayScreen4};
+    QString *id[4] = {&g.displayScreenId, &g.displayScreen2Id, &g.displayScreen3Id, &g.displayScreen4Id};
+    QScreen *found[4] = {nullptr, nullptr, nullptr, nullptr};
+    bool fallback[4] = {false, false, false, false};
+    QList<QScreen*> used;
+    auto wanted = [&](int d) { return d == 0 || index[d] >= 0; };
+
+    struct Fit { int score; int display; QScreen *screen; };
+    QList<Fit> fits;
+    for(int d = 0; d < 4; ++d)
+    {
+        if(!wanted(d) || id[d]->isEmpty())
+            continue;
+        for(QScreen *s : screens)
+        {
+            const int match = screenMatches(*id[d], s);
+            if(match > 0)
+                fits << Fit{match * 2 + (s == displayScreenNow[d] && !displayScreenFallback[d] ? 1 : 0), d, s};
+        }
+    }
+    std::stable_sort(fits.begin(), fits.end(), [](const Fit &a, const Fit &b) { return a.score > b.score; });
+    for(const Fit &f : fits)
+    {
+        if(!found[f.display] && !used.contains(f.screen))
+        {
+            found[f.display] = f.screen;
+            used << f.screen;
+        }
+    }
+    for(int d = 0; d < 4; ++d)
+    {
+        if(!wanted(d) || !id[d]->isEmpty())
+            continue;
+        QScreen *s = screenAt(index[d]);
+        if(s && !used.contains(s))
+        {
+            found[d] = s;
+            used << s;
+            *id[d] = screenIdentity(s);
+            AppLog::write(QString("Display %1 remembers its projector: %2").arg(d + 1).arg(AppLog::describe(s)));
+        }
+    }
+    if(!found[0])
+    {
+        for(QScreen *s : screens)
+        {
+            if(s != QGuiApplication::primaryScreen() && !used.contains(s))
+            {
+                found[0] = s;
+                fallback[0] = true;
+                used << s;
+                break;
+            }
+        }
+    }
+    for(int d = 0; d < 4; ++d)
+    {
+        if(wanted(d) && !found[d] && !id[d]->isEmpty())
+            AppLog::write(QString("Display %1: its projector (%2) is not connected")
+                          .arg(d + 1).arg(screenIdentityName(*id[d])));
+        displayScreenNow[d] = found[d];
+        displayScreenFallback[d] = fallback[d];
+    }
+}
+
+void SoftProjector::displaySettingsChanged()
+{
+    for(int d = 0; d < 4; ++d)
+    {
+        displayScreenNow[d] = nullptr;
+        displayScreenFallback[d] = false;
+    }
+    positionDisplayWindow();
+}
+
+// The time of day on display 2 (the back screen), when chosen in Settings.
+void SoftProjector::showClock()
+{
+    pds1->setClockVisible(false);
+    pds2->setClockVisible(mySettings.general.displayClock2 && hasDisplayScreen2);
+    pds3->setClockVisible(false);
+    pds4->setClockVisible(false);
+}
+
 void SoftProjector::positionDisplayWindow()
 {
     // Position the display window as needed (including setting "always on top" flag,
@@ -318,39 +417,36 @@ void SoftProjector::positionDisplayWindow()
         const bool videoLive = showing && pType == VIDEO;
         const bool had2 = hasDisplayScreen2, had3 = hasDisplayScreen3, had4 = hasDisplayScreen4;
 
-        // The saved screen number can be missing (a monitor or extender link
-        // is down): use the first screen that is not the operator's instead.
-        // Indexing the screen list directly crashed the app at start-up.
-        QScreen *screen1 = screenAt(mySettings.general.displayScreen);
-        if(!screen1)
-        {
-            for(QScreen *s : screens)
-            {
-                if(s != QGuiApplication::primaryScreen())
-                {
-                    screen1 = s;
-                    break;
-                }
-            }
-        }
-        placeOnScreen(pds1, screen1);
-        pds1->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
-        pds1->resetImGenSize();
-        if(!videoLive)
-            pds1->renderPassiveText(theme.passive.backgroundPix,theme.passive.useBackground);
-        pds1->setControlsVisible(false);
-
+        // Each display on its own projector (resolveDisplayScreens). Display 1
+        // has a screen unless its projector is missing and the others are
+        // taken by displays 2-4.
+        resolveDisplayScreens();
+        QScreen *screen1 = displayScreenNow[0];
+        hasDisplayScreen1 = screen1;
         ui->actionCloseDisplay->setEnabled(true);
         ui->actionCloseDisplay->setChecked(turnOn);
         updateCloseDisplayButtons(turnOn);
-        if(turnOn)
-            pds1->showFullScreen();
+        if(hasDisplayScreen1)
+        {
+            placeOnScreen(pds1, screen1);
+            pds1->setCursor(Qt::BlankCursor); //Sets a Blank Mouse to the screen
+            pds1->resetImGenSize();
+            if(!videoLive)
+                pds1->renderPassiveText(theme.passive.backgroundPix,theme.passive.useBackground);
+            pds1->setControlsVisible(false);
+            if(turnOn)
+                pds1->showFullScreen();
+        }
+        else
+        {
+            pds1->hide();
+        }
         AppLog::write(QString("Display 1 on %1, output %2")
                       .arg(AppLog::describe(screen1), turnOn ? "on" : "off"));
 
         // check if to display secondary display screen
-        QScreen *screen2 = screenAt(mySettings.general.displayScreen2);
-        hasDisplayScreen2 = (mySettings.general.displayScreen2 >= 0 && screen2);
+        QScreen *screen2 = displayScreenNow[1];
+        hasDisplayScreen2 = screen2;
         if(hasDisplayScreen2)
         {
             placeOnScreen(pds2, screen2);
@@ -371,8 +467,8 @@ void SoftProjector::positionDisplayWindow()
         }
 
         // check if to display tertiary display screen
-        QScreen *screen3 = screenAt(mySettings.general.displayScreen3);
-        hasDisplayScreen3 = (mySettings.general.displayScreen3 >= 0 && screen3);
+        QScreen *screen3 = displayScreenNow[2];
+        hasDisplayScreen3 = screen3;
         if(hasDisplayScreen3)
         {
             placeOnScreen(pds3, screen3);
@@ -393,8 +489,8 @@ void SoftProjector::positionDisplayWindow()
         }
 
         // check if to display quaternary display screen
-        QScreen *screen4 = screenAt(mySettings.general.displayScreen4);
-        hasDisplayScreen4 = (mySettings.general.displayScreen4 >= 0 && screen4);
+        QScreen *screen4 = displayScreenNow[3];
+        hasDisplayScreen4 = screen4;
         if(hasDisplayScreen4)
         {
             placeOnScreen(pds4, screen4);
@@ -435,6 +531,7 @@ void SoftProjector::positionDisplayWindow()
         showDisplayScreen(false);
         AppLog::write("One screen only: display 1 shows on it while something is live");
         isSingleScreen = true;
+        hasDisplayScreen1 = true;
         hasDisplayScreen2 = false;
         hasDisplayScreen3 = false;
         hasDisplayScreen4 = false;
@@ -442,6 +539,7 @@ void SoftProjector::positionDisplayWindow()
         pds3->hide();
         pds4->hide();
     }
+    showClock();
 }
 
 void SoftProjector::screensChanged()
@@ -540,6 +638,7 @@ void SoftProjector::updateSetting(GeneralSettings &g, Theme &t, SlideShowSetting
     theme.bible2.versions = mySettings.bibleSets2;
     theme.bible3.versions = mySettings.bibleSets3;
     theme.bible4.versions = mySettings.bibleSets4;
+    showClock();
 }
 
 void SoftProjector::applySetting(GeneralSettings &g, Theme &t, SlideShowSettings &s,
@@ -956,7 +1055,7 @@ void SoftProjector::updateScreen()
             // re-show the windows.
             if(!ui->actionCloseDisplay->isChecked())
                 ui->actionCloseDisplay->trigger();
-            else if(pds1->isHidden())
+            else if((hasDisplayScreen1 && pds1->isHidden()) || (hasDisplayScreen2 && pds2->isHidden()))
                 on_actionCloseDisplay_triggered();
         }
 
@@ -1252,7 +1351,10 @@ void SoftProjector::on_actionCloseDisplay_triggered()
             updateCloseDisplayButtons(true);
             return;
         }
-        pds1->showFullScreen();
+        // Without a screen (its projector is missing), showing would put
+        // display 1 wherever its window was last, possibly over the operator.
+        if(hasDisplayScreen1)
+            pds1->showFullScreen();
         if(hasDisplayScreen2)
         {
             pds2->showFullScreen();
@@ -1298,6 +1400,13 @@ void SoftProjector::updateCloseDisplayButtons(bool isOn)
 
 void SoftProjector::on_actionSettings_triggered()
 {
+    // The form shows each display on the screen it is on now: Qt numbers the
+    // screens anew when a projector drops and comes back.
+    GeneralSettings &g = mySettings.general;
+    int *index[4] = {&g.displayScreen, &g.displayScreen2, &g.displayScreen3, &g.displayScreen4};
+    for(int d = 0; d < 4; ++d)
+        if(displayScreenNow[d] && !displayScreenFallback[d])
+            *index[d] = QGuiApplication::screens().indexOf(displayScreenNow[d]);
     settingsDialog->loadSettings(mySettings.general,theme,mySettings.slideSets, mySettings.bibleSets,mySettings.bibleSets2,mySettings.bibleSets3,mySettings.bibleSets4);
     settingsDialog->exec();
 }

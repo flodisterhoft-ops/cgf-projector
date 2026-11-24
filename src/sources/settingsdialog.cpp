@@ -61,6 +61,11 @@ SettingsDialog::SettingsDialog(QWidget *parent) :
 
 }
 
+static QString displayProjectors(const GeneralSettings &g)
+{
+    return g.displayScreenId + '/' + g.displayScreen2Id + '/' + g.displayScreen3Id + '/' + g.displayScreen4Id;
+}
+
 void SettingsDialog::loadSettings(GeneralSettings &sets, Theme &thm, SlideShowSettings &ssets,
                                   BibleVersionSettings &bsets, BibleVersionSettings &bsets2,
                                   BibleVersionSettings &bsets3, BibleVersionSettings &bsets4)
@@ -79,6 +84,7 @@ void SettingsDialog::loadSettings(GeneralSettings &sets, Theme &thm, SlideShowSe
     currentDisplayScreen2 = gsettings.displayScreen2;
     currentDisplayScreen3 = gsettings.displayScreen3;
     currentDisplayScreen4 = gsettings.displayScreen4;
+    currentDisplayProjectors = displayProjectors(gsettings);
 
     // Set individual items
     generalSettingswidget->setSettings(gsettings);
@@ -171,7 +177,8 @@ void SettingsDialog::applySettings()
             || current_display_screen!=gsettings.displayScreen
             || currentDisplayScreen2!=gsettings.displayScreen2
             || currentDisplayScreen3!=gsettings.displayScreen3
-            || currentDisplayScreen4!=gsettings.displayScreen4)
+            || currentDisplayScreen4!=gsettings.displayScreen4
+            || currentDisplayProjectors!=displayProjectors(gsettings))
     {
         emit positionsDisplayWindow();
     }
@@ -188,6 +195,7 @@ void SettingsDialog::applySettings()
     currentDisplayScreen2 = gsettings.displayScreen2;
     currentDisplayScreen3 = gsettings.displayScreen3;
     currentDisplayScreen4 = gsettings.displayScreen4;
+    currentDisplayProjectors = displayProjectors(gsettings);
 }
 
 void SettingsDialog::getThemes()

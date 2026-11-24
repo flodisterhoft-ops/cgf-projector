@@ -62,6 +62,7 @@ private:
     int currentDisplayScreen2;
     int currentDisplayScreen3;
     int currentDisplayScreen4;
+    QString currentDisplayProjectors; // the four remembered projectors
     bool is_always_on_top;
 
     GeneralSettings gsettings;
