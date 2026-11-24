@@ -16,9 +16,9 @@ license: the source code for every distributed build of CGF Projector is
 available in this repository. CGF Projector is modified from the original —
 please do not report problems with this fork to the SoftProjector authors.
 
-The CGF name, logo, and branding are **not** covered by the GPL and are not
-included in this repository. Song lyrics, Bible modules, and all church data
-live outside this codebase entirely — the application ships empty.
+The CGF name and the CGF Church logo are **not** covered by the GPL, and the
+logo is not included in this repository. Song lyrics, Bible modules, and all
+church data live outside this codebase entirely — the application ships empty.
 
 ## Contributing
 

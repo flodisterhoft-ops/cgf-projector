@@ -31,6 +31,24 @@ QByteArray pixToByte(const QPixmap & pmap)
     return buffer.data();
 }
 
+QPixmap cgfSplashPixmap(const QSize &size, qreal devicePixelRatio)
+{
+    const qreal dpr = devicePixelRatio > 0 ? devicePixelRatio : 1.0;
+    const QPixmap source(dpr > 1.0 ? QStringLiteral(":/icons/icons/splash@2x.png")
+                                   : QStringLiteral(":/icons/icons/splash.png"));
+    QPixmap pixmap = source.scaled(size * dpr, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    pixmap.setDevicePixelRatio(dpr);
+    return pixmap;
+}
+
+QIcon cgfAppIcon()
+{
+    QIcon icon;
+    for(int px : {16, 20, 24, 32, 40, 48, 64, 256})
+        icon.addFile(QStringLiteral(":/icons/icons/app-%1.png").arg(px), QSize(px, px));
+    return icon;
+}
+
 bool isAnnounceTitle(QString string)
 {
     // Check if the line is verse title line

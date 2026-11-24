@@ -99,7 +99,7 @@ ThemeInfo::ThemeInfo()
 {
     themeId = 0;
     name = "Default";
-    comments  = "Default SoftProjector Theme";
+    comments  = "Default theme";
 }
 
 Theme::Theme()

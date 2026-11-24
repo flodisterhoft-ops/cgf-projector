@@ -18,6 +18,7 @@
 ***************************************************************************/
 
 #include "../headers/aboutdialog.hpp"
+#include "../headers/spfunctions.hpp"
 #include "ui_aboutdialog.h"
 
 
@@ -27,6 +28,7 @@ AboutDialog::AboutDialog(QWidget *parent, QString version_string) :
 {
     ui->setupUi(this);
     softProjector = (SoftProjector*)parent;
+    ui->label->setPixmap(cgfSplashPixmap(QSize(300, 120), devicePixelRatioF()));
     ui->version_label->setText(version_string);
 }
 

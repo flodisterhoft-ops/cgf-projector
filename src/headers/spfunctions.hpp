@@ -24,10 +24,17 @@
 #include <QStringList>
 #include <QImageReader>
 #include <QPixmap>
+#include <QIcon>
 #include <QBuffer>
 
 
 QByteArray pixToByte(const QPixmap & pmap);
+// The splash picture (splash screen and About), sharp at any display scaling.
+// size is in device-independent pixels; the picture is 450 x 180.
+QPixmap cgfSplashPixmap(const QSize &size, qreal devicePixelRatio);
+// The window and taskbar icon, with each size drawn on its own
+// (tools/branding/make_branding.py).
+QIcon cgfAppIcon();
 bool isAnnounceTitle(QString string);
 QString getSupportedImageFormats();
 //class spFunctions

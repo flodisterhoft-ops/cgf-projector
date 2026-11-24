@@ -64,8 +64,14 @@
         <file>icons/slideshow_delete.png</file>
         <file>icons/slideshow_edit.png</file>
         <file>icons/slideshow_new.png</file>
-        <file>icons/softprojector.png</file>
-        <file>icons/softprojector_cloud.png</file>
+        <file>icons/app-16.png</file>
+        <file>icons/app-20.png</file>
+        <file>icons/app-24.png</file>
+        <file>icons/app-32.png</file>
+        <file>icons/app-40.png</file>
+        <file>icons/app-48.png</file>
+        <file>icons/app-64.png</file>
+        <file>icons/app-256.png</file>
         <file>icons/song_copy.png</file>
         <file>icons/song_count.png</file>
         <file>icons/song_delete.png</file>
@@ -73,6 +79,7 @@
         <file>icons/song_new.png</file>
         <file>icons/song_tab.png</file>
         <file>icons/splash.png</file>
+        <file>icons/splash@2x.png</file>
         <file>icons/stop.png</file>
         <file>icons/up.png</file>
         <file>icons/video.png</file>

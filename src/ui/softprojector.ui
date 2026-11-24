@@ -19,10 +19,6 @@
   <property name="windowTitle">
    <string notr="true"/>
   </property>
-  <property name="windowIcon">
-   <iconset resource="softprojector.qrc">
-    <normaloff>:/icons/icons/softprojector.png</normaloff>:/icons/icons/softprojector.png</iconset>
-  </property>
   <property name="toolButtonStyle">
    <enum>Qt::ToolButtonIconOnly</enum>
   </property>

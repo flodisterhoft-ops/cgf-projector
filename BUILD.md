@@ -388,3 +388,30 @@ again (new program path); after `allow-network.cmd` (one port rule), test
 update 0.2.3 restarted without any prompt. Checked over Tailscale: the
 laptop's bridge reports app-0.2.3, library v3. Test releases 0.2.2 and 0.2.3
 are on the server, so the next real version is 0.2.4 or later.
+
+## Splash and icon (2026-11-23)
+
+Florian saw the old "softProjector" splash on the church laptop and asked for
+the same cloud look with the CGF name, and "CGF" on the icon.
+
+- `python tools/branding/make_branding.py` draws them into `src/`: the splash
+  (`icons/splash.png`, 450 x 180, and `icons/splash@2x.png`), the window and
+  taskbar icon (`icons/app-16.png` to `app-256.png`) and `cgf-projector.ico`
+  (app and launcher). Clouds and colours follow SoftProjector's splash; the
+  lettering is Arial Rounded MT Bold, which comes with Microsoft Office
+  (`C:\Windows\Fonts\ARLRDBD.TTF`). Each size is drawn on its own so small
+  icons stay sharp. A run takes about 80 s.
+- Above 100% display scaling the splash and the About picture use the 2x
+  file. The splash window is translucent, so its edges blend with the desktop
+  (the old 1-bit mask is gone).
+- The application name is now "CGF Projector". Windows shows it for windows
+  without a title of their own, such as the splash. Nothing depends on it:
+  settings live in the database.
+- Titles and messages that still said SoftProjector now say CGF Projector or
+  name the file type ("Songbook file (*.sps)", "Schedule file (*.spsc)"). The
+  About box lost the upstream tagline; the upstream credits stay.
+
+Checked on this PC (one 2560 x 1440 screen at 150%, a copy of the July
+library): the splash shows the new clouds with soft edges over the desktop;
+the title bar, taskbar, About box and Settings show the new icon and titles;
+Explorer's icon for both exes is the new one at 16, 32, 48 and 256 px.

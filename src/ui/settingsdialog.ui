@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>softProjector - Settings</string>
+   <string>Settings</string>
   </property>
   <property name="windowIcon">
    <iconset resource="softprojector.qrc">
@@ -53,7 +53,7 @@
       </property>
       <property name="icon">
        <iconset resource="softprojector.qrc">
-        <normaloff>:/icons/icons/softprojector.png</normaloff>:/icons/icons/softprojector.png</iconset>
+        <normaloff>:/icons/icons/app-48.png</normaloff>:/icons/icons/app-48.png</iconset>
       </property>
      </item>
      <item>

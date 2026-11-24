@@ -2296,8 +2296,8 @@ void SoftProjector::on_actionOpenSchedule_triggered()
         }
     }
 
-    QString path = QFileDialog::getOpenFileName(this,tr("Open SoftProjector schedule:"),".",
-                                                tr("SoftProjector schedule file ") + "(*.spsc)");
+    QString path = QFileDialog::getOpenFileName(this,tr("Open schedule"),".",
+                                                tr("Schedule file ") + "(*.spsc)");
     if(!path.isEmpty())
     {
         schedule_file_path = path;
@@ -2332,8 +2332,8 @@ bool SoftProjector::saveScheduleToFile()
 bool SoftProjector::saveScheduleAsFile()
 {
     bool saved = false;
-    QString path = QFileDialog::getSaveFileName(this,tr("Save SoftProjector schedule as:"),".",
-                                                tr("SoftProjector schedule file ") + "(*.spsc)");
+    QString path = QFileDialog::getSaveFileName(this,tr("Save schedule as"),".",
+                                                tr("Schedule file ") + "(*.spsc)");
     if(!path.isEmpty())
     {
         if(path.endsWith(".spsc"))

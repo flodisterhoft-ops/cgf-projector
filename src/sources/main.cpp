@@ -24,8 +24,11 @@
 #include <QStyleFactory>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScreen>
+#include <QSplashScreen>
 #include "../headers/softprojector.hpp"
 #include "../headers/applog.hpp"
+#include "../headers/spfunctions.hpp"
 
 // Definitions for database versions 'dbVer' numbers
 // x - Official release. ex: 2 - for SoftProjector 2
@@ -170,11 +173,15 @@ bool connect(QString database_file)
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    a.setApplicationName("SoftProjector");
+    // Windows shows the name for windows without a title of their own. Nothing
+    // is stored under it: settings live in the database.
+    a.setApplicationName("CGF Projector");
+    a.setWindowIcon(cgfAppIcon());
 
-    QPixmap pixmap(":icons/icons/splash.png");
-    QSplashScreen splash(pixmap);
-    splash.setMask(pixmap.mask());
+    // Sharp at any display scaling, with soft edges on the desktop.
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    QSplashScreen splash(cgfSplashPixmap(QSize(450, 180), screen ? screen->devicePixelRatio() : 1.0));
+    splash.setAttribute(Qt::WA_TranslucentBackground);
     splash.show();
     a.processEvents();
 
@@ -302,11 +309,11 @@ int main(int argc, char *argv[])
     int dbVersion = sq.value(0).toInt();
     if(dbVer != dbVersion)
     {
-        QString errortxt = QString("SoftProjector requires database vesion # %1\n"
-                                   "The database you are trying to open has vesion # %2\n"
+        QString errortxt = QString("CGF Projector requires database version # %1\n"
+                                   "The database you are trying to open has version # %2\n"
                                    "Please use database with current version\n"
                                    "OR rename/remove all the database files\n"
-                                   "and let softProjector to create needed database file.\n"
+                                   "and let CGF Projector create needed database file.\n"
                                    "The program will terminate!"
                                    ).arg(dbVer).arg(dbVersion);
         QMessageBox mb;

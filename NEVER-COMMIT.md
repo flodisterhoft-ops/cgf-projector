@@ -25,8 +25,11 @@ NKJV, Schlachter 2000 and similar translations are copyrighted. Do not commit
 Bible module files or exports of them.
 
 ## 5. CGF branding
-The CGF logo and branding assets are not covered by the GPL license of this
-code and are kept out of this repository.
+The CGF Church logo (cross, church and open Bible) and other church artwork
+are not covered by the GPL license of this code and are kept out of this
+repository. The program's own splash and icon are code: they show the name
+CGF Projector on SoftProjector's clouds and are drawn by
+`tools/branding/make_branding.py` (Florian, 2026-11-23).
 
 ## If something slips through
 Do not just delete the file in a new commit — that leaves it in history.

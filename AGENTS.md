@@ -131,7 +131,11 @@ stripping what they never used and wiring the app into a central CGF library.
   Telegram (operators use Telegram).
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
-  quick-add upload flow. CGF logo swap pending logo file from Flo.
+  quick-add upload flow.
+- **Splash and icon (user decision 2026-11-23):** keep SoftProjector's cloud
+  look the operators know; the splash says "CGF Projector", the icon shows
+  "CGF" on a cloud. Drawn by `tools/branding/make_branding.py` (BUILD.md,
+  "Splash and icon"). The church logo stays out of the public repo.
 - Next milestones (as of 2026-11-23): install the church laptop from
   `C:\Users\Disterhoft\CGF\install-packages\CGFProjector-0.2.1.zip` (server
   live with app releases; laptop registered), publish the library once the
@@ -226,8 +230,8 @@ typed items and stand/sit cues (congregation view can show "please stand").
 
 - This is a public repo, and git history is permanent. Read **NEVER-COMMIT.md**
   before pushing. Keep out of commits: real databases, tokens or URLs with
-  secrets, screenshots with real announcement content, Bible modules, and CGF
-  branding assets.
+  secrets, screenshots with real announcement content, Bible modules, and the
+  CGF Church logo or other church artwork.
 - One commit per logical cut; build + smoke against the DB copy before each
   commit; log milestones in BUILD.md.
 - Build dirs (`win32_build/` etc.) are gitignored at any depth.

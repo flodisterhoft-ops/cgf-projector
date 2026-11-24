@@ -212,7 +212,7 @@ void ManageDataDialog::on_import_songbook_pushButton_clicked()
 {
     QString file_path = QFileDialog::getOpenFileName(this,
                                                      tr("Select a songbook to import"), ".",
-                                                     tr("SoftProjector songbook file ") + "(*.sps)");
+                                                     tr("Songbook file ") + "(*.sps)");
 
     importType = "local";
     // if file_path exits or "Open" is clicked, then import a Songbook
@@ -615,9 +615,9 @@ void ManageDataDialog::importSongbook(QString path)
                     else if(spsVer > 2)
                     {
                         QString errorm = tr("The SongBook file you are opening, is of a later release and \n"
-                                            "is not supported by current version of SoftProjector.\n"
+                                            "is not supported by this version of CGF Projector.\n"
                                             "You are trying to open SongBook version %1.\n"
-                                            "Please upgrade to latest version of SoftProjector and try again.").arg(spsVer);
+                                            "Please update CGF Projector and try again.").arg(spsVer);
                         if(importType == "down")
                             progressDia->appendText(errorm);
                         else
@@ -632,7 +632,7 @@ void ManageDataDialog::importSongbook(QString path)
                     else
                     {
                         QString errorm = tr("The SongBook file you are opening, is not supported \n"
-                                            "by current version of SoftProjector.\n");
+                                            "by this version of CGF Projector.\n");
                         if(importType == "down")
                             progressDia->appendText(errorm);
                         else
@@ -652,8 +652,8 @@ void ManageDataDialog::importSongbook(QString path)
         {
             //User friednly box for incorrect file version
             QString errorm = tr("The SongBook file you are opening, is in very old format\n"
-                                "and is no longer supported by current version of SoftProjector.\n"
-                                "You may try to import it with version 1.07 and then export it, and import it again.");
+                                "and is no longer supported by CGF Projector.\n"
+                                "You may try to import it with SoftProjector 1.07 and then export it, and import it again.");
             if(importType == "down")
                 progressDia->appendText(errorm);
             else
@@ -676,7 +676,7 @@ void ManageDataDialog::importSongbook(QString path)
 void ManageDataDialog::on_export_songbook_pushButton_clicked()
 {
     QString file_path = QFileDialog::getSaveFileName(this,tr("Save the songbook as:"),
-                                                     ".",tr("SoftProjector songbook file (*.sps)"));
+                                                     ".",tr("Songbook file (*.sps)"));
     if(!file_path.isEmpty())
     {
         if(!file_path.endsWith(".sps"))
@@ -854,7 +854,7 @@ void ManageDataDialog::on_import_bible_pushButton_clicked()
 {
     QString file_path = QFileDialog::getOpenFileName(this,
                                                      tr("Select Bible file to import"),
-                                                     ".",tr("SoftProjector Bible file ") + "(*.spb)");
+                                                     ".",tr("Bible file ") + "(*.spb)");
 
     importType = "local";
     // if file_path exits or "Open" is clicked, then import Bible
@@ -880,7 +880,7 @@ void ManageDataDialog::importBible(QString path)
         if (!line.startsWith("##spData")) // Old bible format verison
         {
             QString errorm = tr("The Bible format you are importing is of an usupported file version.\n"
-                                "Your current SoftProjector version does not support this format.");
+                                "This version of CGF Projector does not support this format.");
             if(importType == "down")
                 progressDia->appendText(errorm);
             else
@@ -902,8 +902,8 @@ void ManageDataDialog::importBible(QString path)
             if (version.trimmed() != "1") // Version 1
             {
                 QString errorm = tr("The Bible format you are importing is of an new version.\n"
-                                    "Your current SoftProjector does not support this format.\n"
-                                    "Please upgrade SoftProjector to latest version.");
+                                    "This version of CGF Projector does not support this format.\n"
+                                    "Please update CGF Projector.");
                 if(importType == "down")
                     progressDia->appendText(errorm);
                 else
@@ -1047,7 +1047,7 @@ void ManageDataDialog::on_export_bible_pushButton_clicked()
 
     QString file_path = QFileDialog::getSaveFileName(this,tr("Save exported Bible as:"),
                                                      clean(bible.title),
-                                                     tr("SoftProjector Bible file ") + "(*.spb)");
+                                                     tr("Bible file ") + "(*.spb)");
     if(!file_path.isEmpty())
     {
         if(!file_path.endsWith(".spb"))
@@ -1368,7 +1368,7 @@ void ManageDataDialog::on_pushButtonThemeImport_clicked()
     QString file_path = QFileDialog::getOpenFileName(this,
                                                      tr("Select a Theme to import"),
                                                      ".",
-                                                     tr("SoftProjector Theme file ") + "(*.spt)");
+                                                     tr("Theme file ") + "(*.spt)");
     importType = "local";
 
     // if file_path exits or "Open" is clicked, then import a Songbook
@@ -1473,9 +1473,9 @@ void ManageDataDialog::importTheme(QString path)
             else if(sptVer > 2)
             {
                 QString errorm = tr("The Theme file you are opening, is of a later release and \n"
-                                    "is not supported by current version of SoftProjector.\n"
+                                    "is not supported by this version of CGF Projector.\n"
                                     "You are trying to open Theme version %1.\n"
-                                    "Please upgrade to latest version of SoftProjector and try again.").arg(sptVer);
+                                    "Please update CGF Projector and try again.").arg(sptVer);
                 if(importType == "down")
                     progressDia->appendText(errorm);
                 else
@@ -1490,7 +1490,7 @@ void ManageDataDialog::importTheme(QString path)
             else
             {
                 QString errorm = tr("The Theme file you are opening, is not supported \n"
-                                    "by current version of SoftProjector.\n");
+                                    "by this version of CGF Projector.\n");
                 if(importType == "down")
                     progressDia->appendText(errorm);
                 else
@@ -1546,7 +1546,7 @@ void ManageDataDialog::on_pushButtonThemeExport_clicked()
 
     QString file_path = QFileDialog::getSaveFileName(this,tr("Export Theme as:"),
                                                      clean(tmInfo.name),
-                                                     tr("SoftProjector Theme file ") + "(*.spt)");
+                                                     tr("Theme file ") + "(*.spt)");
     if(!file_path.isEmpty())
     {
         if(!file_path.endsWith(".spt"))
@@ -1558,7 +1558,7 @@ void ManageDataDialog::on_pushButtonThemeExport_clicked()
 void ManageDataDialog::on_pushButtonThemeExportAll_clicked()
 {
     QString file_path = QFileDialog::getSaveFileName(this,tr("Export all theme as:"),
-                                                     ".", tr("softProjector Theme file ") + "(*.spt)");
+                                                     ".", tr("Theme file ") + "(*.spt)");
     if(!file_path.isEmpty())
     {
         if(!file_path.endsWith(".spt"))
