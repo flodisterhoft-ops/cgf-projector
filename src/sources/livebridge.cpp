@@ -39,6 +39,8 @@ LiveBridge::LiveBridge(QObject *parent)
     connect(&thread, &QThread::started, server, &BridgeServer::start);
     connect(&thread, &QThread::finished, server, &QObject::deleteLater);
     connect(server, &BridgeServer::framesWanted, this, &LiveBridge::setFramesWanted);
+    connect(server, &BridgeServer::started, this, &LiveBridge::bridgeStarted);
+    connect(server, &BridgeServer::releaseReceived, this, &LiveBridge::releaseReceived);
     thread.setObjectName(QStringLiteral("Network bridge"));
     thread.start(QThread::LowPriority);
     sinceVideoSent.start();
@@ -79,6 +81,18 @@ void LiveBridge::publish(const QJsonObject &live, const QPixmap &picture, const 
         videoDuration = 0;
         sendVideo();
     }
+}
+
+void LiveBridge::setLibraryVersion(int version)
+{
+    QMetaObject::invokeMethod(server, [s = server, version] { s->setLibraryVersion(version); },
+                              Qt::QueuedConnection);
+}
+
+void LiveBridge::replyToClient(quintptr client, const QJsonObject &message)
+{
+    QMetaObject::invokeMethod(server, [s = server, client, message] { s->sendToClient(client, message); },
+                              Qt::QueuedConnection);
 }
 
 void LiveBridge::videoStateChanged(QMediaPlayer::PlaybackState state)

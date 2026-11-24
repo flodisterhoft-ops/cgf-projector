@@ -84,6 +84,7 @@ SoftProjector::SoftProjector(QWidget *parent)
 
     // Before the first render, so the back-screen mirror gets the passive screen.
     setupLiveBridge();
+    setupLibraryPush();
     positionDisplayWindow();
 
     // Follow monitors being connected and disconnected while running, so a

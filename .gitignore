@@ -86,3 +86,13 @@ agent/sqlite3.exe
 
 # Network bridge test build (tests/bridge/run_tests.py)
 tests/bridge/out/
+
+# Library push (docs/song-push.md): test build, server dependencies and local
+# state, and each laptop's settings (they hold its device token)
+tests/push/out/
+push-server/node_modules/
+push-server/.wrangler/
+push-server/worker-configuration.d.ts
+.dev.vars
+cgf-cloud.json
+__pycache__/

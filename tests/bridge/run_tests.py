@@ -26,9 +26,9 @@ def project_lists():
     """The app's own file lists from src/softProjector.pro, minus main.cpp."""
     pro = (REPO / "src" / "softProjector.pro").read_text(encoding="utf-8")
     pro = re.sub(r"\\\s*\n", " ", pro)
-    lists = {key: [] for key in ("QT", "SOURCES", "HEADERS", "FORMS", "RESOURCES")}
+    lists = {key: [] for key in ("QT", "SOURCES", "HEADERS", "FORMS", "RESOURCES", "LIBS")}
     for line in pro.splitlines():
-        m = re.match(r"\s*(QT|SOURCES|HEADERS|FORMS|RESOURCES)\s*\+=\s*(.*)", line)
+        m = re.match(r"\s*(?:win32:\s*)?(QT|SOURCES|HEADERS|FORMS|RESOURCES|LIBS)\s*\+=\s*(.*)", line)
         if m:
             lists[m.group(1)] += m.group(2).split()
     lists["SOURCES"].remove("sources/main.cpp")
@@ -41,6 +41,7 @@ def write_pro():
     lists = project_lists()
     lines = [
         "QT += " + " ".join(lists.pop("QT")),
+        "LIBS += " + " ".join(lists.pop("LIBS")),
         "TARGET = bridge_tests",
         "TEMPLATE = app",
         "CONFIG += console",

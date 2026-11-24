@@ -171,3 +171,11 @@ SOURCES += sources/livebridge.cpp \
 HEADERS += headers/livebridge.hpp \
     headers/bridgeserver.hpp
 RESOURCES += web.qrc
+
+# Library releases pushed from the CGF publisher, through the companion
+# program (companion/) and the bridge (docs/song-push.md). bcrypt checks the
+# publisher's signature.
+SOURCES += sources/librarypush.cpp \
+    sources/softprojectorsync.cpp
+HEADERS += headers/librarypush.hpp
+win32: LIBS += -lbcrypt

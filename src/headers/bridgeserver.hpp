@@ -53,10 +53,16 @@ public slots:
     void setLive(const QJsonObject &live, const QImage &picture, const QString &videoPath);
     void setVideo(const QJsonObject &video);
     void setFrame(const QImage &text, const QImage &back, const QSize &screen, bool fade);
+    // Library releases (docs/song-push.md): the version goes into hello, and
+    // each release's result back to the program that sent it.
+    void setLibraryVersion(int version);
+    void sendToClient(quintptr client, const QJsonObject &message);
 
 signals:
     void started(quint16 port);
     void framesWanted(bool wanted); // a back-screen mirror connected, or the last one left
+    // A signed library release from a program on this computer (the companion).
+    void releaseReceived(const QJsonObject &envelope, quintptr client);
 
 private slots:
     void onTcpConnection();
@@ -116,6 +122,7 @@ private:
     QJsonObject sample;                  // John 3:16 in every Bible, for previews
 
     int seq;
+    int libraryVersion = -1;             // -1 until the main window reports it
     QJsonObject live;
     QJsonObject video;
     qint64 videoAt;                      // clock time of the last video update

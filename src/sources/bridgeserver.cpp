@@ -48,6 +48,8 @@ namespace {
 const char settingsFileName[] = "cgf-network.json";
 const int maxHeaderBytes = 16 * 1024;
 const int maxMessageBytes = 64 * 1024;
+// Programs on this computer may send library releases, which can be large.
+const int maxLocalMessageBytes = 16 * 1024 * 1024;
 const int tickMs = 10000;       // heartbeat to clients; also pings them
 const qint64 clientTimeoutMs = 45000;
 
@@ -694,7 +696,8 @@ void BridgeServer::onWsConnection()
 {
     while(QWebSocket *c = ws->nextPendingConnection())
     {
-        c->setMaxAllowedIncomingMessageSize(maxMessageBytes);
+        c->setMaxAllowedIncomingMessageSize(c->peerAddress().isLoopback() ? maxLocalMessageBytes
+                                                                          : maxMessageBytes);
         c->setProperty("cgfSeen", clock.elapsed());
         clients.append(c);
         connect(c, &QWebSocket::textMessageReceived, this, &BridgeServer::onWsMessage);
@@ -745,6 +748,34 @@ void BridgeServer::onWsMessage(const QString &text)
         hidden = m.value("hidden").toBool();
         broadcast(styleMessage());
     }
+    else if(type == QLatin1String("release") && c)
+    {
+        // Only from this computer. The main window checks the publisher's
+        // signature, so the sender itself need not be trusted.
+        if(c->peerAddress().isLoopback())
+            emit releaseReceived(m, quintptr(c));
+        else
+            send(c, QJsonObject{{"type", "releaseResult"}, {"status", "rejected"},
+                                {"reason", "releases are accepted from this computer only"}});
+    }
+}
+
+void BridgeServer::setLibraryVersion(int version)
+{
+    if(version == libraryVersion)
+        return;
+    libraryVersion = version;
+    broadcast(QJsonObject{{"type", "library"}, {"version", version}});
+}
+
+void BridgeServer::sendToClient(quintptr client, const QJsonObject &message)
+{
+    for(QWebSocket *c : std::as_const(clients))
+        if(quintptr(c) == client)
+        {
+            send(c, message);
+            return;
+        }
 }
 
 void BridgeServer::tick()
@@ -774,7 +805,8 @@ QJsonObject BridgeServer::helloMessage() const
             addresses.append(a.toString());
     return QJsonObject{{"type", "hello"}, {"protocol", 1}, {"app", "CGF Projector"},
                        {"host", QHostInfo::localHostName()}, {"port", port},
-                       {"addresses", addresses}, {"bibles", bibles}, {"sample", sample}};
+                       {"addresses", addresses}, {"bibles", bibles}, {"sample", sample},
+                       {"library", QJsonObject{{"version", libraryVersion}}}};
 }
 
 QJsonObject BridgeServer::styleMessage() const

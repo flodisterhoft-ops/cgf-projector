@@ -129,6 +129,10 @@ public:
     void updateSongFromDatabase(int songid);
     void updateSongFromDatabase(int newSongId, int oldSongId);
     bool isInTable(int songid);
+    // Library releases: replace a song in place (or add it), or remove it,
+    // without resetting the table, so the operator's selection stays.
+    void putSong(const Song &song);
+    void removeSongId(int songid);
 };
 
 class SongProxyModel : public QSortFilterProxyModel
@@ -157,6 +161,7 @@ public:
     void deleteSong(int songId);
     QString getSongbookIdStringFromName(QString songbook_name);
     Song getSong(int id);
+    Song getSongWithSongbook(int id); // getSong plus the songbook's name
     QList<Song> getSongs();
     int lastUser(QString songbook_id);
 };

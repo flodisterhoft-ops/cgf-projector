@@ -43,6 +43,7 @@
 
 class QActionGroup;
 class LiveBridge;
+class LibraryPush;
 
 namespace Ui
 {
@@ -147,6 +148,13 @@ private:
     bool liveTextCleared = false;
     void setupLiveBridge();
     void publishLive(bool textCleared = false);
+
+    // Library releases pushed from the CGF publisher, through the companion
+    // program and the bridge (softprojectorsync.cpp, docs/song-push.md)
+    LibraryPush *libraryPush = nullptr;
+    void setupLibraryPush();
+    void startCompanion(quint16 bridgePort);
+    void applyLibraryChanges(const QList<int> &songs, const QList<int> &deletedSongs, bool songbooksChanged);
 
 private slots:
     void showDisplayScreen(bool show);

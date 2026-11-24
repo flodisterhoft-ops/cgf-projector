@@ -53,6 +53,8 @@ public slots:
     void sendToProjector(Song song, int row);
     void songsViewRowChanged(const QModelIndex &current, const QModelIndex &previous);
     void setSearchActive();
+    // A library release was applied: refresh the song list and the preview.
+    void applyLibraryChanges(const QList<int> &songs, const QList<int> &deletedSongs, bool songbooksChanged);
 
 protected:
     virtual void changeEvent(QEvent *e);

@@ -422,6 +422,67 @@ void SongWidget::updateSongFromDatabase(int songid, int initial_sid)
     sendToPreview( currentSong() );
 }
 
+void SongWidget::applyLibraryChanges(const QList<int> &songs, const QList<int> &deletedSongs,
+                                     bool songbooksChanged)
+{
+    // The operator may be mid-search or about to go live from the preview:
+    // update rows in place, keep the selection and keep the preview's verse.
+    const int selectedId = currentSong().songID;
+    if(songbooksChanged)
+    {
+        // Rare (a new or renamed songbook): reload the lists and menu, then
+        // put the selection back without touching the preview.
+        updateSongbooks();
+        for(int row = 0; row < proxy_model->rowCount(); ++row)
+        {
+            const QModelIndex proxyIndex = proxy_model->index(row, 0);
+            if(songs_model->getSong(proxy_model->mapToSource(proxyIndex)).songID == selectedId)
+            {
+                const QSignalBlocker block(ui->songs_view->selectionModel());
+                ui->songs_view->selectRow(row);
+                break;
+            }
+        }
+    }
+    else
+    {
+        for(int id : songs)
+        {
+            const Song song = song_database.getSongWithSongbook(id);
+            songs_model->putSong(song);
+            bool found = false;
+            for(Song &s : allSongs)
+                if(s.songID == id)
+                {
+                    s = song;
+                    found = true;
+                }
+            if(!found)
+                allSongs.append(song);
+        }
+        for(int id : deletedSongs)
+        {
+            songs_model->removeSongId(id);
+            for(int i = allSongs.size() - 1; i >= 0; --i)
+                if(allSongs.at(i).songID == id)
+                    allSongs.removeAt(i);
+        }
+    }
+
+    // A removed song stays in the preview: the operator may still show it.
+    if(preview_song.songID > 0 && songs.contains(preview_song.songID))
+    {
+        const int row = ui->listPreview->currentRow();
+        const Song fresh = song_database.getSongWithSongbook(preview_song.songID);
+        const bool fromSchedule = isSongFromSchelude;
+        sendToPreview(fresh);
+        isSongFromSchelude = fromSchedule;
+        if(row > 0 && row < ui->listPreview->count())
+            ui->listPreview->setCurrentRow(row);
+    }
+    updateButtonStates();
+}
+
 void SongWidget::deleteSong()
 {
     int song_id = currentSong().songID;

@@ -608,6 +608,31 @@ bool SongsModel::isInTable(int songid)
     return false;
 }
 
+void SongsModel::putSong(const Song &song)
+{
+    for(int i = 0; i < song_list.size(); ++i)
+        if(song_list.at(i).songID == song.songID)
+        {
+            song_list[i] = song;
+            emit dataChanged(index(i, 0), index(i, columnCount() - 1));
+            return;
+        }
+    beginInsertRows(QModelIndex(), song_list.size(), song_list.size());
+    song_list.append(song);
+    endInsertRows();
+}
+
+void SongsModel::removeSongId(int songid)
+{
+    for(int i = song_list.size() - 1; i >= 0; --i)
+        if(song_list.at(i).songID == songid)
+        {
+            beginRemoveRows(QModelIndex(), i, i);
+            song_list.removeAt(i);
+            endRemoveRows();
+        }
+}
+
 SongProxyModel::SongProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
 {
 }
@@ -767,6 +792,17 @@ Song SongDatabase::getSong(int id)
 {
     Song song(id);
     song.readData();
+    return song;
+}
+
+Song SongDatabase::getSongWithSongbook(int id)
+{
+    Song song = getSong(id);
+    QSqlQuery sq;
+    sq.prepare("SELECT name FROM Songbooks WHERE id = ?");
+    sq.addBindValue(song.songbook_id);
+    if(sq.exec() && sq.first())
+        song.songbook_name = sq.value(0).toString();
     return song;
 }
 

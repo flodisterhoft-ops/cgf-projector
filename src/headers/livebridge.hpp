@@ -54,6 +54,13 @@ public slots:
     // The projector's rendered layers, for the back-screen mirror. Only
     // converted and sent while a mirror page is connected.
     void frameShown(const QPixmap &text, const QPixmap &back, const QSize &screen, bool fade);
+    // Library releases (docs/song-push.md)
+    void setLibraryVersion(int version);
+    void replyToClient(quintptr client, const QJsonObject &message);
+
+signals:
+    void bridgeStarted(quint16 port);
+    void releaseReceived(const QJsonObject &envelope, quintptr client);
 
 private slots:
     void setFramesWanted(bool wanted);
