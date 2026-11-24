@@ -372,6 +372,11 @@ Verification (2026-11-23), all on this PC:
 - After the merge and these changes: bridge 73 checks, push 30 checks and
   the end-to-end push pass.
 
-Not yet done: deploying the server with app releases (needs Florian's
-go-ahead), registering the church laptop and making its package, a test on
-the church laptop.
+Live (2026-11-23, Florian's go-ahead): the server with app releases is
+deployed (`4a15c42e`); app 0.2.0 is release 1, 0.2.1 release 2. The first
+live run, in a folder without a launcher, found that the companion stopped
+when it could not restart itself; fixed in 0.2.1 (it adds a missing launcher
+and keeps running if the restart fails). With 0.2.1 a temporary device
+downloaded 2 files, copied 105 and restarted on the downloaded companion.
+"Church laptop" is registered and its zip built; the exact zip installs with
+`install.ps1`. Not yet done: installing it on the church laptop.

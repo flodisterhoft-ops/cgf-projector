@@ -164,9 +164,19 @@ old copy).
 
 ## Going live
 
-Steps 1 and 2 were done on 2026-11-23 with Florian's go-ahead. The server
-with app releases (`b8ebf74`) is not deployed yet: that redeploy needs his
-go-ahead.
+Steps 1 to 3 were done on 2026-11-23 with Florian's go-ahead. The server with
+app releases was redeployed the same evening (version
+`4a15c42e-b7b6-43a8-8443-a2275f89f228`). App releases on it: 1 = app-0.2.0,
+2 = app-0.2.1 (0.2.0 with the companion fix from the first live run; the
+church laptop starts on 0.2.1). A live run against push.cgfvernon.ca with a
+temporary device (removed afterwards) checked the companion's `wss://`
+connection, a full download of 0.2.0 (107 files in 11 s), the update to 0.2.1
+(2 files downloaded, 105 copied) and the restart on the downloaded
+companion. The church laptop is registered as "Church laptop"; its package,
+`CGFProjector-0.2.1.zip` with the July library (v3), is in
+`C:\Users\Disterhoft\CGF\install-packages\` with its `cgf-cloud.json`, both
+readable by Florian's Windows user only. The next library publish brings
+the laptop's songs up to date.
 
 1. Done: `push-server/` is deployed to the CGF Vernon Cloudflare account
    (the one with the `cgfvernon.ca` zone) as Worker `cgf-projector-push` at

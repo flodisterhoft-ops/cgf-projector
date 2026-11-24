@@ -132,9 +132,11 @@ stripping what they never used and wiring the app into a central CGF library.
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
   quick-add upload flow. CGF logo swap pending logo file from Flo.
-- Next milestones (as of 2026-11-23): deploy the push server with app
-  releases, install the church laptop from the package, and host snapshots
-  for remote laptops; phone
+- Next milestones (as of 2026-11-23): install the church laptop from
+  `C:\Users\Disterhoft\CGF\install-packages\CGFProjector-0.2.1.zip` (server
+  live with app releases; laptop registered), publish the library once the
+  CGF Lyrics round allows it (the laptop starts on the July v3), and host
+  snapshots for remote laptops; phone
   remote → sermon watcher on the network bridge (OBS overlay and back-screen
   mirror are built; both await a test on the church network); proposals
   upload → web planner.
