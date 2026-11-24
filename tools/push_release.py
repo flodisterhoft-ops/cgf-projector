@@ -328,13 +328,17 @@ def cmd_status(args):
         kept = f"latest release v{s['latest']}, {s['versions']} kept (oldest from v{s['oldest_from']})"
     else:
         kept = "no releases yet"
-    print(f"Server {cfg['server']} - church {s['church']}: {kept}")
+    print(f"Server {cfg['server']} - church {s['church']}: songs: {kept}")
+    app = s.get("app")
+    if app:
+        print(f"  app: {app['folder']} is release {app['seq']} (published {app['received_at']})")
     if not s["devices"]:
         print("  no laptops registered")
     for d in s["devices"]:
         state = "connected" if d["connected"] else "offline"
-        version = f"v{d['last_version']}" if d["last_version"] is not None else "no release yet"
-        print(f"  {d['name']}: {state}, has {version}, last seen {d['last_seen_at']}")
+        version = f"library v{d['last_version']}" if d["last_version"] is not None else "no library release yet"
+        folder = d.get("app_folder") or "app unknown"
+        print(f"  {d['name']}: {state}, {folder}, {version}, last seen {d['last_seen_at']}")
 
 
 def cmd_diff(args):

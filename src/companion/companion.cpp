@@ -624,12 +624,15 @@ void Companion::installDone()
     const QString fresh = launcher + QStringLiteral(".new");
     if(QFile::exists(fresh))
     {
-        QFile::remove(launcher + QStringLiteral(".old"));
-        if(QFile::rename(launcher, launcher + QStringLiteral(".old")) && QFile::rename(fresh, launcher))
-            log(QStringLiteral("the launcher was updated"));
+        const QString old = launcher + QStringLiteral(".old");
+        QFile::remove(old);
+        const bool hadOne = QFile::exists(launcher);
+        if((!hadOne || QFile::rename(launcher, old)) && QFile::rename(fresh, launcher))
+            log(hadOne ? QStringLiteral("the launcher was updated") : QStringLiteral("the launcher was added"));
         else
         {
-            QFile::rename(launcher + QStringLiteral(".old"), launcher);
+            if(hadOne && !QFile::exists(launcher))
+                QFile::rename(old, launcher);
             log(QStringLiteral("the launcher could not be replaced; the old one stays"));
         }
     }
@@ -667,11 +670,15 @@ void Companion::installDone()
         return;
     }
     // Run the new companion too (when this one runs on its own, from sign-in).
+    // If that cannot start, this one keeps running: updates must not stop.
     if(stay && QFileInfo(QCoreApplication::applicationDirPath()).fileName() != job.folder)
     {
-        QProcess::startDetached(launcher, {QStringLiteral("--companion"), QStringLiteral("--after"),
-                                           QString::number(QCoreApplication::applicationPid())});
-        stop(QStringLiteral("restarting on the new version"));
+        if(QFile::exists(launcher)
+                && QProcess::startDetached(launcher, {QStringLiteral("--companion"), QStringLiteral("--after"),
+                                                      QString::number(QCoreApplication::applicationPid())}))
+            stop(QStringLiteral("restarting on the new version"));
+        else
+            log(QStringLiteral("cannot start the new companion; this one keeps running"));
     }
 }
 
