@@ -316,3 +316,62 @@ Deployed 2026-11-23: Worker `cgf-projector-push` at https://push.cgfvernon.ca
 (version `4f8c7fe7`), `PUBLISH_TOKEN` set. Not yet done: hosting snapshots
 for laptops outside Florian's network, a test on the church laptop and
 network.
+
+## App updates and the install package (2026-11-23)
+
+The program itself now updates over the push connection; the church laptop
+is installed from a zip. Design: `docs/song-push.md` ("App updates", "Install
+package"). Branches merged first: the network bridge
+(`claude/loving-lovelace-dfe9f8`) and PR #1 (`claude/zen-fermat-5fa2db`:
+projector link drops, CGFProjector.log, PowerPoint/PDF import).
+
+Build order, after the app (same Git Bash PATH as above):
+
+```
+cd src/companion && qmake companion.pro -spec win32-g++ && mingw32-make -j8 release
+windeployqt --no-translations ../win32_build/bin/cgf-companion.exe
+cd ../launcher && qmake launcher.pro -spec win32-g++ && mingw32-make release
+```
+
+The launcher lands in `src/win32_build/launcher/CGFProjector.exe` (it must not
+overwrite the app of the same name in `bin/`). It links statically and needs
+only Windows' own DLLs.
+
+Publishing a new version, once the server with app releases is deployed:
+
+```
+python tools/push_release.py app-release --build-dir src/win32_build/bin --version 0.2.1 \
+    --notes "What changed" --launcher src/win32_build/launcher/CGFProjector.exe
+```
+
+An install package for a laptop:
+
+```
+python tools/push_release.py add-device "Church laptop" --out <private folder>/cgf-cloud.json
+python tools/make_install.py --version 0.2.0 --snapshot <spData-cgf-vN.sqlite> \
+    --device-file <private folder>/cgf-cloud.json --out <private folder>
+```
+
+Verification (2026-11-23), all on this PC:
+- Clean builds of the app, companion and launcher; no warnings from the new
+  files.
+- Push server: 18 tests (4 new: uploads checked against their hash, releases
+  refused until every file is there and when seq does not rise, delivery to
+  laptops with and without the app open, files served to devices only,
+  cleanup after three releases).
+- Publisher: 11 tests (3 new: data files stay out of a release, the
+  qCompress format, signed app releases).
+- `tests/update`: 23 checks. A package (56 MB zip) installed with
+  `install.ps1`; release t2 (one new file plus the offscreen plugin)
+  downloaded 2 files and copied 106; the companion restarted itself on t2;
+  the app, started through the launcher without Qt on PATH, marked itself
+  healthy and took a song push (library v3 to v4); t3 published while the
+  app ran was offered as "ready" and app-t1 was removed; t4, whose program
+  stops with code 3, was rolled back to t3 within its first seconds and
+  marked bad.
+- After the merge and these changes: bridge 73 checks, push 30 checks and
+  the end-to-end push pass.
+
+Not yet done: deploying the server with app releases (needs Florian's
+go-ahead), registering the church laptop and making its package, a test on
+the church laptop.

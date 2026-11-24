@@ -5,7 +5,8 @@ library release is published, the changed songs and songbooks reach every
 connected church laptop within seconds and go straight into its local
 database. Songs, Bibles and everything else still live on the laptop, so
 projection works with the internet down; a laptop that was offline catches up
-when it reconnects.
+when it reconnects. New versions of the program itself travel the same way
+(see "App updates").
 
 This is the "tier-3 live push" from AGENTS.md. Three recorded decisions shape
 it: the projector app never talks to the internet (a companion program does,
@@ -63,6 +64,73 @@ publish_snapshot.py ─► push_release.py ─► push server ─► cgf-compani
   (`other_changes`) and the next snapshot install brings it.
 - The bridge accepts releases only from programs on the same computer.
 
+## App updates
+
+Built 2026-11-23, so the church laptop gets new versions of the program
+itself without a visit. The same connection carries them.
+
+On the laptop (from the install package) the program and the data live apart:
+
+```
+%USERPROFILE%\CGFProjector\
+  CGFProjector.exe        the launcher (desktop shortcut, and --companion at sign-in)
+  cgf-versions.txt        current=app-0.2.1, previous=app-0.2.0, seq, trial, starts, bad
+  cgf-healthy.txt         the last version that ran a full minute
+  app-0.2.1\              one version: the app, the companion, Qt; cgf-release.json (notes)
+  app-0.2.0\              the previous version, kept as the fallback
+  spData.sqlite, version.txt, cgf-cloud.json, CGFProjector.log, cgf-companion.log, cgf-launcher.log
+```
+
+1. Florian builds and deploys as usual (BUILD.md), then runs
+   `python tools/push_release.py app-release --build-dir src/win32_build/bin --version 0.2.1 --notes "..." --launcher src/win32_build/launcher/CGFProjector.exe`.
+   It uploads only files the server does not have yet and signs the list of
+   every file of the version.
+2. The server sends the list to every connected laptop, and to each laptop
+   again when it connects.
+3. The companion checks the signature and builds `app-0.2.1.partial`: files
+   that are the same as in the current version (same hash) are copied, the
+   rest downloaded and checked against their hash. Then the folder gets its
+   name, `cgf-versions.txt` switches to it, and older folders are deleted
+   (one still running stays until next time). The running app is not touched.
+4. The next start opens the new version. If the app is open, the status bar
+   shows "CGF Projector 0.2.1 is ready" with What's new and Restart now; the
+   button is disabled while anything is on the projector. Nobody has to click
+   it: the next start opens the new version anyway.
+
+Because the companion starts at Windows sign-in and keeps running, an update
+published during the week is usually installed before anyone opens the app
+on Sunday.
+
+**Going back by itself.** A new version is on trial until it has run a full
+minute (or closed normally); it then writes `cgf-healthy.txt`. If it stops
+with an error in its first 20 seconds, the launcher starts the previous
+version at once; if it never runs a full minute in three starts, the fourth
+start goes back. The failed version is listed under `bad` and is never
+installed again; the next release replaces it. `cgf-launcher.log` says what
+happened.
+
+The launcher itself is plain Win32 and linked statically, so it starts even
+if a version's Qt libraries are broken. A release can replace it too (it is
+not running between starts). A broken companion cannot repair itself: test
+companion changes with `tests/update` before releasing them.
+
+## Install package
+
+`python tools/make_install.py --version 0.2.0 --snapshot <spData-cgf-vN.sqlite> --device-file <cgf-cloud.json> --seq <N> --out <folder>`
+writes `CGFProjector-0.2.0.zip`: `install.cmd`, `install.ps1` and the
+`CGFProjector` folder above. `--seq` is the version's app release number on
+the server, so the laptop does not download it again. The zip holds the
+laptop's device token: keep it private, and remove the device if it goes
+astray.
+
+On the laptop: unzip, double-click `install.cmd`. It installs into
+`%USERPROFILE%\CGFProjector` for the signed-in Windows user, no admin rights
+needed; adds desktop and Start menu shortcuts and a Startup entry for the
+companion; and starts the companion. Installing again keeps the song
+library, settings and device token, and adds the new version beside the old
+one. SoftProjector 2.1 can stay installed: it keeps its own database and
+settings.
+
 ## Files
 
 | Where | What |
@@ -74,6 +142,11 @@ publish_snapshot.py ─► push_release.py ─► push server ─► cgf-compani
 | `src/sources/softprojectorsync.cpp` | Main window side: starts the companion, refreshes the lists |
 | `bridgeserver.cpp`, `livebridge.cpp` | `release` messages from local programs, the library version in `hello` |
 | `tests/push/` | App checks and the end-to-end run |
+| `src/launcher/` | The launcher (`CGFProjector.exe` in the install folder) |
+| `src/sources/softprojectorupdate.cpp` | Healthy mark, the update bar, Help, What's new |
+| `src/sources/cgfsignature.cpp` | The signature check, shared by the app and the companion |
+| `tools/make_install.py`, `tools/install/` | The install package and its installer |
+| `tests/update/` | App updates end to end |
 
 ## Settings
 
@@ -91,7 +164,9 @@ old copy).
 
 ## Going live
 
-Steps 1 and 2 were done on 2026-11-23 with Florian's go-ahead.
+Steps 1 and 2 were done on 2026-11-23 with Florian's go-ahead. The server
+with app releases (`b8ebf74`) is not deployed yet: that redeploy needs his
+go-ahead.
 
 1. Done: `push-server/` is deployed to the CGF Vernon Cloudflare account
    (the one with the `cgfvernon.ca` zone) as Worker `cgf-projector-push` at
@@ -106,9 +181,8 @@ Steps 1 and 2 were done on 2026-11-23 with Florian's go-ahead.
    `push_release.py server-secret --wrangler-dir push-server` set the
    server's `PUBLISH_TOKEN` without showing it. Running `init` again keeps
    both. A new key would need every laptop's `cgf-cloud.json` remade.
-3. Per laptop: `python tools/push_release.py add-device "Booth laptop" --out <file>`,
-   then copy that file as `cgf-cloud.json` next to `CGFProjector.exe`, with
-   `cgf-companion.exe` from the same build.
+3. Per laptop: `python tools/push_release.py add-device "Church laptop" --out <file>`,
+   then build the install package with that file (above).
 4. Publish as usual. `python tools/push_release.py status` shows which laptops
    are connected and which version each has.
 
@@ -142,21 +216,33 @@ Songbooks and deletions ride in part 1. A part stays under about 900 KB.
 | `POST /v1/<church>/releases` | publisher token | `{"parts": [...]}`, whole releases only |
 | `POST /v1/<church>/devices` | publisher token | `{"name"}` → `{"name", "token"}` (shown once) |
 | `DELETE /v1/<church>/devices/<name>` | publisher token | removes it and closes its connection |
-| `GET /v1/<church>/status` | publisher token | latest version, laptops, their versions |
+| `GET /v1/<church>/status` | publisher token | latest version, app release, laptops, their versions and app folders |
+| `POST /v1/<church>/app/files/missing` | publisher token | `{"sha256": [...]}` → the ones not stored |
+| `PUT /v1/<church>/app/files/<sha256>` | publisher token | a file as `qCompress` writes it (4-byte size + zlib), checked against its hash |
+| `GET /v1/<church>/app/files/<sha256>` | laptop or publisher | the stored file |
+| `POST /v1/<church>/app/releases` | publisher token | `{"release": <signed app release>}`; seq must rise, every file uploaded |
 
 Tokens go in `Authorization: Bearer`, never in the address. The server stores
 only a hash of each device token. Over the WebSocket:
 
 ```jsonc
 // laptop → server
-{"type": "hello", "version": 3}     // send me every release after v3
+{"type": "hello", "version": 3, "app": "app-0.2.0"}  // songs after v3; no version: the app is closed
 {"type": "ack", "version": 4}       // the app now has v4
 "ping"                              // answered "pong" without waking the object
 // server → laptop
 {"type": "welcome", "device": "...", "latest": 4}
 {"type": "release", ...}            // replayed after hello, or live after a publish
 {"type": "resync", "have": 3, "latest": 9}   // too far behind: wait for the snapshot
+{"type": "app", "payload": "...", "sig": "...", "key": "..."}  // the latest app release
+// laptop → server, after installing one
+{"type": "status", "app": "app-0.2.1"}
 ```
+
+An app release payload: `{"kind": "cgf-app", "v": 1, "church", "seq",
+"version", "folder": "app-<version>", "notes", "published_at", "files":
+[{"path": "platforms/qwindows.dll", "sha256", "bytes"}], "launcher": {"sha256",
+"bytes"}}`. The server keeps the files of the last three releases.
 
 ### Bridge (companion ↔ app)
 
@@ -171,13 +257,19 @@ the server; the app answers that program only:
 // server again from "version") | rejected (+ "reason")
 ```
 
+`hello` also carries `"app": {"folder", "version"}`, the folder the app runs
+from. When the companion has installed a newer one it sends
+`{"type": "appUpdate", "folder", "version", "notes"}`, accepted from this
+computer only.
+
 ## Tests
 
 ```
-cd push-server && npm install && npm test                 # server, 14 tests
-python tools/test_push_release.py                         # publisher, 8 tests
+cd push-server && npm install && npm test                 # server, 18 tests
+python tools/test_push_release.py                         # publisher, 11 tests
 python tests/push/run_tests.py --db <snapshot>            # app, 30 checks
 python tests/push/run_tests.py --db <snapshot> --e2e      # + wrangler dev and the companion
+python tests/update/run_tests.py --db <snapshot>          # app updates, 23 checks
 ```
 
 `<snapshot>` is a published snapshot such as CGF Lyrics'
@@ -186,12 +278,22 @@ made-up edits. The end-to-end run starts `wrangler dev` on port 8788, sets up
 a throwaway publisher in `tests/push/out/`, registers a device, starts the
 app offscreen (the companion starts with it) and publishes v4.
 
+`tests/update` installs a package into `tests/update/out/laptop` against
+`wrangler dev` on port 8789, runs the companion as it runs from sign-in and
+publishes four versions: one new file (only that is downloaded), the app
+started through the launcher (healthy mark, a song push in this layout), an
+update while the app is open (the restart offer), and a version that
+crashes at once (the launcher goes back by itself). The test versions carry
+Qt's offscreen platform plugin so the app can run without a screen; the real
+package carries only the Windows one.
+
 ## Not covered yet
 
 - Laptops outside Florian's network need the snapshots hosted too (the sync
   agent's `source`), for a first install and for catching up after a long
   time offline.
-- App updates (a new `CGFProjector.exe`) can later use the same connection.
 - A schedule file saved before an update keeps the old song text inside it
   until it is saved again.
+- A version that hangs at start (no window, no exit) is only caught by the
+  three-starts rule.
 - Not yet tested on the church laptop or its network.

@@ -132,12 +132,12 @@ stripping what they never used and wiring the app into a central CGF library.
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
   quick-add upload flow. CGF logo swap pending logo file from Flo.
-- Next milestones (as of 2026-11-23): put CGF Projector with the companion
-  on the church laptop (the push server is live) and host snapshots for
-  remote laptops; phone
+- Next milestones (as of 2026-11-23): deploy the push server with app
+  releases, install the church laptop from the package, and host snapshots
+  for remote laptops; phone
   remote → sermon watcher on the network bridge (OBS overlay and back-screen
-  mirror are built; both await a test on the church network); app updates
-  over the push connection; proposals upload → web planner.
+  mirror are built; both await a test on the church network); proposals
+  upload → web planner.
 
 ## Network bridge (built 2026-10-31; see docs/network-bridge.md)
 
@@ -185,6 +185,17 @@ stripping what they never used and wiring the app into a central CGF library.
   catch up through the sync agent's snapshot install.
 - Secrets: publisher key and token in `%USERPROFILE%\.cgf-publish\`; each
   laptop's device token in its `cgf-cloud.json` (git-ignored, never commit).
+- App updates (built 2026-11-23; Florian: he rarely gets to the church laptop
+  and wants it always on the best version). Florian asked whether to move the
+  connection into the app; decided: keep the companion, because a running
+  program cannot replace its own files, the companion (started at Windows
+  sign-in, `--stay`) installs updates while the app is closed, and network
+  trouble cannot freeze the projector. Layout: launcher `CGFProjector.exe` in
+  the install folder, one `app-<version>` folder per version, data in the
+  install folder (`--data-dir`). A version that fails at start is rolled back
+  by the launcher and never reinstalled. App files are stored in the push
+  server's Durable Object (no R2, which would need a checkout in the
+  dashboard). The laptop is installed from `tools/make_install.py`'s zip.
 
 ## The service order (spec seed for the web planner)
 
