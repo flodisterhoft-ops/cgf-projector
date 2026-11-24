@@ -442,3 +442,7 @@ bring back the old density.
 Checked on this PC: a small Qt program drew list rows with both styles
 (selected, under the mouse, window active or not), and the real app, its main
 window captured in the background, showed the classic style.
+
+Published (Florian's go-ahead) as app 0.2.5, release 6, from f367967 with the
+launcher: 106 files, 1 uploaded (the app; the launcher was unchanged). The
+church laptop reported app-0.2.5 installed 5 s later.
