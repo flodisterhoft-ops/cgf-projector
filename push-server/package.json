@@ -1,0 +1,17 @@
+{
+	"name": "cgf-projector-push",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"test": "vitest run",
+		"types": "wrangler types",
+		"check": "wrangler types && tsc --noEmit"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-plugin": "^1.9.1",
+		"typescript": "^5.9.0",
+		"vitest": "^5.1.1",
+		"wrangler": "^4.167.0"
+	}
+}

@@ -1,0 +1,21 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Tells church laptops about new library releases (docs/song-push.md).
+	// Deploys to the CGF Vernon Cloudflare account, beside the Hub; it shares
+	// nothing with the Hub.
+	"name": "cgf-projector-push",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-01",
+	"workers_dev": false,
+	"preview_urls": false,
+	"routes": [{ "pattern": "push.cgfvernon.ca", "custom_domain": true }],
+	"observability": {
+		"enabled": true
+	},
+	"durable_objects": {
+		"bindings": [{ "name": "CHURCH", "class_name": "ChurchPush" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["ChurchPush"] }]
+	// Secret (not in this file): PUBLISH_TOKEN, set with `wrangler secret put`.
+	// For `wrangler dev`, a local .dev.vars file holds a test value.
+}
