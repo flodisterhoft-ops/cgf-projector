@@ -415,3 +415,10 @@ Checked on this PC (one 2560 x 1440 screen at 150%, a copy of the July
 library): the splash shows the new clouds with soft edges over the desktop;
 the title bar, taskbar, About box and Settings show the new icon and titles;
 Explorer's icon for both exes is the new one at 16, 32, 48 and 256 px.
+
+Published (Florian's go-ahead) as app 0.2.4, release 5, from 03347c1 with
+the launcher: 106 files, 2 uploaded (the app and the launcher). The church
+laptop was connected and reported app-0.2.4 installed 5 s later; it opens
+from the app's next start (or Restart now in the status bar). The desktop
+shortcut points at the replaced launcher; Windows may show the old icon there
+until it refreshes its icon cache (sign out or restart).

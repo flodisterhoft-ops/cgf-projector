@@ -136,9 +136,9 @@ stripping what they never used and wiring the app into a central CGF library.
   look the operators know; the splash says "CGF Projector", the icon shows
   "CGF" on a cloud. Drawn by `tools/branding/make_branding.py` (BUILD.md,
   "Splash and icon"). The church logo stays out of the public repo.
-- Next milestones (as of 2026-11-23): install the church laptop from
-  `C:\Users\Disterhoft\CGF\install-packages\CGFProjector-0.2.1.zip` (server
-  live with app releases; laptop registered), publish the library once the
+- Next milestones (as of 2026-11-23): the church laptop is installed and
+  takes app releases (app 0.2.4, release 5, is the new splash and icon);
+  publish the library once the
   CGF Lyrics round allows it (the laptop starts on the July v3), and host
   snapshots for remote laptops; phone
   remote → sermon watcher on the network bridge (OBS overlay and back-screen
