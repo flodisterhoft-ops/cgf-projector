@@ -230,3 +230,119 @@ describe("devices", () => {
 		expect(r.status).toBe(400);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// App releases
+
+async function qCompress(data: Uint8Array): Promise<Uint8Array> {
+	const z = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream("deflate"))).arrayBuffer());
+	const out = new Uint8Array(4 + z.byteLength);
+	new DataView(out.buffer).setUint32(0, data.byteLength);
+	out.set(z, 4);
+	return out;
+}
+
+async function hex(data: Uint8Array): Promise<string> {
+	const d = await crypto.subtle.digest("SHA-256", data);
+	return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function upload(church: string, text: string) {
+	const data = new TextEncoder().encode(text);
+	const sha = await hex(data);
+	const r = await call(`/v1/${church}/app/files/${sha}`, { method: "PUT", headers: PUBLISHER, body: await qCompress(data) });
+	return { sha, status: r.status, bytes: data.byteLength };
+}
+
+function appRelease(church: string, seq: number, folder: string, files: { path: string; sha256: string; bytes: number }[]) {
+	return {
+		type: "app",
+		payload: JSON.stringify({ kind: "cgf-app", v: 1, church, seq, folder, version: folder.slice(4), files }),
+		sig: "c2ln",
+		key: "test",
+	};
+}
+
+function publishApp(church: string, release: unknown) {
+	return call(`/v1/${church}/app/releases`, { method: "POST", headers: PUBLISHER, body: JSON.stringify({ release }) });
+}
+
+describe("app releases", () => {
+	it("checks an upload against its hash and reports which files are missing", async () => {
+		const c = "app-upload";
+		const good = await upload(c, "program file one");
+		expect(good.status).toBe(200);
+		const data = await qCompress(new TextEncoder().encode("something else"));
+		const wrong = await call(`/v1/${c}/app/files/${"0".repeat(64)}`, { method: "PUT", headers: PUBLISHER, body: data });
+		expect(wrong.status).toBe(400);
+		const junk = await call(`/v1/${c}/app/files/${good.sha}`, { method: "PUT", headers: PUBLISHER, body: "not compressed" });
+		expect(junk.status).toBe(400);
+		const r = await call(`/v1/${c}/app/files/missing`, {
+			method: "POST", headers: PUBLISHER, body: JSON.stringify({ sha256: [good.sha, "1".repeat(64)] }),
+		});
+		expect(await r.json()).toEqual({ missing: ["1".repeat(64)] });
+	});
+
+	it("refuses a release whose files are not all uploaded, and seqs that do not increase", async () => {
+		const c = "app-refuse";
+		const f = await upload(c, "exe bytes");
+		const missing = await publishApp(c, appRelease(c, 1, "app-1.0.0", [
+			{ path: "CGFProjector.exe", sha256: f.sha, bytes: f.bytes },
+			{ path: "Qt6Core.dll", sha256: "2".repeat(64), bytes: 5 },
+		]));
+		expect(missing.status).toBe(400);
+		expect(((await missing.json()) as { missing: string[] }).missing).toEqual(["2".repeat(64)]);
+		expect((await publishApp(c, appRelease(c, 1, "app-1.0.0", [{ path: "CGFProjector.exe", sha256: f.sha, bytes: f.bytes }]))).status).toBe(200);
+		expect((await publishApp(c, appRelease(c, 1, "app-1.0.1", [{ path: "CGFProjector.exe", sha256: f.sha, bytes: f.bytes }]))).status).toBe(400);
+		const bad = [{ path: "../evil.exe", sha256: f.sha, bytes: 1 }];
+		expect((await publishApp(c, appRelease(c, 2, "app-1.0.2", bad))).status).toBe(400);
+		expect((await publishApp(c, appRelease(c, 2, "../app", [{ path: "a", sha256: f.sha, bytes: 1 }]))).status).toBe(400);
+	});
+
+	it("sends a new release to laptops, again after hello, and serves its files to them only", async () => {
+		const c = "app-deliver";
+		const token = await addDevice(c, "Booth");
+		const laptop = await connect(c, token);
+		const f = await upload(c, "the new program");
+		const r = await publishApp(c, appRelease(c, 1, "app-2.0.0", [{ path: "CGFProjector.exe", sha256: f.sha, bytes: f.bytes }]));
+		expect(await r.json()).toMatchObject({ seq: 1, folder: "app-2.0.0", connected: 1 });
+		const [m] = await laptop.next();
+		expect(m.type).toBe("app");
+		expect(JSON.parse(m.payload).folder).toBe("app-2.0.0");
+
+		// Without the projector app open the laptop sends no version: no song replay, just the app.
+		laptop.send({ type: "hello", app: "app-1.0.0" });
+		expect((await laptop.next(2)).map((x) => x.type)).toEqual(["welcome", "app"]);
+		await pause();
+		expect(laptop.inbox).toEqual([]);
+
+		const file = await call(`/v1/${c}/app/files/${f.sha}`, { headers: { Authorization: `Bearer ${token}` } });
+		expect(file.status).toBe(200);
+		expect(file.headers.get("X-CGF-Bytes")).toBe(String(f.bytes));
+		const body = new Uint8Array(await file.arrayBuffer());
+		expect(body.byteLength).toBeGreaterThan(4);
+		expect((await call(`/v1/${c}/app/files/${f.sha}`, { headers: { Authorization: "Bearer guess" } })).status).toBe(401);
+		expect((await call(`/v1/${c}/app/files/${f.sha}`)).status).toBe(404);
+
+		const s = await status(c);
+		expect(s.devices[0]).toMatchObject({ name: "Booth" });
+		expect((s.devices[0] as unknown as { app_folder: string }).app_folder).toBe("app-1.0.0");
+	});
+
+	it("keeps the files of the last releases and deletes older ones", async () => {
+		const c = "app-cleanup";
+		const files = [];
+		for (let i = 1; i <= 4; i++) {
+			const f = await upload(c, `build ${i}`);
+			files.push(f);
+			const r = await publishApp(c, appRelease(c, i, `app-0.${i}`, [{ path: "CGFProjector.exe", sha256: f.sha, bytes: f.bytes }]));
+			expect(r.status).toBe(200);
+		}
+		const r = await call(`/v1/${c}/app/files/missing`, {
+			method: "POST", headers: PUBLISHER, body: JSON.stringify({ sha256: files.map((f) => f.sha) }),
+		});
+		expect(await r.json()).toEqual({ missing: [files[0].sha] });
+		const s = (await (await call(`/v1/${c}/status`, { headers: PUBLISHER })).json()) as { app: { seq: number } };
+		expect(s.app.seq).toBe(4);
+	});
+});

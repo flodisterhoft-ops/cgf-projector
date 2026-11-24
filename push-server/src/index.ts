@@ -8,7 +8,18 @@
 // the signature itself, so this server can only relay, never forge.
 
 import { DurableObject } from "cloudflare:workers";
-import { isInt, KEEP_RELEASES, parseEnvelope, type ReleaseRow } from "./release";
+import {
+	type AppReleaseRow,
+	FILE_CHUNK,
+	inflateQt,
+	isInt,
+	KEEP_APP_RELEASES,
+	KEEP_RELEASES,
+	parseAppEnvelope,
+	parseEnvelope,
+	type ReleaseRow,
+	SHA256,
+} from "./release";
 
 export interface PushEnv {
 	CHURCH: DurableObjectNamespace<ChurchPush>;
@@ -79,10 +90,76 @@ export default {
 			return stub.fetch(new Request(request.url, { method: "GET", headers }));
 		}
 
-		// Everything else is the publisher's. A missing secret fails closed.
 		const token = bearer(request);
-		if (!env.PUBLISH_TOKEN || !token || !(await sameSecret(token, env.PUBLISH_TOKEN)))
-			return json({ error: "unauthorized" }, 401);
+		const isPublisher = !!env.PUBLISH_TOKEN && !!token && (await sameSecret(token, env.PUBLISH_TOKEN));
+
+		// An app file, by content hash: for laptops (device token) and the publisher.
+		if (route.length === 3 && route[0] === "app" && route[1] === "files" && request.method === "GET") {
+			if (!token || !SHA256.test(route[2])) return json({ error: "not found" }, 404);
+			return stub.fetch(
+				new Request(request.url, {
+					headers: {
+						"X-CGF-Op": "get-file",
+						"X-CGF-Church": church,
+						"X-CGF-Token-Hash": isPublisher ? "" : await sha256Hex(token),
+						"X-CGF-Publisher": isPublisher ? "1" : "0",
+						"X-CGF-Sha256": route[2],
+					},
+				}),
+			);
+		}
+
+		// Everything else is the publisher's. A missing secret fails closed.
+		if (!isPublisher) return json({ error: "unauthorized" }, 401);
+
+		if (route[0] === "app") {
+			if (route.length === 3 && route[1] === "files" && route[2] === "missing" && request.method === "POST") {
+				let body: { sha256?: unknown };
+				try {
+					body = await request.json();
+				} catch {
+					return json({ error: "body is not JSON" }, 400);
+				}
+				const list = Array.isArray(body.sha256) ? body.sha256.filter((s) => typeof s === "string" && SHA256.test(s)) : [];
+				return json({ missing: await stub.missingFiles(church, list as string[]) });
+			}
+			if (route.length === 3 && route[1] === "files" && request.method === "PUT") {
+				const sha = route[2];
+				if (!SHA256.test(sha)) return json({ error: "bad hash" }, 400);
+				const stored = await request.arrayBuffer();
+				// Check the upload before keeping it: a laptop must never get a bad file.
+				const original = await inflateQt(stored);
+				if (!original) return json({ error: "not a qCompress stream" }, 400);
+				const digest = await crypto.subtle.digest("SHA-256", original);
+				const actual = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+				if (actual !== sha) return json({ error: "the file does not match its hash" }, 400);
+				return stub.fetch(
+					new Request(request.url, {
+						method: "PUT",
+						body: stored,
+						headers: {
+							"X-CGF-Op": "put-file",
+							"X-CGF-Church": church,
+							"X-CGF-Sha256": sha,
+							"X-CGF-Bytes": String(original.byteLength),
+						},
+					}),
+				);
+			}
+			if (route.length === 2 && route[1] === "releases" && request.method === "POST") {
+				let body: { release?: unknown };
+				try {
+					body = await request.json();
+				} catch {
+					return json({ error: "body is not JSON" }, 400);
+				}
+				const r = parseAppEnvelope(body.release, church);
+				if (typeof r === "string") return json({ error: r }, 400);
+				const result = await stub.publishApp(church, r);
+				return json(result, "error" in result ? 400 : 200);
+			}
+			return json({ error: "not found" }, 404);
+		}
 
 		if (route.length === 1 && route[0] === "releases" && request.method === "POST") {
 			let body: { parts?: unknown };
@@ -159,13 +236,44 @@ export class ChurchPush extends DurableObject<PushEnv> {
 					last_version INTEGER,
 					PRIMARY KEY (church_id, name)
 				);
+				CREATE TABLE IF NOT EXISTS app_releases (
+					church_id TEXT NOT NULL,
+					seq INTEGER NOT NULL,
+					folder TEXT NOT NULL,
+					envelope TEXT NOT NULL,
+					received_at TEXT NOT NULL,
+					PRIMARY KEY (church_id, seq)
+				);
+				CREATE TABLE IF NOT EXISTS app_file_info (
+					church_id TEXT NOT NULL,
+					sha256 TEXT NOT NULL,
+					chunks INTEGER NOT NULL,
+					bytes INTEGER NOT NULL,
+					stored_bytes INTEGER NOT NULL,
+					created_at TEXT NOT NULL,
+					PRIMARY KEY (church_id, sha256)
+				);
+				CREATE TABLE IF NOT EXISTS app_files (
+					church_id TEXT NOT NULL,
+					sha256 TEXT NOT NULL,
+					chunk INTEGER NOT NULL,
+					data BLOB NOT NULL,
+					PRIMARY KEY (church_id, sha256, chunk)
+				);
 			`);
+			// Added with app updates (2026-11-23): the app version each laptop runs.
+			const cols = this.sql.exec<{ name: string }>("PRAGMA table_info(devices)").toArray().map((c) => c.name);
+			if (!cols.includes("app_folder")) this.sql.exec("ALTER TABLE devices ADD COLUMN app_folder TEXT");
 		});
 		// Keep-alives are answered without waking the object.
 		ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
 	}
 
 	async fetch(request: Request): Promise<Response> {
+		const op = request.headers.get("X-CGF-Op");
+		if (op === "put-file") return this.putFile(request);
+		if (op === "get-file") return this.getFile(request);
+
 		const church = request.headers.get("X-CGF-Church") ?? "";
 		const hash = request.headers.get("X-CGF-Token-Hash") ?? "";
 		const device = this.sql
@@ -193,12 +301,19 @@ export class ChurchPush extends DurableObject<PushEnv> {
 		} catch {
 			return;
 		}
-		const version = isInt(m.version) && m.version >= 0 ? m.version : 0;
+		// A laptop without the projector app open has no library version: it
+		// gets app releases only, and its songs when the app opens.
+		const version = isInt(m.version) && m.version >= 0 ? m.version : null;
+		if (typeof m.app === "string" && m.app.length <= 60) this.setAppFolder(a.church, a.device, m.app);
 		if (m.type === "hello") {
 			this.touch(a.church, a.device, null);
 			this.replay(ws, a, version);
-		} else if (m.type === "ack") {
+			const app = this.latestApp(a.church);
+			if (app) ws.send(app.envelope);
+		} else if (m.type === "ack" && version !== null) {
 			this.touch(a.church, a.device, version);
+		} else if (m.type === "status") {
+			this.touch(a.church, a.device, null);
 		}
 	}
 
@@ -246,7 +361,7 @@ export class ChurchPush extends DurableObject<PushEnv> {
 		this.sql.exec(
 			`INSERT INTO devices (church_id, name, token_sha256, created_at) VALUES (?, ?, ?, ?)
 			 ON CONFLICT (church_id, name) DO UPDATE SET token_sha256 = excluded.token_sha256,
-			   created_at = excluded.created_at, last_seen_at = NULL, last_version = NULL`,
+			   created_at = excluded.created_at, last_seen_at = NULL, last_version = NULL, app_folder = NULL`,
 			church, name, await sha256Hex(token), now(),
 		);
 		// A new token replaces the old one: drop connections made with it.
@@ -262,8 +377,8 @@ export class ChurchPush extends DurableObject<PushEnv> {
 
 	async status(church: string) {
 		const devices = this.sql
-			.exec<{ name: string; created_at: string; last_seen_at: string | null; last_version: number | null }>(
-				"SELECT name, created_at, last_seen_at, last_version FROM devices WHERE church_id = ? ORDER BY name",
+			.exec<{ name: string; created_at: string; last_seen_at: string | null; last_version: number | null; app_folder: string | null }>(
+				"SELECT name, created_at, last_seen_at, last_version, app_folder FROM devices WHERE church_id = ? ORDER BY name",
 				church,
 			)
 			.toArray()
@@ -275,7 +390,143 @@ export class ChurchPush extends DurableObject<PushEnv> {
 				church,
 			)
 			.one();
-		return { church, latest: this.latest(church), ...r, devices };
+		const app = this.latestApp(church);
+		const appFiles = this.sql
+			.exec<{ files: number; stored: number | null }>(
+				"SELECT COUNT(*) AS files, SUM(stored_bytes) AS stored FROM app_file_info WHERE church_id = ?",
+				church,
+			)
+			.one();
+		return {
+			church,
+			latest: this.latest(church),
+			...r,
+			app: app ? { seq: app.seq, folder: app.folder, received_at: app.received_at } : null,
+			app_files: { count: appFiles.files, stored_bytes: appFiles.stored ?? 0 },
+			devices,
+		};
+	}
+
+	// ----------------------------------------------------------------------
+	// App releases
+
+	async missingFiles(church: string, shas: string[]): Promise<string[]> {
+		const missing: string[] = [];
+		for (const sha of new Set(shas)) {
+			const row = this.sql
+				.exec("SELECT 1 FROM app_file_info WHERE church_id = ? AND sha256 = ?", church, sha)
+				.toArray()[0];
+			if (!row) missing.push(sha);
+		}
+		return missing;
+	}
+
+	private async putFile(request: Request): Promise<Response> {
+		const church = request.headers.get("X-CGF-Church") ?? "";
+		const sha = request.headers.get("X-CGF-Sha256") ?? "";
+		const bytes = Number(request.headers.get("X-CGF-Bytes") ?? "0");
+		const stored = new Uint8Array(await request.arrayBuffer());
+		const chunks = Math.max(1, Math.ceil(stored.byteLength / FILE_CHUNK));
+		this.sql.exec("DELETE FROM app_files WHERE church_id = ? AND sha256 = ?", church, sha);
+		for (let i = 0; i < chunks; i++)
+			this.sql.exec(
+				"INSERT INTO app_files (church_id, sha256, chunk, data) VALUES (?, ?, ?, ?)",
+				church, sha, i, stored.slice(i * FILE_CHUNK, (i + 1) * FILE_CHUNK),
+			);
+		this.sql.exec(
+			`INSERT OR REPLACE INTO app_file_info (church_id, sha256, chunks, bytes, stored_bytes, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			church, sha, chunks, bytes, stored.byteLength, now(),
+		);
+		return json({ stored: sha, chunks });
+	}
+
+	private async getFile(request: Request): Promise<Response> {
+		const church = request.headers.get("X-CGF-Church") ?? "";
+		const sha = request.headers.get("X-CGF-Sha256") ?? "";
+		if (request.headers.get("X-CGF-Publisher") !== "1") {
+			const hash = request.headers.get("X-CGF-Token-Hash") ?? "";
+			const device = this.sql
+				.exec("SELECT 1 FROM devices WHERE church_id = ? AND token_sha256 = ?", church, hash)
+				.toArray()[0];
+			if (!device) return json({ error: "unauthorized" }, 401);
+		}
+		const info = this.sql
+			.exec<{ chunks: number; bytes: number; stored_bytes: number }>(
+				"SELECT chunks, bytes, stored_bytes FROM app_file_info WHERE church_id = ? AND sha256 = ?",
+				church, sha,
+			)
+			.toArray()[0];
+		if (!info) return json({ error: "not found" }, 404);
+		const out = new Uint8Array(info.stored_bytes);
+		let offset = 0;
+		for (const row of this.sql.exec<{ data: ArrayBuffer }>(
+			"SELECT data FROM app_files WHERE church_id = ? AND sha256 = ? ORDER BY chunk",
+			church, sha,
+		)) {
+			const part = new Uint8Array(row.data);
+			out.set(part, offset);
+			offset += part.byteLength;
+		}
+		if (offset !== info.stored_bytes) return json({ error: "file is incomplete" }, 500);
+		return new Response(out, {
+			headers: { "Content-Type": "application/octet-stream", "X-CGF-Bytes": String(info.bytes) },
+		});
+	}
+
+	// Store an app release whose files are all here, tell every laptop, and
+	// delete files no recent release needs.
+	async publishApp(church: string, release: AppReleaseRow) {
+		const latest = this.latestApp(church);
+		if (latest && release.seq <= latest.seq) return { error: `seq must be above ${latest.seq}` };
+		const missing = await this.missingFiles(church, release.shas);
+		if (missing.length) return { error: `${missing.length} files are not uploaded`, missing };
+		this.sql.exec(
+			"INSERT INTO app_releases (church_id, seq, folder, envelope, received_at) VALUES (?, ?, ?, ?, ?)",
+			church, release.seq, release.folder, release.envelope, now(),
+		);
+		const keep = this.sql
+			.exec<{ seq: number; envelope: string }>(
+				"SELECT seq, envelope FROM app_releases WHERE church_id = ? ORDER BY seq DESC LIMIT ?",
+				church, KEEP_APP_RELEASES,
+			)
+			.toArray();
+		this.sql.exec("DELETE FROM app_releases WHERE church_id = ? AND seq < ?", church, keep[keep.length - 1].seq);
+		const needed = new Set<string>();
+		for (const k of keep) {
+			const parsed = parseAppEnvelope(JSON.parse(k.envelope), church);
+			if (typeof parsed !== "string") parsed.shas.forEach((s) => needed.add(s));
+		}
+		let removed = 0;
+		for (const row of this.sql
+			.exec<{ sha256: string }>("SELECT sha256 FROM app_file_info WHERE church_id = ?", church)
+			.toArray())
+			if (!needed.has(row.sha256)) {
+				this.sql.exec("DELETE FROM app_files WHERE church_id = ? AND sha256 = ?", church, row.sha256);
+				this.sql.exec("DELETE FROM app_file_info WHERE church_id = ? AND sha256 = ?", church, row.sha256);
+				removed++;
+			}
+		const sockets = this.ctx.getWebSockets();
+		for (const ws of sockets)
+			try {
+				ws.send(release.envelope);
+			} catch {
+				// it gets the release with its next hello
+			}
+		return { seq: release.seq, folder: release.folder, connected: sockets.length, removed_files: removed };
+	}
+
+	private latestApp(church: string) {
+		return this.sql
+			.exec<{ seq: number; folder: string; envelope: string; received_at: string }>(
+				"SELECT seq, folder, envelope, received_at FROM app_releases WHERE church_id = ? ORDER BY seq DESC LIMIT 1",
+				church,
+			)
+			.toArray()[0];
+	}
+
+	private setAppFolder(church: string, device: string, folder: string) {
+		this.sql.exec("UPDATE devices SET app_folder = ? WHERE church_id = ? AND name = ?", folder, church, device);
 	}
 
 	private latest(church: string): number {
@@ -295,10 +546,10 @@ export class ChurchPush extends DurableObject<PushEnv> {
 	// Send a laptop every release from its version onward, in order. If the
 	// chain is broken (it was offline longer than the releases kept here), it
 	// is told to take the full snapshot instead.
-	private replay(ws: WebSocket, a: Attachment, version: number) {
+	private replay(ws: WebSocket, a: Attachment, version: number | null) {
 		const latest = this.latest(a.church);
 		ws.send(JSON.stringify({ type: "welcome", device: a.device, latest }));
-		if (version >= latest) return;
+		if (version === null || version >= latest) return;
 
 		const rows = this.sql
 			.exec<{ to_version: number; from_version: number; part: number; parts: number; envelope: string }>(
