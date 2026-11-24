@@ -173,6 +173,12 @@ bool connect(QString database_file)
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    // The classic Windows look of SoftProjector 2.1 (Qt 5): the selected verse,
+    // song or book is a blue row and the row under the mouse light blue. On
+    // Windows 11, Qt 6 picks its Windows 11 style instead, which marks the
+    // selection with a faint grey fill and a thin accent-colour bar that
+    // operators could hardly see (Florian, 2026-11-23).
+    QApplication::setStyle(QStringLiteral("windowsvista"));
     // Windows shows the name for windows without a title of their own. Nothing
     // is stored under it: settings live in the database.
     a.setApplicationName("CGF Projector");

@@ -136,6 +136,10 @@ stripping what they never used and wiring the app into a central CGF library.
   look the operators know; the splash says "CGF Projector", the icon shows
   "CGF" on a cloud. Drawn by `tools/branding/make_branding.py` (BUILD.md,
   "Splash and icon"). The church logo stays out of the public repo.
+- **Classic Windows style (user decision 2026-11-23):** `main.cpp` sets Qt's
+  "windowsvista" style, the look of SoftProjector 2.1. Qt 6's Windows 11
+  style made the selected verse nearly invisible (faint grey, thin accent
+  bar). The font stays Qt 6's Segoe UI 9 pt.
 - Next milestones (as of 2026-11-23): the church laptop is installed and
   takes app releases (app 0.2.4, release 5, is the new splash and icon);
   publish the library once the

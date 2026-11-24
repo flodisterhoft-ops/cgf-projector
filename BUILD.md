@@ -422,3 +422,23 @@ laptop was connected and reported app-0.2.4 installed 5 s later; it opens
 from the app's next start (or Restart now in the status bar). The desktop
 shortcut points at the replaced launcher; Windows may show the old icon there
 until it refreshes its icon cache (sign out or restart).
+
+## Classic Windows style (2026-11-23)
+
+Florian could hardly tell which verse was selected on the church laptop. On
+Windows 11, Qt 6.8 uses its Windows 11 style, which marks the selected row
+with a faint grey fill and a thin bar in the Windows accent colour (purple on
+the laptop). SoftProjector 2.1 ran on Qt 5 with the classic "windowsvista"
+style, and `main.cpp` now sets that style: the selected row is light blue
+with a blue outline, the row under the mouse lighter blue, and the selection
+grey while another window is active. Tabs, buttons and scroll bars look as
+they did in 2.1.
+
+The font stays Qt 6's Segoe UI 9 pt (Qt 5 used MS Shell Dlg 2 at 8 pt). That
+is why lists are less dense than in 2.1; the style does not change the row
+height (18 px either way). Kept because it is easier to read; 8 pt would
+bring back the old density.
+
+Checked on this PC: a small Qt program drew list rows with both styles
+(selected, under the mouse, window active or not), and the real app, its main
+window captured in the background, showed the classic style.
