@@ -379,4 +379,12 @@ when it could not restart itself; fixed in 0.2.1 (it adds a missing launcher
 and keeps running if the restart fails). With 0.2.1 a temporary device
 downloaded 2 files, copied 105 and restarted on the downloaded companion.
 "Church laptop" is registered and its zip built; the exact zip installs with
-`install.ps1`. Not yet done: installing it on the church laptop.
+`install.ps1`.
+
+On the church laptop (2026-11-23, Florian watching): installed from the zip
+(0.2.1). Test update 0.2.2 was installed 3 s after publishing; the status bar
+offered it, Restart now reopened the app as 0.2.2. Windows Firewall then asked
+again (new program path); after `allow-network.cmd` (one port rule), test
+update 0.2.3 restarted without any prompt. Checked over Tailscale: the
+laptop's bridge reports app-0.2.3, library v3. Test releases 0.2.2 and 0.2.3
+are on the server, so the next real version is 0.2.4 or later.
