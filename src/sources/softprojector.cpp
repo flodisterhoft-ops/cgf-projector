@@ -98,6 +98,7 @@ SoftProjector::SoftProjector(QWidget *parent)
     // Before the first render, so the back-screen mirror gets the passive screen.
     setupLiveBridge();
     setupLibraryPush();
+    setupAppUpdates();
     positionDisplayWindow();
 
     // Follow monitors being connected and disconnected while running, so a
@@ -235,7 +236,9 @@ SoftProjector::SoftProjector(QWidget *parent)
     connect(mediaControls,SIGNAL(muted(bool)),pds1,SLOT(setVideoMuted(bool)));
     connect(mediaControls,SIGNAL(timeChanged(qint64)),this,SLOT(setVideoPosition(qint64)));
 
-    version_string = "0.1";
+    // The installed version (cgf-release.json); a development build says 0.1.
+    version_string = QCoreApplication::applicationVersion().isEmpty() ? QStringLiteral("0.1")
+                                                                       : QCoreApplication::applicationVersion();
     this->setWindowTitle("CGF Projector " + version_string);
 }
 
@@ -601,6 +604,7 @@ void SoftProjector::closeEvent(QCloseEvent *event)
             break;
         }
     }
+    finishClose(event->isAccepted());
 }
 
 void SoftProjector::keyPressEvent(QKeyEvent *event)

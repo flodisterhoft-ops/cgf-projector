@@ -20,6 +20,7 @@
 #include "../headers/bridgeserver.hpp"
 
 #include <QBuffer>
+#include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -758,6 +759,8 @@ void BridgeServer::onWsMessage(const QString &text)
             send(c, QJsonObject{{"type", "releaseResult"}, {"status", "rejected"},
                                 {"reason", "releases are accepted from this computer only"}});
     }
+    else if(type == QLatin1String("appUpdate") && c && c->peerAddress().isLoopback())
+        emit appUpdateReady(m); // the companion installed a new version
 }
 
 void BridgeServer::setLibraryVersion(int version)
@@ -806,7 +809,9 @@ QJsonObject BridgeServer::helloMessage() const
     return QJsonObject{{"type", "hello"}, {"protocol", 1}, {"app", "CGF Projector"},
                        {"host", QHostInfo::localHostName()}, {"port", port},
                        {"addresses", addresses}, {"bibles", bibles}, {"sample", sample},
-                       {"library", QJsonObject{{"version", libraryVersion}}}};
+                       {"library", QJsonObject{{"version", libraryVersion}}},
+                       {"app", QJsonObject{{"folder", QFileInfo(QCoreApplication::applicationDirPath()).fileName()},
+                                           {"version", QCoreApplication::applicationVersion()}}}};
 }
 
 QJsonObject BridgeServer::styleMessage() const

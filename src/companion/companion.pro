@@ -19,5 +19,6 @@ DESTDIR = $${RES_DIR}/bin
 OBJECTS_DIR = $${RES_DIR}/companion/obj
 MOC_DIR = $${RES_DIR}/companion/moc
 
-SOURCES += main.cpp companion.cpp
-HEADERS += companion.hpp
+SOURCES += main.cpp companion.cpp ../sources/cgfsignature.cpp
+HEADERS += companion.hpp ../headers/cgfsignature.hpp
+win32: LIBS += -lbcrypt

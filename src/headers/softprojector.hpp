@@ -44,6 +44,8 @@
 class QActionGroup;
 class LiveBridge;
 class LibraryPush;
+class QLabel;
+class QPushButton;
 
 namespace Ui
 {
@@ -155,6 +157,20 @@ private:
     void setupLibraryPush();
     void startCompanion(quint16 bridgePort);
     void applyLibraryChanges(const QList<int> &songs, const QList<int> &deletedSongs, bool songbooksChanged);
+
+    // App updates installed by the companion (softprojectorupdate.cpp)
+    QWidget *updateBar = nullptr;
+    QLabel *updateLabel = nullptr;
+    QPushButton *updateRestart = nullptr;
+    QString pendingUpdateVersion;
+    QString pendingUpdateNotes;
+    bool restartRequested = false;
+    void setupAppUpdates();
+    void markHealthy();
+    void showAppUpdate(const QJsonObject &update);
+    void refreshUpdateBar();
+    void restartForUpdate();
+    void finishClose(bool accepted);
 
 private slots:
     void showDisplayScreen(bool show);

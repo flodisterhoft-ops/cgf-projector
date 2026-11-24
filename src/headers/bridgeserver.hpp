@@ -63,6 +63,8 @@ signals:
     void framesWanted(bool wanted); // a back-screen mirror connected, or the last one left
     // A signed library release from a program on this computer (the companion).
     void releaseReceived(const QJsonObject &envelope, quintptr client);
+    // The companion installed a newer app version (folder, version, notes).
+    void appUpdateReady(const QJsonObject &update);
 
 private slots:
     void onTcpConnection();

@@ -45,6 +45,7 @@ void SoftProjector::setupLiveBridge()
 void SoftProjector::publishLive(bool textCleared)
 {
     liveTextCleared = textCleared;
+    refreshUpdateBar();
     if(!liveBridge)
         return;
 

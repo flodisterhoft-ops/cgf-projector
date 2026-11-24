@@ -22,6 +22,8 @@
 #include <QMessageBox>
 #include <QtSql>
 #include <QStyleFactory>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include "../headers/softprojector.hpp"
 #include "../headers/applog.hpp"
 
@@ -257,6 +259,22 @@ int main(int argc, char *argv[])
 #else
     database_dir = a.applicationDirPath() + QDir::separator();
 #endif
+    // Installed from the install package (docs/song-push.md, "App updates"):
+    // each version lives in app-<version> below the install folder, and the
+    // launcher passes the install folder, which holds the database.
+    {
+        const QStringList args = a.arguments();
+        const int i = args.indexOf(QStringLiteral("--data-dir"));
+        if(i > 0 && i + 1 < args.size() && QDir(args.at(i + 1)).exists())
+            database_dir = QDir(args.at(i + 1)).absolutePath() + QDir::separator();
+    }
+    // The version this folder holds, written when it was installed.
+    {
+        QFile release(QDir(a.applicationDirPath()).filePath(QStringLiteral("cgf-release.json")));
+        if(release.open(QIODevice::ReadOnly))
+            a.setApplicationVersion(QJsonDocument::fromJson(release.readAll()).object()
+                                    .value(QStringLiteral("version")).toString());
+    }
     AppLog::start(database_dir);
 
 // CGF: force the classic light appearance. Upstream's Qt6 port applied a

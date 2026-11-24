@@ -1,6 +1,6 @@
 /***************************************************************************
 //
-//    CGF Projector companion - relays library releases from the push server
+//    CGF Projector companion - relays releases from the push server
 //    Copyright (C) 2026  CGF Vernon
 //
 //    This program is free software: you can redistribute it and/or modify
@@ -21,38 +21,63 @@
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
+#include <QFileInfo>
+#include <QJsonDocument>
 #include <QLockFile>
 #include <QNetworkProxyFactory>
 
-// Started by CGF Projector: cgf-companion --config <cgf-cloud.json> --bridge-port <port>
+//   cgf-companion --config <cgf-cloud.json> [--data-dir <install folder>]
+//                 [--bridge-port <port>] [--stay]
+// The app starts it with --config and --bridge-port; the launcher starts it at
+// Windows sign-in with --data-dir and --stay (it then keeps running).
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("cgf-companion"));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Relays CGF library releases to CGF Projector"));
+    parser.setApplicationDescription(QStringLiteral("Relays CGF releases to CGF Projector"));
     const QCommandLineOption config(QStringLiteral("config"), QStringLiteral("cgf-cloud.json"), QStringLiteral("file"));
+    const QCommandLineOption data(QStringLiteral("data-dir"), QStringLiteral("The install folder"), QStringLiteral("dir"));
     const QCommandLineOption port(QStringLiteral("bridge-port"), QStringLiteral("The app's bridge port"),
-                                  QStringLiteral("port"), QStringLiteral("8770"));
-    parser.addOptions({config, port});
+                                  QStringLiteral("port"));
+    const QCommandLineOption stay(QStringLiteral("stay"), QStringLiteral("Keep running while the app is closed"));
+    parser.addOptions({config, data, port, stay});
     parser.addHelpOption();
     parser.process(app);
     if(!parser.isSet(config))
         return 2;
-    const quint16 bridgePort = parser.value(port).toUShort();
+    const QString dataDir = QDir(parser.isSet(data) ? parser.value(data)
+                                                    : QFileInfo(parser.value(config)).absolutePath()).absolutePath();
 
-    // One companion per app: after a restart of the app the old one is still
-    // here for up to a minute and serves the new app instead.
-    QLockFile lock(QDir::temp().filePath(QStringLiteral("cgf-companion-%1.lock").arg(bridgePort)));
+    // The bridge port: as given, else as the app's cgf-network.json sets it.
+    quint16 bridgePort = 8770;
+    if(parser.isSet(port))
+        bridgePort = parser.value(port).toUShort();
+    else
+    {
+        QFile f(QDir(dataDir).filePath(QStringLiteral("cgf-network.json")));
+        if(f.open(QIODevice::ReadOnly))
+        {
+            const int p = QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("port")).toInt(8770);
+            if(p > 0 && p < 65536)
+                bridgePort = quint16(p);
+        }
+    }
+
+    // One companion per install: a second one (the app starting it while the
+    // sign-in one runs, or an old one about to restart) leaves at once.
+    const QByteArray key = QCryptographicHash::hash(dataDir.toLower().toUtf8(), QCryptographicHash::Sha1).toHex().left(12);
+    QLockFile lock(QDir::temp().filePath(QStringLiteral("cgf-companion-%1.lock").arg(QString::fromLatin1(key))));
     if(!lock.tryLock(0))
         return 0;
 
     // A church network may need a proxy for the internet.
     QNetworkProxyFactory::setUseSystemConfiguration(true);
 
-    Companion companion(parser.value(config), bridgePort);
+    Companion companion(parser.value(config), dataDir, bridgePort, parser.isSet(stay));
     if(!companion.start())
         return 2;
     return app.exec();
