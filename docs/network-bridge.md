@@ -22,8 +22,14 @@ One port, default **8770**, on every network interface of the projector laptop:
 `<laptop>` is the laptop's Windows name. If the host church's Wi-Fi blocks
 traffic between devices, put the laptop on Tailscale and use its Tailscale name.
 
-The first time the app runs, Windows Firewall asks whether to let it on the
-network. Someone with admin rights must click Allow on the church laptop.
+Windows Firewall must let the church network in. Its own prompt ("Allow
+access") is remembered per program path, and every app update runs from a
+new `app-<version>` folder, so it would ask again after each update (seen on
+the church laptop, 2026-11-23). Instead, `allow-network.cmd` from the install
+package (`tools/install/`) adds one rule for the bridge's port, for devices on
+the same network and on Tailscale, and removes the per-version rules; Windows
+does not ask when such a rule exists. `install.ps1` runs it once, asking for
+admin rights.
 
 ### OBS setup (livestream PC)
 

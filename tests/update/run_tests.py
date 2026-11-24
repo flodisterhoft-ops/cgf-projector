@@ -195,7 +195,7 @@ def run(env, tool_env, app_env, token, db):
     check(r.returncode == 0, "the install package is made: " + r.stdout.strip()[-80:])
     r = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
                         str(OUT / "pkg" / "CGFProjector-t1" / "install.ps1"), "-Target", str(LAPTOP),
-                        "-NoShortcuts", "-NoStart"], capture_output=True, text=True)
+                        "-NoShortcuts", "-NoStart", "-NoFirewall"], capture_output=True, text=True)
     check(r.returncode == 0, "install.ps1 installs into the laptop folder " + (r.stderr.strip()[:200] or ""))
     (LAPTOP / "cgf-network.json").write_text(json.dumps({"port": BRIDGE_PORT}), "utf-8")
     s = state()

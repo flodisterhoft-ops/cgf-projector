@@ -89,7 +89,7 @@ def main(argv=None):
                 raise SystemExit("--device-file is not a cgf-cloud.json from push_release.py add-device")
             shutil.copy2(args.device_file, root / "cgf-cloud.json")
 
-        for name in ("install.ps1", "install.cmd"):
+        for name in ("install.ps1", "install.cmd", "allow-network.ps1", "allow-network.cmd"):
             shutil.copy2(REPO / "tools" / "install" / name, pkg / name)
 
         zip_base = out / f"CGFProjector-{args.version}"

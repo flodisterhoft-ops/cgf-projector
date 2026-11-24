@@ -12,7 +12,8 @@
 param(
     [string]$Target = (Join-Path $env:USERPROFILE "CGFProjector"),
     [switch]$NoShortcuts,
-    [switch]$NoStart
+    [switch]$NoStart,
+    [switch]$NoFirewall
 )
 $ErrorActionPreference = "Stop"
 $source = Join-Path $PSScriptRoot "CGFProjector"
@@ -92,6 +93,24 @@ if (-not $NoShortcuts) {
         $s.WorkingDirectory = $Target
         $s.IconLocation = "$exe,0"
         $s.Save()
+    }
+}
+
+if (-not $NoFirewall) {
+    # Once, as administrator: otherwise Windows asks about the network after
+    # every update, because each version runs from its own folder.
+    $port = 8770
+    $net = Join-Path $Target "cgf-network.json"
+    if (Test-Path $net) {
+        $p = (Get-Content $net -Raw | ConvertFrom-Json).port
+        if ($p) { $port = [int]$p }
+    }
+    $script = Join-Path $PSScriptRoot "allow-network.ps1"
+    try {
+        Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-File", "`"$script`"", "-Port", $port
+    } catch {
+        Write-Host "Windows Firewall was not changed. To let the church network in later, run allow-network.cmd."
     }
 }
 

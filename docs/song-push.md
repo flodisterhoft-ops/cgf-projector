@@ -126,7 +126,10 @@ astray.
 On the laptop: unzip, double-click `install.cmd`. It installs into
 `%USERPROFILE%\CGFProjector` for the signed-in Windows user, no admin rights
 needed; adds desktop and Start menu shortcuts and a Startup entry for the
-companion; and starts the companion. Installing again keeps the song
+companion; and starts the companion. One step asks for admin rights: a
+Windows Firewall rule for the network bridge's port, so Windows does not ask
+again after every update (`allow-network.cmd` does the same later;
+docs/network-bridge.md). Installing again keeps the song
 library, settings and device token, and adds the new version beside the old
 one. SoftProjector 2.1 can stay installed: it keeps its own database and
 settings.
