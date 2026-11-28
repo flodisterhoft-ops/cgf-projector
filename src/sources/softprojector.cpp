@@ -991,6 +991,13 @@ void SoftProjector::updateScreen()
     // the display
     int currentRow = ui->listShow->currentRow();
 
+    // A presentation step that was about to follow by itself waits for
+    // showPicture to set it up again; anything else on the screen ends the run.
+    if(slideStepTimer)
+        slideStepTimer->stop();
+    if(!showing || pType != PICTURE || currentRow < 0 || new_list)
+        shownPictureRow = -1;
+
     if(!showing)
     {
         // Do not display any text:
@@ -1254,19 +1261,41 @@ void SoftProjector::showAnnounce(int currentRow)
 
 void SoftProjector::showPicture(int currentRow)
 {
-    pds1->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
+    // A still of an imported presentation comes on with its step's effect
+    // when the operator went one step forward, as a click does in PowerPoint.
+    // Reached any other way (a jump, a step back, the first picture) it
+    // fades in like every other picture. Sound plays on display 1 only.
+    const SlideShowItem &item = pictureShowList.at(currentRow);
+    const SlideStep step = item.step();
+    const bool forward = step.isValid() && shownPictureRow >= 0 && currentRow == shownPictureRow + 1;
+    pds1->renderSlideStep(item.image, mySettings.slideSets, step, forward, true);
     if(hasDisplayScreen2)
-    {
-        pds2->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
-    }
+        pds2->renderSlideStep(item.image, mySettings.slideSets, step, forward, false);
     if(hasDisplayScreen3)
-    {
-        pds3->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
-    }
+        pds3->renderSlideStep(item.image, mySettings.slideSets, step, forward, false);
     if(hasDisplayScreen4)
+        pds4->renderSlideStep(item.image, mySettings.slideSets, step, forward, false);
+    shownPictureRow = currentRow;
+
+    // The next step follows by itself (PowerPoint's "after previous" and
+    // "with previous"): after this slide's transition, or the time
+    // PowerPoint gives it after this step began.
+    if(currentRow + 1 >= pictureShowList.count())
+        return;
+    const SlideStep next = pictureShowList.at(currentRow + 1).step();
+    if(!step.isValid() || !next.isValid() || !next.automatic || next.slide != step.slide || next.index != step.index + 1)
+        return;
+    if(!slideStepTimer)
     {
-        pds4->renderSlideShow(pictureShowList.at(currentRow).image,mySettings.slideSets);
+        slideStepTimer = new QTimer(this);
+        slideStepTimer->setSingleShot(true);
+        connect(slideStepTimer, &QTimer::timeout, this, [this] {
+            const int row = ui->listShow->currentRow();
+            if(showing && pType == PICTURE && row == shownPictureRow && row + 1 < ui->listShow->count())
+                ui->listShow->setCurrentRow(row + 1);
+        });
     }
+    slideStepTimer->start(qMax(50, next.delayMs + (step.index == 0 ? qMax(500, step.durationMs) : 0)));
 }
 
 void SoftProjector::showVideo()

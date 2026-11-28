@@ -33,6 +33,7 @@
 #include "song.hpp"
 #include "announcement.hpp"
 #include "videoinfo.hpp"
+#include "presentationsteps.hpp"
 //#include "slideshow.hpp"
 
 namespace Ui {
@@ -58,6 +59,11 @@ public slots:
     void renderSongText(Stanza stanza, SongSettings &sSets);
     void renderAnnounceText(AnnounceSlide announce, TextSettings &aSets);
     void renderSlideShow(QPixmap slide,SlideShowSettings &ssSets);
+    // A still of an imported presentation. With animate it comes on with the
+    // step's effect (the operator went one step forward); otherwise with the
+    // usual fade. Videos, sounds and animated pictures of the step start;
+    // sound is false on all displays but one, or it would echo.
+    void renderSlideStep(QPixmap slide, SlideShowSettings &ssSets, const SlideStep &step, bool animate, bool sound);
     void renderVideo(VideoInfo videoDetails);
 
     void playVideo();
@@ -119,6 +125,14 @@ private:
 
     QPixmap back;
     QPixmap shownText, shownBack; // for frameShown()
+
+    // Presentation steps (renderSlideStep).
+    void setEffectImage(const char *item, const QPixmap &p);
+    QVariantMap stepEffect;         // the effect for the next updateScreen(); empty = the usual transition
+    int fadeTime = 500;             // how long that transition's fade takes
+    bool keepSlideMedia = false;    // the next updateScreen() leaves slide videos and sounds alone
+    qint64 slideStillKey = 0;       // shownBack is a presentation still this function put there
+    int effectImages = 0;
 };
 
 #endif // PROJECTORDISPLAYSCREEN_HPP

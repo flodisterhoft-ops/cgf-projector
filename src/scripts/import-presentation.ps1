@@ -9,6 +9,8 @@
 #   -Profile  folder for LibreOffice's own settings, kept apart from a
 #             LibreOffice the person uses themselves
 #   -Engine   auto (PowerPoint, else LibreOffice), powerpoint or libreoffice
+#   -ToPptx   instead of drawing slides, save the file as this .pptx (the app
+#             reads animations from .pptx; .ppt and .odp are saved as one first)
 #
 # PowerPoint files are exported by PowerPoint on this computer. Without
 # PowerPoint, LibreOffice turns the file into a PDF first. Hidden slides are
@@ -25,7 +27,8 @@ param(
     [int]$Size = 1920,
     [string]$Soffice = '',
     [string]$Profile = '',
-    [ValidateSet('auto', 'powerpoint', 'libreoffice')][string]$Engine = 'auto'
+    [ValidateSet('auto', 'powerpoint', 'libreoffice')][string]$Engine = 'auto',
+    [string]$ToPptx = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,6 +59,10 @@ function Export-PowerPoint($app) {
     try {
         # Read-only, untitled = false, no window
         $pres = $app.Presentations.Open($In, -1, 0, 0)
+        if ($ToPptx) {
+            $pres.SaveCopyAs($ToPptx, 24)    # ppSaveAsOpenXMLPresentation
+            return
+        }
         $fit = Get-FitSize $pres.PageSetup.SlideWidth $pres.PageSetup.SlideHeight
         $slides = @($pres.Slides | Where-Object { $_.SlideShowTransition.Hidden -ne -1 })
         "count $($slides.Count)"
@@ -78,33 +85,74 @@ function Export-PowerPoint($app) {
     }
 }
 
-# PowerPoint's default font, Aptos, exists only inside Office. Calibri is on
-# every Windows computer and a little narrower, so lines never get longer.
+# Fonts that come with Office (or with Google Slides and Canva) and not with
+# Windows, and the Windows font to draw them with: the nearest in width that
+# has its own bold and italic, measured with tools/presentations/fonts.py, so
+# that lines wrap where they did. Aptos is PowerPoint's default font and
+# exists only inside Office. A font this computer has is left alone.
+$FontReplacements = @(
+    @('Aptos', 'Calibri'), @('Aptos Display', 'Calibri'), @('Aptos Narrow', 'Calibri'),
+    @('Garamond', 'Times New Roman'), @('Baskerville Old Face', 'Times New Roman'),
+    @('Goudy Old Style', 'Times New Roman'), @('Perpetua', 'Times New Roman'),
+    @('Book Antiqua', 'Palatino Linotype'), @('Rockwell', 'Palatino Linotype'),
+    @('Bookman Old Style', 'Sitka Text'), @('Century Schoolbook', 'Sitka Text'), @('Calisto MT', 'Cambria'),
+    @('Century Gothic', 'Trebuchet MS'), @('Gill Sans MT', 'Corbel'), @('Tw Cen MT', 'Calibri'),
+    @('Berlin Sans FB', 'Calibri'), @('Franklin Gothic Book', 'Franklin Gothic Medium'),
+    @('Lucida Sans', 'Lucida Sans Unicode'), @('Cooper Black', 'Segoe UI Black'), @('Broadway', 'Arial Black'),
+    @('Monotype Corsiva', 'Gabriola'), @('Kunstler Script', 'Gabriola'),
+    @('Montserrat', 'Verdana'), @('Montserrat Light', 'Verdana'), @('Montserrat Medium', 'Verdana'),
+    @('Montserrat SemiBold', 'Verdana'), @('Montserrat ExtraBold', 'Verdana'), @('Montserrat Black', 'Verdana')
+)
+$FontReplacementsVersion = '2'      # raise it when the list changes: laptops then get the new list
+
+# Puts the list into LibreOffice's settings (its own, in -Profile), for the
+# fonts this computer does not have. LibreOffice only replaces a font for
+# drawing a PDF when told to do it always, hence the test here.
 function Write-OfficeProfile {
+    $installed = @()
+    foreach ($hive in 'HKLM:', 'HKCU:') {
+        $key = Get-ItemProperty -Path "$hive\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts" -ErrorAction SilentlyContinue
+        if ($key) { $installed += $key.PSObject.Properties.Name | ForEach-Object { ($_ -replace '\s*\(.*\)\s*$', '') } }
+    }
+    $missing = @($FontReplacements | Where-Object {
+        $family = $_[0]
+        -not ($installed | Where-Object { $_ -eq $family -or $_ -like "$family Bold*" -or $_ -like "$family Italic*" -or $_ -like "$family Regular*" })
+    })
+    $wanted = $FontReplacementsVersion + ':' + (($missing | ForEach-Object { $_[0] }) -join ',')
+    $marker = Join-Path $Profile 'cgf-fonts.txt'
+    if ((Test-Path -LiteralPath $marker) -and ([IO.File]::ReadAllText($marker).Trim() -eq $wanted)) { return }
     $file = Join-Path $Profile 'user\registrymodifications.xcu'
-    if (Test-Path -LiteralPath $file) { return }   # LibreOffice keeps these lines
     [void][IO.Directory]::CreateDirectory((Join-Path $Profile 'user'))
-    $pairs = ''
+    $items = '<item oor:path="/org.openoffice.Office.Common/Font/Substitution"><prop oor:name="Replacement" oor:op="fuse"><value>true</value></prop></item>' + "`n"
     $n = 0
-    foreach ($font in @('Aptos', 'Aptos Display', 'Aptos Narrow')) {
-        $pairs += '<item oor:path="/org.openoffice.Office.Common/Font/Substitution/FontPairs">' +
+    foreach ($pair in $missing) {
+        $items += '<item oor:path="/org.openoffice.Office.Common/Font/Substitution/FontPairs">' +
             "<node oor:name=`"_$n`" oor:op=`"replace`">" +
             '<prop oor:name="Always" oor:op="fuse"><value>true</value></prop>' +
             '<prop oor:name="OnScreenOnly" oor:op="fuse"><value>false</value></prop>' +
-            "<prop oor:name=`"ReplaceFont`" oor:op=`"fuse`"><value>$font</value></prop>" +
-            '<prop oor:name="SubstituteFont" oor:op="fuse"><value>Calibri</value></prop></node></item>' + "`n"
+            "<prop oor:name=`"ReplaceFont`" oor:op=`"fuse`"><value>$($pair[0])</value></prop>" +
+            "<prop oor:name=`"SubstituteFont`" oor:op=`"fuse`"><value>$($pair[1])</value></prop></node></item>" + "`n"
         $n++
     }
-    $xml = '<?xml version="1.0" encoding="UTF-8"?>' + "`n" +
-        '<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' + "`n" +
-        '<item oor:path="/org.openoffice.Office.Common/Font/Substitution"><prop oor:name="Replacement" oor:op="fuse"><value>true</value></prop></item>' + "`n" +
-        $pairs + '</oor:items>' + "`n"
-    [IO.File]::WriteAllText($file, $xml, (New-Object System.Text.UTF8Encoding($false)))
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    if (Test-Path -LiteralPath $file) {
+        # LibreOffice has added lines of its own since: only ours are replaced.
+        $xml = [IO.File]::ReadAllText($file, $utf8)
+        $xml = [regex]::Replace($xml, '<item oor:path="/org\.openoffice\.Office\.Common/Font/Substitution[^"]*">.*?</item>\s*', '',
+                                [Text.RegularExpressions.RegexOptions]::Singleline)
+        $xml = $xml.Replace('</oor:items>', $items + '</oor:items>')
+    } else {
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' + "`n" +
+            '<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' + "`n" +
+            $items + '</oor:items>' + "`n"
+    }
+    [IO.File]::WriteAllText($file, $xml, $utf8)
+    [IO.File]::WriteAllText($marker, $wanted, $utf8)
 }
 
-# LibreOffice turns the presentation into a PDF; returns the PDF's path, or
-# nothing after a cancel.
-function Convert-WithLibreOffice {
+# LibreOffice turns the presentation into a PDF (or a .pptx); returns the new
+# file's path, or nothing after a cancel.
+function Convert-WithLibreOffice([string]$Format = 'pdf') {
     # LibreOffice opens almost anything, a text file as one page of text.
     # Presentations are zip files (pptx, odp) or Office's older container (ppt).
     $head = New-Object byte[] 4
@@ -113,6 +161,9 @@ function Convert-WithLibreOffice {
     $magic = [BitConverter]::ToString($head)
     if ($magic -ne '50-4B-03-04' -and $magic -ne 'D0-CF-11-E0') { throw 'This file is not a presentation.' }
 
+    if ($Format -eq [IO.Path]::GetExtension($In).ToLowerInvariant().TrimStart('.')) {
+        throw "This file is a .$Format already."
+    }
     $work = Join-Path $Out 'office'
     [void][IO.Directory]::CreateDirectory($work)
     # A copy with a plain name: any file name works, and the original is
@@ -124,7 +175,7 @@ function Convert-WithLibreOffice {
         Write-OfficeProfile
         $arguments += '"-env:UserInstallation=' + ([Uri]$Profile).AbsoluteUri + '"'
     }
-    $arguments += @('--headless', '--norestore', '--nolockcheck', '--convert-to', 'pdf', '--outdir', "`"$work`"", "`"$copy`"")
+    $arguments += @('--headless', '--norestore', '--nolockcheck', '--convert-to', $Format, '--outdir', "`"$work`"", "`"$copy`"")
     $process = Start-Process -FilePath $Soffice -ArgumentList $arguments -WindowStyle Hidden -PassThru
     $started = Get-Date
     while (-not $process.WaitForExit(250)) {
@@ -136,9 +187,9 @@ function Convert-WithLibreOffice {
             return $null
         }
     }
-    $pdf = Join-Path $work 'deck.pdf'
-    if (-not (Test-Path -LiteralPath $pdf)) { throw 'LibreOffice could not open this file.' }
-    return $pdf
+    $made = Join-Path $work "deck.$Format"
+    if (-not (Test-Path -LiteralPath $made)) { throw 'LibreOffice could not open this file.' }
+    return $made
 }
 
 function Export-Pdf([string]$Path) {
@@ -197,8 +248,13 @@ try {
         if ($powerPoint) {
             Export-PowerPoint $powerPoint
         } elseif ($Engine -ne 'powerpoint' -and $Soffice -and (Test-Path -LiteralPath $Soffice)) {
-            $pdf = Convert-WithLibreOffice
-            if ($pdf) { Export-Pdf $pdf }
+            if ($ToPptx) {
+                $made = Convert-WithLibreOffice 'pptx'
+                if ($made) { Move-Item -LiteralPath $made -Destination $ToPptx -Force }
+            } else {
+                $pdf = Convert-WithLibreOffice
+                if ($pdf) { Export-Pdf $pdf }
+            }
         } else {
             [Console]::Error.WriteLine('Neither PowerPoint nor LibreOffice is on this computer.')
             exit 2

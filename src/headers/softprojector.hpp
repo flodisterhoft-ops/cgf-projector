@@ -128,6 +128,11 @@ private:
     // until it comes back.
     bool displayScreenLost;
     QTimer *screenChangeTimer;
+    // Presentation steps (showPicture): the picture row on the projector, -1
+    // when it shows something else, and the timer for a step that follows
+    // the one before it by itself.
+    int shownPictureRow = -1;
+    QTimer *slideStepTimer = nullptr;
     // The screen each display (1-4) is on now; see resolveDisplayScreens().
     // Fallback: display 1 is on a screen other than its own projector's.
     QPointer<QScreen> displayScreenNow[4];
