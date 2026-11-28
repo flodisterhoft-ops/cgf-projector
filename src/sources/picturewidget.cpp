@@ -306,8 +306,12 @@ void PictureWidget::deleteSlideShow()
 {
     QSqlQuery sq;
     int ssId = slideShows.at(ui->listWidgetSlideShow->currentRow()).slideSwId;
+    // Videos and sounds of an imported presentation go with it, unless
+    // another slide show uses the same files.
+    const QStringList media = PresentationSteps::mediaOf(ssId);
     sq.exec(QString("DELETE FROM SlideShows WHERE id = %1").arg(ssId));
     sq.exec(QString("DELETE FROM Slides WHERE ss_id = %1").arg(ssId));
+    PresentationSteps::removeUnusedMedia(media);
     loadSlideShows();
     on_pushButtonClearImages_clicked();
 }

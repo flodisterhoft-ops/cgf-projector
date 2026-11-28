@@ -129,6 +129,11 @@ private:
     // until it comes back.
     bool displayScreenLost;
     QTimer *screenChangeTimer;
+    // Presentation steps (showPicture): the picture row on the projector, -1
+    // when it shows something else, and the timer for a step that follows
+    // the one before it by itself.
+    int shownPictureRow = -1;
+    QTimer *slideStepTimer = nullptr;
     // The screen each display (1-4) is on now; see resolveDisplayScreens().
     // Fallback: display 1 is on a screen other than its own projector's.
     QPointer<QScreen> displayScreenNow[4];
@@ -179,18 +184,12 @@ private:
     Proposals *proposals = nullptr;
     quintptr proposalClient = 0; // the companion that takes proposals up
 
-    // App updates installed by the companion (softprojectorupdate.cpp)
-    QWidget *updateBar = nullptr;
-    QLabel *updateLabel = nullptr;
-    QPushButton *updateRestart = nullptr;
-    QString pendingUpdateVersion;
-    QString pendingUpdateNotes;
-    bool restartRequested = false;
+    // App updates installed by the companion, and the What's new window
+    // (softprojectorupdate.cpp, whatsnew.hpp)
     void setupAppUpdates();
     void markHealthy();
     void showAppUpdate(const QJsonObject &update);
-    void refreshUpdateBar();
-    void restartForUpdate();
+    void showWhatsNew(bool onlyIfNew);
     void finishClose(bool accepted);
 
 private slots:

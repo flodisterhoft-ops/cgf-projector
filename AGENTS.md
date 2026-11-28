@@ -126,10 +126,27 @@ stripping what they never used and wiring the app into a central CGF library.
   machines via sync later).
 - **Added 2026-10-31: PowerPoint/PDF import** in the Pictures tab. Each slide
   becomes a picture in a saved slide show, so operators step through it like
-  a song (BUILD.md, "PowerPoint and PDF import").
+  a song (BUILD.md, "PowerPoint and PDF import"). PowerPoint draws the
+  slides when the computer has it; otherwise LibreOffice, which the
+  companion downloads into the data folder when the operator agrees (user
+  decision 2026-11-27; BUILD.md, "LibreOffice for PowerPoint files").
+- **Presentation steps (user decision 2026-11-28):** a slide with animations
+  is one still per click, and a step forward plays a simple effect (fade,
+  wipe, fly, float, zoom, cut). The app never draws shapes itself and never
+  hands the projector to PowerPoint: the office program draws stills, the
+  effect works on the difference between two of them. Videos and sounds in
+  slides play at their step. Florian turned down Google Slides and a full
+  PowerPoint player. BUILD.md, "Presentation steps"; `tests/steps`;
+  `tools/presentations/` checks real files.
 - **Added 2026-11-27: rotate buttons** in the Pictures tab and the slide show
   editor, and photos load the right way up (camera rotation tag). See
   BUILD.md, "Rotating pictures"; `tests/pictures`.
+- **What's new window (user decision 2026-11-28, app 0.2.9):** at the first
+  start after the program or the library changed, one window lists the
+  changes with icons and tags (New, Changed, Fixed, Removed); batches show
+  counts, not song lists. It replaces the "Restart now" bar. Program items
+  live in `src/whats-new.json`; add one per release before publishing
+  (docs/whats-new.md).
 - Planned add: **Share button** — song/setlist as link or PDF, possibly via
   Telegram (operators use Telegram).
 - **Library from the cloud only (user decision 2026-11-27):** Bibles and

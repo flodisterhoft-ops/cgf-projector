@@ -27,6 +27,7 @@
 #include <QProgressDialog>
 
 #include "spfunctions.hpp"
+#include "presentationsteps.hpp"
 
 class SlideShowItem
 {
@@ -49,6 +50,10 @@ public:
     void rotate(int degrees);
     // Writes the pictures of a slide that is already in the database.
     bool saveImages() const;
+    // For a slide of an imported presentation: which step of which slide it
+    // is and how it comes on. Kept as text in path, so it is saved with
+    // slide shows and schedules as they are. Not valid for other pictures.
+    SlideStep step() const { return SlideStep::fromText(path); }
 };
 
 class SlideShowInfo

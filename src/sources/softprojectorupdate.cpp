@@ -20,26 +20,22 @@
 // The main window's side of app updates (docs/song-push.md, "App updates").
 // The companion installs a new version into its own app-<version> folder; the
 // launcher starts it from the next start on. Here: mark this version as
-// running fine (so the launcher keeps it), offer a restart when a newer one is
-// ready, and show the release notes.
+// running fine (so the launcher keeps it), and at the first start after the
+// program or the library changed, show the What's new window (whatsnew.hpp).
+// Nobody is asked to restart: the new version simply opens next time.
 
 #include "../headers/softprojector.hpp"
+#include "../headers/librarypush.hpp"
 #include "../headers/livebridge.hpp"
+#include "../headers/whatsnew.hpp"
 #include "ui_softprojector.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QHBoxLayout>
-#include <QJsonDocument>
-#include <QLabel>
-#include <QMessageBox>
-#include <QProcess>
-#include <QPushButton>
 #include <QSaveFile>
 #include <QSqlDatabase>
-#include <QStatusBar>
 #include <QTimer>
 
 namespace {
@@ -60,10 +56,20 @@ bool versionedLayout()
             && QFile::exists(parent.filePath(QStringLiteral("CGFProjector.exe")));
 }
 
-QJsonObject releaseInfo(const QString &folder)
+// The version this laptop ran before (cgf-versions.txt, written by the
+// launcher and the companion): "0.2.6" for "previous=app-0.2.6".
+QString previousAppVersion()
 {
-    QFile f(QDir(folder).filePath(QStringLiteral("cgf-release.json")));
-    return f.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(f.readAll()).object() : QJsonObject();
+    QFile f(QDir(dataDir()).filePath(QStringLiteral("cgf-versions.txt")));
+    if(!f.open(QIODevice::ReadOnly))
+        return QString();
+    for(const QByteArray &raw : f.readAll().split('\n'))
+    {
+        const QString line = QString::fromUtf8(raw).trimmed();
+        if(line.startsWith(QLatin1String("previous=app-")))
+            return line.mid(13);
+    }
+    return QString();
 }
 
 } // namespace
@@ -76,19 +82,33 @@ void SoftProjector::setupAppUpdates()
             ? qEnvironmentVariableIntValue("CGF_HEALTHY_MS") : 60000;
     QTimer::singleShot(healthyMs, this, &SoftProjector::markHealthy);
 
-    const QJsonObject installed = releaseInfo(QCoreApplication::applicationDirPath());
-    if(!installed.isEmpty())
-    {
-        QAction *notes = new QAction(tr("What's new"), this);
-        ui->menuHelp->insertAction(ui->actionAbout, notes);
-        connect(notes, &QAction::triggered, this, [this, installed] {
-            const QString text = installed.value(QStringLiteral("notes")).toString();
-            QMessageBox::information(this, tr("What's new in %1").arg(installed.value(QStringLiteral("version")).toString()),
-                                     text.isEmpty() ? tr("No notes for this version.") : text);
-        });
-    }
+    QAction *whatsNew = new QAction(tr("What's new"), this);
+    ui->menuHelp->insertAction(ui->actionAbout, whatsNew);
+    connect(whatsNew, &QAction::triggered, this, [this] { showWhatsNew(false); });
+    // On a laptop installed from the package, once the main window is up.
+    if(versionedLayout() || qEnvironmentVariableIsSet("CGF_WHATS_NEW"))
+        QTimer::singleShot(1500, this, [this] { showWhatsNew(true); });
+
     if(liveBridge)
         connect(liveBridge, &LiveBridge::appUpdateReady, this, &SoftProjector::showAppUpdate);
+}
+
+void SoftProjector::showWhatsNew(bool onlyIfNew)
+{
+    const int library = libraryPush ? libraryPush->version() : 0;
+    QJsonObject content;
+    if(onlyIfNew)
+    {
+        content = WhatsNew::pending(dataDir(), previousAppVersion(), library);
+        if(content.isEmpty())
+            return;
+        WhatsNew::markShown(dataDir(), content);
+        qInfo("What's new: shown for %s", qPrintable(content.value(QStringLiteral("app")).toString()));
+    }
+    else
+        content = WhatsNew::lastShown(dataDir(), library);
+    auto *dialog = new WhatsNewDialog(content, this);
+    dialog->open(); // not exec(): nothing waits for it
 }
 
 void SoftProjector::markHealthy()
@@ -105,59 +125,15 @@ void SoftProjector::markHealthy()
 
 void SoftProjector::showAppUpdate(const QJsonObject &update)
 {
-    if(!versionedLayout())
-        return;
-    pendingUpdateVersion = update.value(QStringLiteral("version")).toString();
-    pendingUpdateNotes = update.value(QStringLiteral("notes")).toString();
-    qInfo("App update %s is ready (restart offered)", qPrintable(pendingUpdateVersion));
-    if(!updateBar)
-    {
-        updateBar = new QWidget(this);
-        auto *row = new QHBoxLayout(updateBar);
-        row->setContentsMargins(6, 0, 6, 0);
-        updateLabel = new QLabel(updateBar);
-        auto *notes = new QPushButton(tr("What's new"), updateBar);
-        updateRestart = new QPushButton(tr("Restart now"), updateBar);
-        row->addWidget(updateLabel);
-        row->addWidget(notes);
-        row->addWidget(updateRestart);
-        statusBar()->addPermanentWidget(updateBar);
-        connect(notes, &QPushButton::clicked, this, [this] {
-            QMessageBox::information(this, tr("What's new in %1").arg(pendingUpdateVersion),
-                                     pendingUpdateNotes.isEmpty() ? tr("No notes for this version.") : pendingUpdateNotes);
-        });
-        connect(updateRestart, &QPushButton::clicked, this, &SoftProjector::restartForUpdate);
-    }
-    updateLabel->setText(tr("CGF Projector %1 is ready").arg(pendingUpdateVersion));
-    updateBar->show();
-    refreshUpdateBar();
-}
-
-void SoftProjector::refreshUpdateBar()
-{
-    if(!updateRestart)
-        return;
-    // Never while something is on the projector: a restart would blank it.
-    const bool live = showing && (isSingleScreen || ui->actionCloseDisplay->isChecked());
-    updateRestart->setEnabled(!live);
-}
-
-void SoftProjector::restartForUpdate()
-{
-    restartRequested = true;
-    close(); // asks about an unsaved schedule, and may be cancelled
+    // The companion installed a newer version while this one runs. Nothing to
+    // do here: the next start opens it and shows what changed.
+    qInfo("App update %s is ready; it opens at the next start",
+          qPrintable(update.value(QStringLiteral("version")).toString()));
 }
 
 // From closeEvent, once it is decided whether the window closes.
 void SoftProjector::finishClose(bool accepted)
 {
-    if(!accepted)
-    {
-        restartRequested = false;
-        return;
-    }
-    markHealthy(); // a clean close counts as a good run
-    if(restartRequested && versionedLayout())
-        QProcess::startDetached(QDir(dataDir()).filePath(QStringLiteral("CGFProjector.exe")),
-                                {QStringLiteral("--after"), QString::number(QCoreApplication::applicationPid())});
+    if(accepted)
+        markHealthy(); // a clean close counts as a good run
 }

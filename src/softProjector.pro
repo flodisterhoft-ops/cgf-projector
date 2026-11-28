@@ -27,7 +27,13 @@ QT += core \
     quick \
     printsupport \
     multimedia \
-    multimediawidgets
+    multimediawidgets \
+    xml
+
+# QZipReader and QZipWriter, for reading and rewriting .pptx files
+# (sources/presentationsteps.cpp). They are Qt's own classes but not part of
+# its promised interface, so a newer Qt may need a small change there.
+QT += core-private
 
 TARGET = CGFProjector
 TEMPLATE = app
@@ -89,7 +95,8 @@ SOURCES += sources/main.cpp \
     sources/spimageprovider.cpp \
     sources/mediacontrol.cpp \
     sources/applog.cpp \
-    sources/presentationimport.cpp
+    sources/presentationimport.cpp \
+    sources/presentationsteps.cpp
 HEADERS += headers/softprojector.hpp \
     headers/songwidget.hpp \
     headers/biblewidget.hpp \
@@ -133,7 +140,8 @@ HEADERS += headers/softprojector.hpp \
     headers/spimageprovider.hpp \
     headers/mediacontrol.hpp \
     headers/applog.hpp \
-    headers/presentationimport.hpp
+    headers/presentationimport.hpp \
+    headers/presentationsteps.hpp
 FORMS += ui/softprojector.ui \
     ui/songwidget.ui \
     ui/biblewidget.ui \
@@ -183,8 +191,10 @@ SOURCES += sources/librarypush.cpp \
     sources/proposals.cpp \
     sources/softprojectorsync.cpp \
     sources/cgfsignature.cpp \
-    sources/softprojectorupdate.cpp
+    sources/softprojectorupdate.cpp \
+    sources/whatsnew.cpp
 HEADERS += headers/librarypush.hpp \
     headers/proposals.hpp \
+    headers/whatsnew.hpp \
     headers/cgfsignature.hpp
 win32: LIBS += -lbcrypt

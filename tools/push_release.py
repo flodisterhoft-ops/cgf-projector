@@ -478,7 +478,7 @@ def cmd_push(args):
 # App releases (docs/song-push.md, "App updates")
 
 # Files in a build folder that belong to a laptop, never to a release.
-LOCAL_FILE = re.compile(r"(?i)^(spData.*|.*\.sqlite.*|version\.txt|cgf-(cloud|network|versions|healthy)\..*|"
+LOCAL_FILE = re.compile(r"(?i)^(spData.*|.*\.sqlite.*|version\.txt|cgf-(cloud|network|versions|healthy|whats-new)\..*|"
                         r".*\.log|releases\.json|.*\.tmp)$")
 LOCAL_DIRS = {"staging"}
 APP_FOLDER = re.compile(r"^app-[A-Za-z0-9._-]{1,40}$")

@@ -21,6 +21,7 @@
 #define LIBRARYPUSH_HPP
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QMap>
@@ -75,6 +76,9 @@ signals:
     // Bible takes over a removed one in the screen settings (old id -> new id).
     void biblesChanged(const QStringList &changed, const QStringList &removed,
                        const QMap<QString, QString> &replaces);
+    // What an applied release added, updated or removed, for the What's new
+    // window: {"songs": [...], "songbooks": [...], "bibles": [...]} (whatsnew.hpp).
+    void libraryRecorded(const QJsonObject &changes);
     // A held release was applied (or refused) after its Bible passage left
     // the projector: the "releaseResult" for whoever sent it.
     void heldReleaseFinished(const QJsonObject &result);
@@ -93,6 +97,7 @@ private:
         bool songbooks = false;
         QStringList bibles, deletedBibles;
         QMap<QString, QString> replaces;
+        QJsonArray songEvents, bookEvents, bibleEvents; // for libraryRecorded
     };
 
     void loadConfig();

@@ -18,6 +18,7 @@
 ***************************************************************************/
 
 #include "companion.hpp"
+#include "fetchoffice.hpp"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -30,8 +31,11 @@
 
 //   cgf-companion --config <cgf-cloud.json> [--data-dir <install folder>]
 //                 [--bridge-port <port>] [--stay]
+//   cgf-companion --fetch-libreoffice --data-dir <install folder>
 // The app starts it with --config and --bridge-port; the launcher starts it at
-// Windows sign-in with --data-dir and --stay (it then keeps running).
+// Windows sign-in with --data-dir and --stay (it then keeps running). With
+// --fetch-libreoffice it downloads LibreOffice for the app's PowerPoint
+// import and leaves (fetchoffice.hpp); it needs no cgf-cloud.json for that.
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
@@ -44,9 +48,18 @@ int main(int argc, char *argv[])
     const QCommandLineOption port(QStringLiteral("bridge-port"), QStringLiteral("The app's bridge port"),
                                   QStringLiteral("port"));
     const QCommandLineOption stay(QStringLiteral("stay"), QStringLiteral("Keep running while the app is closed"));
-    parser.addOptions({config, data, port, stay});
+    const QCommandLineOption office(QStringLiteral("fetch-libreoffice"),
+                                    QStringLiteral("Download LibreOffice into the install folder, then leave"));
+    parser.addOptions({config, data, port, stay, office});
     parser.addHelpOption();
     parser.process(app);
+    if(parser.isSet(office))
+    {
+        if(!parser.isSet(data))
+            return 2;
+        QNetworkProxyFactory::setUseSystemConfiguration(true);
+        return fetchLibreOffice(QDir(parser.value(data)).absolutePath());
+    }
     if(!parser.isSet(config))
         return 2;
     const QString dataDir = QDir(parser.isSet(data) ? parser.value(data)

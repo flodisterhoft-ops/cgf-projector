@@ -192,6 +192,18 @@ void ProjectorDisplayScreen::updateScreen()
 {
     QObject *root = dispView->rootObject();
     QMetaObject::invokeMethod(root,"stopTransitions");
+    root->setProperty("tranTime", fadeTime);
+    if(!keepSlideMedia)
+        QMetaObject::invokeMethod(root,"stopSlideMedia");
+    // A presentation step's own effect replaces the background's transition.
+    if(isNewBack && !stepEffect.isEmpty())
+    {
+        QMetaObject::invokeMethod(root,"transitionBackStep",Q_ARG(QVariant,back1to2),Q_ARG(QVariant,stepEffect));
+        isNewBack = false;
+    }
+    stepEffect.clear();
+    fadeTime = 500;
+    keepSlideMedia = false;
     //    QString tranType = "seq";
 
     // if background is a video, play video, else stop it.
@@ -430,6 +442,183 @@ void ProjectorDisplayScreen::renderSlideShow(QPixmap slide, SlideShowSettings &s
         setBackPixmap(slide,3);
     updateScreen();
 
+}
+
+// Where two stills of the same size differ. With sprite, also the differing
+// pixels of "from" as a picture of their own: the more a pixel differs, the
+// more solid it is, which keeps soft edges soft.
+static QRect changedRect(const QImage &before, const QImage &after, const QImage &from, QImage *sprite)
+{
+    const QImage a = before.convertToFormat(QImage::Format_RGB32);
+    const QImage b = after.convertToFormat(QImage::Format_RGB32);
+    const QImage f = from.convertToFormat(QImage::Format_RGB32);
+    if(a.size() != b.size() || a.isNull())
+        return QRect();
+    auto difference = [](QRgb p, QRgb q) {
+        return qMax(qAbs(qRed(p) - qRed(q)), qMax(qAbs(qGreen(p) - qGreen(q)), qAbs(qBlue(p) - qBlue(q))));
+    };
+    int left = a.width(), right = -1, top = a.height(), bottom = -1;
+    for(int y = 0; y < a.height(); ++y)
+    {
+        const QRgb *pa = reinterpret_cast<const QRgb *>(a.constScanLine(y));
+        const QRgb *pb = reinterpret_cast<const QRgb *>(b.constScanLine(y));
+        for(int x = 0; x < a.width(); ++x)
+        {
+            // Stills kept as JPEG differ a little around what changed.
+            if(pa[x] == pb[x] || difference(pa[x], pb[x]) <= 20)
+                continue;
+            left = qMin(left, x);
+            right = qMax(right, x);
+            top = qMin(top, y);
+            bottom = y;
+        }
+    }
+    if(right < 0)
+        return QRect();
+    const QRect region = QRect(left, top, right - left + 1, bottom - top + 1).adjusted(-2, -2, 2, 2) & a.rect();
+    if(sprite)
+    {
+        *sprite = QImage(region.size(), QImage::Format_ARGB32_Premultiplied);
+        for(int y = 0; y < region.height(); ++y)
+        {
+            const QRgb *pa = reinterpret_cast<const QRgb *>(a.constScanLine(region.y() + y)) + region.x();
+            const QRgb *pb = reinterpret_cast<const QRgb *>(b.constScanLine(region.y() + y)) + region.x();
+            const QRgb *pf = reinterpret_cast<const QRgb *>(f.constScanLine(region.y() + y)) + region.x();
+            QRgb *out = reinterpret_cast<QRgb *>(sprite->scanLine(y));
+            for(int x = 0; x < region.width(); ++x)
+            {
+                const int alpha = qBound(0, (difference(pa[x], pb[x]) - 6) * 12, 255);
+                out[x] = qPremultiply(qRgba(qRed(pf[x]), qGreen(pf[x]), qBlue(pf[x]), alpha));
+            }
+        }
+    }
+    return region;
+}
+
+void ProjectorDisplayScreen::setEffectImage(const char *item, const QPixmap &p)
+{
+    // The provider hands out the picture set last; a new name makes QML ask again.
+    QPixmap copy = p;
+    imProvider->setPixMap(copy);
+    QObject *image = dispView->rootObject()->findChild<QObject*>(QLatin1String(item));
+    if(image)
+        image->setProperty("source", QStringLiteral("image://improvider/fx%1").arg(++effectImages));
+}
+
+void ProjectorDisplayScreen::renderSlideStep(QPixmap slide, SlideShowSettings &ssSets, const SlideStep &step,
+                                             bool animate, bool sound)
+{
+    // The still on screen now, if this function put it there: the effect is
+    // worked out from the difference between it and the new one.
+    const QPixmap before = shownBack.cacheKey() == slideStillKey ? shownBack : QPixmap();
+
+    tranType = TR_FADE;
+    const bool expand = (slide.width() < imGen.width() && slide.height() < imGen.height()) ? ssSets.expandSmall : true;
+    setTextPixmap(imGen.generateEmptyImage());
+    setBackPixmap(slide, expand ? ssSets.fitType + 1 : 3);
+    const QPixmap after = shownBack;
+    slideStillKey = after.cacheKey();
+    // Where setBackPixmap put the still: centred when smaller than the screen.
+    const QPoint at(after.width() < imGen.width() ? (imGen.width() - after.width()) / 2 : 0,
+                    after.height() < imGen.height() ? (imGen.height() - after.height()) / 2 : 0);
+
+    if(animate && step.isValid() && isNewBack)
+    {
+        // A slide without a transition names no effect: a fade.
+        const QString kind = step.effect.isEmpty() ? QStringLiteral("fade") : step.effect;
+        fadeTime = qBound(100, step.durationMs, 2000);
+        const bool whole = step.index == 0;     // a slide's transition works on the whole picture
+        const bool sameSize = !before.isNull() && before.size() == after.size();
+        if(kind == QLatin1String("cut"))
+            tranType = TR_NONE;
+        else if(!sameSize)
+            tranType = TR_FADE;     // nothing to compare with: the usual cross-fade
+        else
+        {
+            const bool moves = kind == QLatin1String("fly") || kind == QLatin1String("float") || kind == QLatin1String("zoom");
+            const bool slides = kind == QLatin1String("push") || kind == QLatin1String("cover") || kind == QLatin1String("uncover");
+            const bool window = kind == QLatin1String("wipe") || kind == QLatin1String("split") || kind == QLatin1String("box");
+            QVariantMap fx;
+            fx.insert("kind", "fade");
+            fx.insert("dir", step.direction);
+            fx.insert("duration", fadeTime);
+            fx.insert("sx", at.x());
+            fx.insert("sy", at.y());
+            fx.insert("whole", whole);
+            fx.insert("exit", step.exit || kind == QLatin1String("uncover"));
+            fx.insert("push", kind == QLatin1String("push"));
+            const QRect all(QPoint(0, 0), after.size());
+            QRect region = all;
+            if(whole && slides)
+            {
+                // The whole still moves: the new one in, the old one out, or both.
+                fx.insert("kind", "fly");
+                if(kind == QLatin1String("push"))
+                    setEffectImage("fxSpriteOut", before);
+                setEffectImage("fxSprite", kind == QLatin1String("uncover") ? before : after);
+            }
+            else if(!whole && (moves || window))
+            {
+                // Only what changed: seen through a growing window, or cut out and moved.
+                QImage sprite;
+                region = changedRect(before.toImage(), after.toImage(), (step.exit ? before : after).toImage(),
+                                     moves ? &sprite : nullptr);
+                // Nearly everything changed: a fade says it better.
+                if(qint64(region.width()) * region.height() > qint64(all.width()) * all.height() * 85 / 100)
+                    region = all;
+                else if(moves && !region.isEmpty())
+                {
+                    fx.insert("kind", kind);
+                    setEffectImage("fxSprite", QPixmap::fromImage(sprite));
+                }
+                else if(window)
+                    fx.insert("kind", kind);
+            }
+            else if(whole && window)
+                fx.insert("kind", kind);
+            if(fx.value("kind") != QLatin1String("fly") && !(moves && fx.value("kind") == kind))
+            {
+                // Wipe, split, box and fade show the new still over the old
+                // one. That fade has no dip toward black half way, which the
+                // usual cross-fade of two layers has.
+                setEffectImage("fxStillA", after);
+                setEffectImage("fxStillB", after);
+            }
+            fx.insert("x", at.x() + region.x());
+            fx.insert("y", at.y() + region.y());
+            fx.insert("w", region.width());
+            fx.insert("h", region.height());
+            if(region.isEmpty())
+                tranType = TR_NONE;     // nothing to see changed
+            else
+                stepEffect = fx;
+        }
+    }
+
+    // Videos, sounds and animated pictures of this step, where the still is on the screen.
+    QVariantList media;
+    const QDir folder(PresentationSteps::mediaDir());
+    for(const SlideMedia &m : step.media)
+    {
+        if(!folder.exists(m.file))
+            continue;
+        QVariantMap v;
+        v.insert("kind", m.kind);
+        v.insert("source", QUrl::fromLocalFile(folder.filePath(m.file)).toString());
+        v.insert("x", at.x() + m.rect.x() * after.width());
+        v.insert("y", at.y() + m.rect.y() * after.height());
+        v.insert("w", m.rect.width() * after.width());
+        v.insert("h", m.rect.height() * after.height());
+        v.insert("volume", m.volume);
+        v.insert("loop", m.loop);
+        // CGF_SLIDE_MEDIA_MUTED: the checks play real sounds, silently.
+        v.insert("muted", !sound || qEnvironmentVariableIsSet("CGF_SLIDE_MEDIA_MUTED"));
+        media << v;
+    }
+    keepSlideMedia = !media.isEmpty();
+    updateScreen();
+    if(!media.isEmpty())
+        QMetaObject::invokeMethod(dispView->rootObject(), "playSlideMedia", Q_ARG(QVariant, QVariant(media)));
 }
 
 void ProjectorDisplayScreen::renderVideo(VideoInfo videoDetails)

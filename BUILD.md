@@ -248,7 +248,8 @@ slides need stepping.
 
 - PowerPoint files (.pptx .ppt .pptm .ppsx .pps .odp) are exported by
   PowerPoint on the same computer, through COM. Hidden slides are left out.
-  Without PowerPoint the app says so: PDF files import without it.
+  Without PowerPoint, LibreOffice does it since 2026-11-28 ("LibreOffice for
+  PowerPoint files" below).
 - PDF pages are drawn by Windows (`Windows.Data.Pdf`, Windows 8.1 and later),
   so no Office and no extra Qt module (Qt PDF would have meant a new download
   and a bigger deployment).
@@ -588,6 +589,199 @@ Published (Florian's go-ahead) as app 0.2.8, release 9, from 6d3bb54 with the
 launcher: 106 files, 2 uploaded (the app and the companion). The church
 laptop was offline, still on app-0.2.6; it installs only the latest release
 when it next connects, so it goes straight to 0.2.8.
+
+## LibreOffice for PowerPoint files (2026-11-28)
+
+Valentin's laptop has no PowerPoint, so "Import PowerPoint or PDF" refused
+his presentation. Florian's decision (2026-11-27): PowerPoint when the
+computer has it, LibreOffice otherwise, fetched when it is first needed.
+Microsoft's online converter (Graph, `format=pdf`) was ruled out: its
+documentation limits conversion to files of 2 MB.
+
+- Order, in `src/scripts/import-presentation.ps1`: PowerPoint through COM;
+  without it LibreOffice (`soffice --headless --convert-to pdf`), whose PDF
+  the existing page drawing turns into slides; with neither, exit code 2.
+  Hidden slides are left out either way. A file that is neither a zip (pptx,
+  odp) nor Office's older container (ppt) is refused before LibreOffice sees
+  it, because LibreOffice would import a text file as one page of text.
+- `PresentationImport::findLibreOffice` looks in the data folder
+  (`libreoffice/program/soffice.exe` beside the database), then for an
+  installed LibreOffice (registry, Program Files).
+- With neither program the app asks once: "Download LibreOffice now?"
+  (about 375 MB). The companion does it, `cgf-companion --fetch-libreoffice
+  --data-dir <folder>` (`src/companion/fetchoffice.cpp`), so the app itself
+  stays off the internet. It downloads LibreOffice 26.2.7 from The Document
+  Foundation (download.documentfoundation.org, then the archive server),
+  accepts only the file whose SHA-256 is built in, and unpacks it with
+  `msiexec /a` into `<data folder>/libreoffice`. That is Windows Installer's
+  unpack-only mode: no administrator rights, nothing in the Start menu,
+  nothing registered. Dictionaries, menu translations, help and spare icon
+  sets are removed afterwards (1.5 GB becomes about 740 MB; the slides come
+  out pixel for pixel the same). The import then runs again by itself.
+- LibreOffice keeps its settings in `<data folder>/libreoffice-profile`, apart
+  from a LibreOffice the person uses themselves. The script writes one
+  setting there: PowerPoint's default font, Aptos, exists only inside Office,
+  and LibreOffice would replace it with a wider font and a serif italic.
+  Calibri is on every Windows computer and 4.5 % narrower than Aptos, so no
+  line gets longer than in PowerPoint.
+- A newer LibreOffice: change the two addresses and the SHA-256 in
+  `fetchoffice.cpp` together (the hash is on the download server, `<file>.sha256`).
+- For checks and odd cases: `CGF_IMPORT_ENGINE=libreoffice` or `powerpoint`
+  forces one program, `CGF_LIBREOFFICE` names a soffice.exe,
+  `CGF_LIBREOFFICE_URL` another address for the same file.
+
+How it looks: the test deck (German and Russian text, a picture, gradient and
+shadow, rotated text, WordArt, a table) drawn by both programs side by side.
+Layout, pictures, shapes and the table match; the font differs (Calibri for
+Aptos) and LibreOffice shrinks overflowing text a little more. Animations,
+videos and sound are not carried over, as with PowerPoint. The first import
+after the download took 20 to 40 s (LibreOffice sets itself up), later ones
+about 5 s, the same as PowerPoint.
+
+Checks: `python tests/presentations/run_tests.py --db <CGF database> --msi
+<LibreOffice msi>` drives the real main window offscreen as a computer
+without PowerPoint and serves the installer from this computer: Cancel at the
+question, a failed download, a file with the wrong SHA-256, the real download
+and unpacking (in a folder with spaces in its path), imports afterwards
+without a question, a Cyrillic file name, the Pictures tab, Cancel during the
+conversion (LibreOffice stopped), a broken file; PowerPoint and PDF as before.
+21 checks pass. The companion's real download from the official server was
+run once by hand: 141 s on Florian's PC, 373 MB. Also `tests/update` 23,
+`tests/pictures` 42 and `tests/push` 52 plus end to end pass. Not yet tried on
+a laptop without PowerPoint, and not published.
+
+## Presentation steps (2026-11-28)
+
+An imported presentation was one still per slide. Florian asked (2026-11-28)
+for the animations too, reduced to a few cheap ones ("convert all animations
+to something simple like fade in"), for videos and sounds in slides to play,
+and for the import to be built on the presentations people really bring.
+
+What real files use: `tools/presentations/survey.py` on the 780 readable
+.pptx files on Florian's PC (5,479 slides; school work, church services,
+youth evenings). 21 have animations and 21 have transitions. Of the 834
+effects that make something appear or leave, 77 % are a plain fade; then
+float in, zoom, wipe, appear and a few fly-ins. Text built line by line is
+the most common animation by far (741 lines). Fewer than half of the effects
+start on a click; the others start with or after another one. Transitions
+are nearly all fade, with a few wipes and one each of push, cover, uncover
+and split. 39 videos and 9 sounds are inside slides. Garamond is the most
+used font after Calibri.
+
+How it works:
+
+- `PresentationSteps::expand` (`src/sources/presentationsteps.cpp`) reads the
+  .pptx (a zip of XML) and writes a copy in which every step of every slide
+  is a slide of its own, without animations: shapes that have not appeared
+  yet are taken out, text lines that have not appeared yet are made invisible
+  in place (transparent letters, a space for a bullet), so the lines above
+  never move. PowerPoint or LibreOffice then draws that copy as before.
+  `.ppt`, `.pps` and `.odp` are saved as `.pptx` by the office program first
+  (`-ToPptx` in the import script).
+- A step is `SlideStep` (`presentationsteps.hpp`): slide and step number, the
+  effect, its direction and length, whether it follows by itself and after
+  how long, and the media it starts. It is kept as one line of text
+  (`cgf-step:{...}`) in the `Slides.path` column, which slide shows and
+  schedule files already carry, so nothing in the database changes.
+- PowerPoint's effects become ours by what they do, not by their names: a
+  wipe filter is a wipe from that side; a move with a fade is a float; a move
+  alone is a fly-in from its side; a change of size is a zoom; box, circle,
+  diamond and plus are a box opening from the middle; a barn-door filter is a
+  split; visibility alone is a cut; everything else is a fade. Transitions:
+  fade, cut, push, wipe, cover, uncover, split; any other is a fade of its
+  length. A slide without a transition keeps the app's usual fade.
+- Effects that start together are one step; "after previous" starts a step
+  that follows by itself. Sequences that start when a shape is clicked follow
+  as further clicks, because the operator has no mouse on the slide. Steps
+  that show nothing new (an emphasis or a motion path alone) are left out. A
+  video nothing starts gets a step of its own.
+- On the projector (`ProjectorDisplayScreen::renderSlideStep`,
+  `DisplayArea.qml`): one step forward plays the step's effect; any other way
+  to a still (a jump, a step back, the first picture) is the usual fade. The
+  effect works on the part of the picture that differs between the two
+  stills: wipe, split and box show the new still through a growing window
+  over that part; fly, float and zoom move that part, cut out with soft edges
+  from the difference. No shape is drawn separately, so this works the same
+  with PowerPoint and LibreOffice. Push, cover and uncover move whole stills.
+  A fade lays the new still over the old one and fades it in: the app's usual
+  cross-fade of two layers dips toward black half way, which made a white
+  slide flash grey every time a line appeared.
+- Videos and sounds are copied into `<data folder>/slide-media` under names
+  made from their content, and play at their step: the video in its place on
+  the slide, sound on display 1 only. Animated GIFs keep moving over the
+  still. A linked video is found where the file says or beside the
+  presentation. Deleting a slide show deletes its media unless another slide
+  show uses the same files.
+- A sound or video set to "hide during show" is left off the stills.
+- Parts a slide cannot share with its copies are dropped (notes, comments,
+  custom data) or copied (charts, SmartArt, theme overrides): PowerPoint
+  refuses a file in which two slides share a "tags" part, which two of
+  Florian's files have.
+- If the office program will not draw the rewritten copy, the file itself is
+  drawn, one still per slide; `CGFProjector.log` says so.
+- LibreOffice gets a longer list of font replacements for fonts that come
+  with Office and not with Windows (`$FontReplacements` in the import script;
+  Garamond, Century Gothic and Montserrat are the common ones in Florian's
+  files), chosen by measured width with `tools/presentations/fonts.py`, and
+  only for fonts the computer lacks.
+
+Not carried over: movement along paths, spins and other emphasis effects (the
+object stays as it is), animations of single chart bars or SmartArt parts
+(the whole chart appears), text that types letter by letter (a wipe), slides
+that advance by themselves after a time, online videos, and sound that runs
+across slides. The stream overlay and the back-screen mirror get every still
+without the motion and without slide sound.
+
+For checks and odd cases: `CGF_IMPORT_STEPS=0` imports one still per slide.
+
+Tools (`tools/presentations/`): `survey.py` counts what a set of files uses;
+`corpus.py` runs the splitter over a set and has PowerPoint or LibreOffice
+draw the copies, to find files they refuse; `fonts.py` measures font widths;
+`stepstool` is the splitter as a command (build with qmake and mingw32-make
+in its folder). Their reports name no files unless asked to.
+
+Releasing: the app now needs `Qt6Xml.dll`. Run `windeployqt` again before
+`push_release.py app-release` (`tests/update` fails on an incomplete package).
+
+Checks: `python tests/steps/run_tests.py --db <CGF database> [--video <file>]
+[--soffice <soffice.exe>]` has PowerPoint make a deck with each kind of
+animation, imports it through PowerPoint and LibreOffice and steps through it
+on the real main window offscreen, watching the projector's effect layer, the
+steps that follow by themselves and the media players: 60 checks pass (it
+leaves `frame-*.png` beside the test exe, the projector in the middle of a
+push, a wipe and a fly-in). With `--record <presentation> --frames <folder>`
+it runs no checks and records the projector stepping through a real file, as
+pictures and a GIF: how the grey flash was found. `tools/presentations/corpus.py` on Florian's
+files: the splitter read all 780; PowerPoint and LibreOffice each drew every
+still of the 21 files with steps and of 25 of the others. Also
+`tests/presentations` 21, `tests/pictures` 42, `tests/screens` 34,
+`tests/bridge` 73, `tests/push` 52 and publisher 14 pass.
+
+Merged into master on Florian's word (2026-11-28, a fast-forward to d1ea200).
+On master, with the build deployed again (`Qt6Xml.dll`): `tests/update` 23
+and the push end-to-end run pass. A test package, 0.2.9-test2, was made for
+Florian's laptop without PowerPoint. Not yet tried with an operator or on
+that laptop, and not published.
+
+## What's new window (2026-11-28)
+
+Florian asked for a window at the first start after an update instead of the
+bar at the bottom right, with icons, short lines and counts instead of song
+lists for big batches, mainly for Valentin (docs/whats-new.md).
+
+- `WhatsNewDialog` (`whatsnew.cpp`) opens 1.5 s after start on an installed
+  laptop when something changed since it last opened; Help > What's new opens
+  it again. Program items come from `src/whats-new.json` (in the resources);
+  library changes are recorded per applied release (`LibraryPush::
+  libraryRecorded`) in `cgf-whats-new.json` beside the database.
+- The update bar and its Restart now button are gone; an installed update
+  only logs "App update X is ready; it opens at the next start".
+- Wording: the window's texts were reviewed with GPT Astra 6.2 on high effort
+  (Florian's request) and taken as it wrote them.
+
+Checks: `tests/push` 69 (17 new: what was recorded, the lines, the 5-song
+limit, 5,000 songs, shown once, Help menu, two screenshots) plus end to end
+9, `tests/update` 23, bridge 73, screens 34, pictures 42, publisher 14.
 
 ## Proposals up (2026-11-28)
 

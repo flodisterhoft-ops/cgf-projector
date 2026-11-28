@@ -1,6 +1,10 @@
 <RCC>
     <qresource prefix="/icons">
         <file>icons/effectsBlurredShadow.png</file>
+        <file>icons/whatsnew-new.svg</file>
+        <file>icons/whatsnew-changed.svg</file>
+        <file>icons/whatsnew-fixed.svg</file>
+        <file>icons/whatsnew-removed.svg</file>
         <file>icons/effectsNone.png</file>
         <file>icons/effectsShadow.png</file>
         <file>icons/add.png</file>
@@ -114,5 +118,8 @@
     </qresource>
     <qresource prefix="/scripts">
         <file>scripts/import-presentation.ps1</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>whats-new.json</file>
     </qresource>
 </RCC>

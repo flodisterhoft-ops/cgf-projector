@@ -23,6 +23,7 @@
 #include "songwidget.hpp"
 #include "biblewidget.hpp"
 #include "editwidget.hpp"
+#include "whatsnew.hpp"
 #undef private
 #undef protected
 #include "ui_softprojector.h"
@@ -109,6 +110,130 @@ static QStringList listTexts(QListWidget *list)
     return out;
 }
 
+// ---- What's new (whatsnew.hpp) ------------------------------------------------
+
+static int countState(const QJsonObject &map, const QString &s)
+{
+    int n = 0;
+    for(const QJsonValue &v : map) if(v.toObject()["s"].toString() == s) ++n;
+    return n;
+}
+
+static QStringList titles(const QJsonObject &content, const QString &section)
+{
+    QStringList out;
+    for(const QJsonValue &s : content["sections"].toArray())
+        if(s.toObject()["title"].toString() == section)
+            for(const QJsonValue &i : s.toObject()["items"].toArray())
+                out << i.toObject()["kind"].toString() + ": " + i.toObject()["title"].toString();
+    return out;
+}
+
+static QJsonArray linesOf(const QJsonObject &content, const QString &title)
+{
+    for(const QJsonValue &s : content["sections"].toArray())
+        for(const QJsonValue &i : s.toObject()["items"].toArray())
+            if(i.toObject()["title"].toString() == title) return i.toObject()["lines"].toArray();
+    return QJsonArray();
+}
+
+static QJsonObject songEvents(int count, const char *state, int firstId)
+{
+    QJsonArray songs;
+    for(int i = 0; i < count; ++i)
+        songs << QJsonObject{{"id", firstId + i}, {"s", state}, {"n", i + 1}, {"t", QString("Test song %1").arg(i + 1)}};
+    return QJsonObject{{"songs", songs}};
+}
+
+static void shot(const QJsonObject &content, const QString &file)
+{
+    WhatsNewDialog d(content);
+    d.setAttribute(Qt::WA_DeleteOnClose, false);
+    d.show();
+    waitUntil([] { return false; }, 300);
+    const bool saved = d.grab().save(file);
+    d.close();
+    CHECK(saved, "the window renders: " + QFileInfo(file).fileName());
+}
+
+static void checkWhatsNew(const QJsonObject &e, const QString &oldBibleName)
+{
+    const QString dir = QFileInfo(QSqlDatabase::database().databaseName()).absolutePath();
+    QFile f(dir + "/cgf-whats-new.json");
+    CHECK(f.open(QIODevice::ReadOnly), "the applied releases were recorded for What's new");
+    const QJsonObject lib = QJsonDocument::fromJson(f.readAll()).object()["library"].toObject();
+    f.close();
+    const QJsonObject songs = lib["songs"].toObject();
+    CHECK(countState(songs, "added") == 2 && countState(songs, "updated") == 2 && countState(songs, "removed") == 1,
+          QString("songs recorded across v4 and v5: 2 added, 2 updated, 1 removed (%1, %2, %3)")
+          .arg(countState(songs, "added")).arg(countState(songs, "updated")).arg(countState(songs, "removed")));
+    CHECK(countState(lib["songbooks"].toObject(), "added") == 1, "the new songbook is recorded");
+    const QJsonObject bibles = lib["bibles"].toObject();
+    CHECK(bibles[e["newBible"].toString()].toObject()["s"].toString() == "updated"
+          && bibles[e["oldBible"].toString()].toObject()["s"].toString() == "removed",
+          "the replaced hand import counts as corrected, the old library Bible as removed");
+
+    // The first start after updating from 0.2.6, with these library releases.
+    const QJsonObject c = WhatsNew::pending(dir, "0.2.6", 6);
+    const QStringList program = titles(c, "Program");
+    CHECK(program == QStringList({"new: Bibles now update automatically", "new: New photos load the right way up",
+                                  "new: You can now import slides without PowerPoint",
+                                  "new: Imported slides now build up click by click",
+                                  "changed: Program updates no longer ask you to restart",
+                                  "removed: Local tools for managing Bibles and songbooks"}),
+          "program changes since 0.2.6, new first: " + program.join(" | "));
+    const QStringList library = titles(c, "Library");
+    const QStringList expected = {"fixed: Bible text corrected: " + e["newBibleName"].toString(),
+                                  "removed: Bible removed: " + oldBibleName,
+                                  "new: New songbook: " + e["newBook"].toString(),
+                                  "new: 2 new songs", "changed: 2 songs updated", "removed: 1 song removed"};
+    CHECK(library == expected, "library changes, one line per kind: " + library.join(" | "));
+    CHECK(linesOf(c, "2 new songs").size() == 2 && linesOf(c, "1 song removed").size() == 1,
+          "a few songs are listed by number and title: " + linesOf(c, "2 new songs").at(0).toString());
+    CHECK(c["app"].toString() == WhatsNew::appVersion() && c["library"].toInt() == 6, "the window names program and library versions");
+
+    WhatsNew::markShown(dir, c);
+    CHECK(WhatsNew::pending(dir, "0.2.6", 6).isEmpty(), "once shown, the next start shows nothing");
+    CHECK(WhatsNew::lastShown(dir, 6) == c, "Help > What's new opens the same content again");
+
+    QTemporaryDir batch;
+    WhatsNew::recordLibrary(batch.path(), songEvents(7, "updated", 1));
+    WhatsNew::recordLibrary(batch.path(), songEvents(3, "added", 100));
+    QJsonObject b = WhatsNew::pending(batch.path(), "", 7);
+    CHECK(titles(b, "Program").isEmpty(), "a new installation shows no program history");
+    CHECK(titles(b, "Library").contains("changed: 7 songs updated") && linesOf(b, "7 songs updated").isEmpty(),
+          "more than 5 songs: only the number");
+    CHECK(linesOf(b, "3 new songs").size() == 3, "5 or fewer: listed");
+
+    QTemporaryDir big;
+    WhatsNew::recordLibrary(big.path(), songEvents(5000, "updated", 1));
+    WhatsNew::recordLibrary(big.path(), songEvents(2, "updated", 1)); // the same songs again
+    CHECK(titles(WhatsNew::pending(big.path(), "", 8), "Library") == QStringList({"changed: 5,000 songs updated"}),
+          "a batch of 5,000 reads \"5,000 songs updated\", and songs updated twice count once");
+
+    QTemporaryDir gone;
+    WhatsNew::recordLibrary(gone.path(), songEvents(1, "added", 7));
+    WhatsNew::recordLibrary(gone.path(), songEvents(1, "removed", 7));
+    CHECK(WhatsNew::pending(gone.path(), "", 9).isEmpty(), "a song added and removed again before the next start is no news");
+
+    // Screenshots: the church laptop's first start of this version after
+    // Schlachter v3, and a big batch with a few new songs.
+    const QString out = QFileInfo(dir).absolutePath();
+    QTemporaryDir laptop;
+    WhatsNew::recordLibrary(laptop.path(), QJsonObject{{"bibles", QJsonArray{
+        QJsonObject{{"id", 13}, {"s", "removed"}, {"name", "German: Schlachter (2000)"}},
+        QJsonObject{{"id", 14}, {"s", "updated"}, {"name", "German: Schlachter 2000 (v3)"}}}}});
+    shot(WhatsNew::pending(laptop.path(), "0.2.6", 4), out + "/whats-new-laptop.png");
+    QTemporaryDir week;
+    WhatsNew::markShown(week.path(), QJsonObject{{"app", WhatsNew::appVersion()}}); // program changes already seen
+    WhatsNew::recordLibrary(week.path(), songEvents(5000, "updated", 1));
+    WhatsNew::recordLibrary(week.path(), QJsonObject{{"songs", QJsonArray{
+        QJsonObject{{"id", 9001}, {"s", "added"}, {"n", 50}, {"t", QString::fromUtf8("Zünde an Dein Feuer Herr im Herzen mir")}},
+        QJsonObject{{"id", 9002}, {"s", "added"}, {"n", 9}, {"t", QString::fromUtf8("Вижу Бога каждый день")}},
+        QJsonObject{{"id", 9003}, {"s", "added"}, {"n", 12}, {"t", "Above all"}}}}});
+    shot(WhatsNew::pending(week.path(), "", 7), out + "/whats-new-batch.png");
+}
+
 static int runLocal(SoftProjector &w, quint16 port, const QJsonObject &rel)
 {
     const QJsonObject e = rel["expect"].toObject();
@@ -189,6 +314,7 @@ static int runLocal(SoftProjector &w, quint16 port, const QJsonObject &rel)
 
     // ---- Bibles (docs/library-from-cloud.md) --------------------------------
     const QString oldBible = e["oldBible"].toString(), newBible = e["newBible"].toString();
+    const QString oldBibleName = dbValue(QString("SELECT bible_name FROM BibleVersions WHERE id = %1").arg(oldBible)).toString().trimmed();
     CHECK(hello["library"].toObject()["features"].toArray().contains(QJsonValue("bibles")),
           "the bridge announces that this app takes Bible releases");
     CHECK(w.mySettings.bibleSets.secondaryBible == newBible && w.mySettings.bibleSets2.primaryBible == oldBible,
@@ -262,6 +388,8 @@ static int runLocal(SoftProjector &w, quint16 port, const QJsonObject &rel)
     }
     CHECK(names.contains(e["newBibleName"].toString()) && !helloIds.contains(oldBible),
           "the bridge lists the new Bible by name and no longer the old one");
+
+    checkWhatsNew(e, oldBibleName);
 
     qInfo().noquote() << QString("%1 checks, %2 failed").arg(checks).arg(failures);
     return failures ? 1 : 0;
@@ -480,11 +608,13 @@ int main(int argc, char *argv[])
 {
     const QString mode = argc > 1 ? QString::fromLatin1(argv[1]) : QString("--local");
     if(qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "offscreen");
+    if(qEnvironmentVariableIsEmpty("QT_QPA_FONTDIR")) qputenv("QT_QPA_FONTDIR", "C:/Windows/Fonts"); // offscreen draws no text without it
     qputenv("QT_QUICK_BACKEND", "software");
     if(qEnvironmentVariableIsEmpty("CGF_BRIDGE_PORT")) qputenv("CGF_BRIDGE_PORT", "8778");
     qputenv("CGF_BRIDGE_LOCAL", "1");
     QApplication a(argc, argv);
     a.setApplicationName("CGFPushHarness"); // its own settings, never the real app's
+    a.setFont(QFont("Segoe UI", 9)); // what Qt 6 uses on Windows; offscreen would pick another
     const QString dir = QCoreApplication::applicationDirPath();
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
