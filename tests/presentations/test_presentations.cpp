@@ -56,6 +56,14 @@ static bool looksRight(const QList<SlideShowItem> &slides)
     return first.blue() > first.red() + 30 && first.lightness() < 120 && last.lightness() > 240;
 }
 
+// True for the settings folder CGF Projector makes for LibreOffice in the
+// temporary folder, and for nothing else: the checks delete it.
+static bool isAwayProfile(const QString &path)
+{
+    const QFileInfo info(path);
+    return info.absoluteDir() == QDir(QDir::tempPath()) && info.fileName().startsWith("cgf-libreoffice-");
+}
+
 static bool officeRunning()
 {
     QProcess p;
@@ -98,6 +106,28 @@ int main(int argc, char *argv[])
     bool answer = false;
     PresentationImport::confirmDownload = [&](QWidget *) { ++asked; return answer; };
     QString error;
+
+    // A message box nobody answers would hold the checks up for ever: the
+    // Pictures tab shows one when its own import fails. Any that appears is
+    // closed and counted.
+    QStringList unanswered;
+    QTimer boxes;
+    QObject::connect(&boxes, &QTimer::timeout, &w, [&] {
+        const QWidgetList tops = QApplication::topLevelWidgets();
+        for(QWidget *top : tops)
+            if(auto *box = qobject_cast<QMessageBox *>(top))
+                if(box->isVisible())
+                {
+                    unanswered << box->text();
+                    box->reject();
+                }
+    });
+    boxes.start(500);
+
+    // run_tests.py clears LibreOffice's settings in this folder. From a
+    // checkout too deep for them they are in the temporary folder instead.
+    if(isAwayProfile(PresentationImport::officeProfileDir()))
+        QDir(PresentationImport::officeProfileDir()).removeRecursively();
 
     // ---- PowerPoint and PDF, as before.
     qputenv("CGF_IMPORT_ENGINE", "powerpoint");
@@ -151,9 +181,14 @@ int main(int argc, char *argv[])
     CHECK(bytes > 400000000 && bytes < 900000000 && !data.exists("libreoffice/program/resource")
           && QDir(data.filePath("libreoffice/share/extensions")).entryList({"dict-*"}, QDir::Dirs).isEmpty(),
           QString("LibreOffice is trimmed to what the import needs: %1 MB").arg(bytes / 1000000));
-    QFile settings(data.filePath("libreoffice-profile/user/registrymodifications.xcu"));
+    // In the data folder; from a checkout too deep for that, in the temporary folder.
+    const QString profile = PresentationImport::officeProfileDir();
+    const bool beside = QDir(profile) == QDir(data.filePath("libreoffice-profile"));
+    QFile settings(profile + "/user/registrymodifications.xcu");
     CHECK(settings.open(QIODevice::ReadOnly) && settings.readAll().contains("Aptos"),
-          "LibreOffice's own settings are in the data folder, with Aptos shown as Calibri");
+          QString("LibreOffice's own settings are %1, with Aptos shown as Calibri")
+          .arg(beside ? QString("in the data folder") : "in the temporary folder, this folder being too deep for them: " + profile));
+    settings.close();
 
     // ---- From now on: no question, any file name, the Pictures tab.
     const QString odd = dir + QString::fromUtf8("/Проповедь Gnade ü.pptx");
@@ -194,6 +229,32 @@ int main(int argc, char *argv[])
     { QFile f(broken); f.open(QIODevice::WriteOnly); f.write("this is not a presentation"); }
     slides = PresentationImport::run(broken, sets, &w, error);
     CHECK(asked == 4 && slides.isEmpty() && !error.isEmpty(), "a broken file: " + error);
+
+    // ---- A data folder too deep for LibreOffice's settings: they go to the
+    // temporary folder, and the import works as before. (LibreOffice makes no
+    // PDF once a file of its settings passes Windows' 260 characters.)
+    qputenv("CGF_IMPORT_PROFILE_LIMIT", "20");
+    const QString away = PresentationImport::officeProfileDir();
+    const bool inTemp = isAwayProfile(away);
+    CHECK(inTemp && QDir::toNativeSeparators(away).length() < 100, "a data folder too deep: the settings folder is " + away);
+    if(inTemp)
+        QDir(away).removeRecursively();
+    slides = PresentationImport::run(deck, sets, &w, error);
+    QFile awaySettings(away + "/user/registrymodifications.xcu");
+    CHECK(slides.count() == 6 && error.isEmpty() && awaySettings.open(QIODevice::ReadOnly) && awaySettings.readAll().contains("Aptos"),
+          QString("and the deck imports with them there, 6 slides (%1) %2").arg(slides.count()).arg(error));
+    awaySettings.close();
+    qunsetenv("CGF_IMPORT_PROFILE_LIMIT");
+    if(inTemp && QDir(away) != QDir(PresentationImport::officeProfileDir()))
+        QDir(away).removeRecursively();     // only this check used it
+
+    CHECK(unanswered.isEmpty(), "no message box was left for someone to answer: " + unanswered.join(" / "));
+    // The Pictures tab gives the reason in a message box, which the timer
+    // above closes: the checks went no further here when an import failed.
+    pw->importPresentation(broken);
+    CHECK(unanswered.count() == 1 && unanswered.value(0).contains("broken.pptx"),
+          "the Pictures tab says why in a message box: " + unanswered.join(" / "));
+    boxes.stop();
 
     qInfo().noquote() << QString("%1 checks, %2 failed").arg(checks).arg(failures);
     return failures ? 1 : 0;

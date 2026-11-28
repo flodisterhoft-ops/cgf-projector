@@ -17,6 +17,10 @@ path is checked too), no LibreOffice installed for everyone (the checks start
 as a computer without one), the built companion (src/win32_build/bin, see
 BUILD.md) and the Qt 6.8.3 / MinGW toolchain. Takes about three minutes; the
 unpacked LibreOffice (about 1.1 GB) stays in out/bin until the next run.
+
+It runs from any checkout. From one deep in the file system (a worktree with
+a long name) LibreOffice's settings go to the temporary folder, as they do in
+the program; the checks say so in the line about the settings.
 """
 
 import argparse

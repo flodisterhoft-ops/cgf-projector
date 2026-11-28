@@ -21,6 +21,7 @@
 #include "../headers/applog.hpp"
 #include <QCoreApplication>
 #include <QDir>
+#include <QCryptographicHash>
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QMessageBox>
@@ -62,6 +63,30 @@ std::function<bool(QWidget *)> PresentationImport::confirmDownload = [](QWidget 
     box.exec();
     return box.clickedButton() == download;
 };
+
+QString PresentationImport::officeProfileDir()
+{
+    // LibreOffice keeps a file 112 characters below its settings folder
+    // (user\extensions\bundled\registry\...PackageRegistryBackend\backenddb.xml).
+    // When that file's path passes Windows' 260 characters LibreOffice ends
+    // without a word and without a PDF. Measured, the folder's own path may
+    // be 146 long; the limit here leaves room for a C:\Users\NAME~1 that
+    // LibreOffice writes out in full. An installed laptop is far below it
+    // (about 50), a checkout deep in the file system is not.
+    // CGF_IMPORT_PROFILE_LIMIT sets another limit (checks).
+    int limit = 138;
+    if(!qEnvironmentVariableIsEmpty("CGF_IMPORT_PROFILE_LIMIT"))
+        limit = qEnvironmentVariableIntValue("CGF_IMPORT_PROFILE_LIMIT");
+    const QString beside = dataDir().filePath("libreoffice-profile");
+    if(QDir::toNativeSeparators(beside).length() <= limit)
+        return beside;
+    // The temporary folder, one per data folder: two copies of the program
+    // never share settings, and LibreOffice makes them again if Windows
+    // clears them away.
+    const QByteArray id = QCryptographicHash::hash(dataDir().absolutePath().toLower().toUtf8(),
+                                                   QCryptographicHash::Sha1).toHex().left(10);
+    return QDir(QDir::tempPath()).filePath("cgf-libreoffice-" + QString::fromLatin1(id));
+}
 
 QString PresentationImport::findLibreOffice()
 {
@@ -225,8 +250,12 @@ int runScript(const QString &script, const QString &workDir, const QStringList &
     // the data folder, apart from a LibreOffice the person uses themselves.
     const QString office = PresentationImport::findLibreOffice();
     if(!office.isEmpty())
-        arguments << "-Soffice" << office
-                  << "-Profile" << QDir::toNativeSeparators(dataDir().filePath("libreoffice-profile"));
+    {
+        const QString profile = PresentationImport::officeProfileDir();
+        if(QDir(profile) != QDir(dataDir().filePath("libreoffice-profile")))
+            AppLog::write("LibreOffice: the data folder is too deep for its settings; they are in " + profile);
+        arguments << "-Soffice" << office << "-Profile" << QDir::toNativeSeparators(profile);
+    }
     // CGF_IMPORT_ENGINE=libreoffice or powerpoint forces one (checks, and to
     // see what the other program makes of a file).
     const QString engine = qEnvironmentVariable("CGF_IMPORT_ENGINE");

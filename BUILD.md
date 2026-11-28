@@ -621,7 +621,9 @@ documentation limits conversion to files of 2 MB.
   sets are removed afterwards (1.5 GB becomes about 740 MB; the slides come
   out pixel for pixel the same). The import then runs again by itself.
 - LibreOffice keeps its settings in `<data folder>/libreoffice-profile`, apart
-  from a LibreOffice the person uses themselves. The script writes one
+  from a LibreOffice the person uses themselves (in the temporary folder when
+  the data folder is too deep for them: "LibreOffice from a deep folder"
+  below). The script writes one
   setting there: PowerPoint's default font, Aptos, exists only inside Office,
   and LibreOffice would replace it with a wider font and a serif italic.
   Calibri is on every Windows computer and 4.5 % narrower than Aptos, so no
@@ -919,3 +921,34 @@ Second laptop: Florian's Book5 Pro 360 is registered as "Book5 Pro 360"
 `cgf-cloud.json` are in `C:\Users\Disterhoft\CGF\install-packages\book5pro360\`
 (his Windows user only), sent by Taildrop to `book5pro360`. Installing it
 over the older copy there keeps its songs and settings.
+
+## LibreOffice from a deep folder (2026-11-28, after 0.2.9)
+
+The 0.2.9 checks failed in one worktree and then stood still for 50 minutes
+(above). Florian asked for the fix.
+
+- The cause, measured: LibreOffice keeps a file 112 characters below its
+  settings folder. Once that file's path passes Windows' 260 characters,
+  LibreOffice ends with exit code 0 and no PDF, and the import reported that
+  the file "may be damaged". A settings folder at 146 characters converts,
+  one at 152 does not. `<data folder>\libreoffice-profile` gets there when
+  the data folder is longer than 126 characters. An installed laptop
+  (`C:\Users\<name>\CGFProjector`) stays far below that. On Florian's PC
+  `tests/presentations` passes it in every worktree under
+  `.claude\worktrees` whose name is longer than 13 characters.
+- `PresentationImport::officeProfileDir()` keeps the settings beside the
+  database as before. When that path would be longer than 138 characters
+  they go to the temporary folder instead, in
+  `cgf-libreoffice-<10 hex digits made from the data folder's path>`, and
+  `CGFProjector.log` says so. `CGF_IMPORT_PROFILE_LIMIT` sets another limit
+  (checks).
+- `tests/presentations` imports once with the settings in the temporary
+  folder. It also closes any message box nobody answers and counts it: the
+  Pictures tab shows one when its own import fails, and that is where the
+  checks stood still. The same timer lets it check that the Pictures tab
+  gives the reason in a box.
+
+`tests/presentations` 25 from the main checkout, and 24 (before the last
+check was added) from a worktree whose data folder is 136 characters long,
+where it failed before. Steps 86, pictures 42, screens 34 and bridge 73 pass.
+On master after 0.2.9; in no release yet.

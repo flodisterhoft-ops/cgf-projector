@@ -51,6 +51,10 @@ QString findLibreOffice();
 bool fetchLibreOffice(QWidget *parent, QString &error);
 // Asks whether to download LibreOffice. The checks replace it.
 extern std::function<bool(QWidget *)> confirmDownload;
+// The folder for LibreOffice's own settings: beside the database, or in the
+// temporary folder when the data folder is too deep in the file system for
+// LibreOffice to keep them there.
+QString officeProfileDir();
 }
 
 #endif // PRESENTATIONIMPORT_HPP
