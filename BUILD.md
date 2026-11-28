@@ -543,8 +543,8 @@ it; its hello reports app-0.2.7, the server sends v4, and the app applies it
 at start (or once a Bible passage leaves the screen). Check: the bridge's
 `hello` at ws://<laptop>:8770/ws lists Bibles 2, 3, 5, 14 and library v4.
 
-Until library-bibles is merged into master, `%USERPROFILE%\.cgf-publish\push.json`
-names the main checkout's `tools/push_release.py`, which has no Bible support.
-A normal `publish_snapshot.py` run is safe with it only while the Bibles stay
-as in v4; a Bible change before the merge must be pushed with this branch's
-tool (`projector_bibles.py republish --no-push`, then `push_release.py push`).
+`%USERPROFILE%\.cgf-publish\push.json` names the main checkout's
+`tools/push_release.py`. Before library-bibles was merged into master that
+copy had no Bible support, so v4 was pushed with this branch's tool; the
+merge (with app 0.2.8) gives master's tool Bible support, and normal
+publishes use it again.
