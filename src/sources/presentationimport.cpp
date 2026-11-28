@@ -305,9 +305,13 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
     // being deleted afterwards.
     QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner);
 
-    // Draw slides at the size Pictures stores them (Settings > Pictures), so
-    // they are not scaled down afterwards, which blurs text.
-    const int box = sets.resize ? sets.boundWidth : 1920;
+    // Slides are drawn to fit a 1920 x 1080 projector, whatever size Settings >
+    // Pictures gives photos: a slide has no size of its own, and drawn at 1280
+    // (that setting's default) it was stretched on the projector, which
+    // softens text. More than the projector's size would show nothing more.
+    Q_UNUSED(sets);
+    const QSize frame(1920, 1080);
+    const QStringList size = {"-Size", QString::number(frame.width()), "-Height", QString::number(frame.height())};
     const QString shortName = QFileInfo(file).fileName();
 
     QProgressDialog progress(QObject::tr("Importing %1...").arg(shortName),
@@ -405,7 +409,7 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
         }
     }
 
-    int code = runScript(script, work.path(), {"-In", QDir::toNativeSeparators(input), "-Size", QString::number(box)},
+    int code = runScript(script, work.path(), QStringList{"-In", QDir::toNativeSeparators(input)} + size,
                          progress, detail);
     if(code > 0 && code != 2 && input != file)
     {
@@ -416,7 +420,7 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
         for(const QString &name : QDir(work.path()).entryList({"slide*.png"}, QDir::Files))
             QFile::remove(work.filePath(name));
         QDir(work.filePath("office")).removeRecursively();
-        code = runScript(script, work.path(), {"-In", QDir::toNativeSeparators(file), "-Size", QString::number(box)},
+        code = runScript(script, work.path(), QStringList{"-In", QDir::toNativeSeparators(file)} + size,
                          progress, detail);
     }
     if(failed(code))
@@ -441,8 +445,8 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
             continue;
         }
         // PDF pages come out larger on displays scaled above 100 %.
-        if(img.width() > box || img.height() > box)
-            img = img.scaled(box, box, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        if(img.width() > frame.width() || img.height() > frame.height())
+            img = img.scaled(frame, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         SlideShowItem slide;
         slide.image = img;
         slide.imagePreview = img.scaled(400, 400, Qt::KeepAspectRatio, Qt::SmoothTransformation);

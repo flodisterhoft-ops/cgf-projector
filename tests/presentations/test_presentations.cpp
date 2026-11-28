@@ -33,17 +33,17 @@ static void pump(int ms)
     }
 }
 
-// Every slide fits the box and is as wide as a 16:9 slide should be.
-static bool slidesFit(const QList<SlideShowItem> &slides, int box)
+// Every slide of the 16:9 deck is drawn for a 1920 x 1080 projector,
+// whatever size the Pictures setting gives photos.
+static bool slidesFit(const QList<SlideShowItem> &slides)
 {
     for(const SlideShowItem &s : slides)
     {
         const QSize z = s.image.size();
-        if(z.isEmpty() || z.width() > box || z.height() > box || z.width() < box - 2
-                || qAbs(z.height() - box * 9 / 16) > 2)
+        if(qAbs(z.width() - 1920) > 2 || qAbs(z.height() - 1080) > 2)
             return false;
     }
-    return true;
+    return !slides.isEmpty();
 }
 
 // The first slide has a dark blue background, the last a white one.
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     qputenv("CGF_IMPORT_ENGINE", "powerpoint");
     QList<SlideShowItem> slides = PresentationImport::run(deck, sets, &w, error);
     CHECK(slides.count() == 6 && error.isEmpty(), QString("PowerPoint: 6 slides, the hidden one left out (%1) %2").arg(slides.count()).arg(error));
-    CHECK(slidesFit(slides, 1280) && looksRight(slides), "PowerPoint: slides fit 1280 and look right");
+    CHECK(slidesFit(slides) && looksRight(slides), "PowerPoint: slides are 1920 x 1080 and look right");
     slides = PresentationImport::run(pdf, sets, &w, error);
     CHECK(slides.count() == 6 && error.isEmpty() && looksRight(slides), QString("PDF: 6 pages (%1) %2").arg(slides.count()).arg(error));
 
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
     slides = PresentationImport::run(deck, sets, &w, error);
     CHECK(asked == 4 && slides.count() == 6 && error.isEmpty(),
           QString("Download: LibreOffice is fetched and the deck imports, 6 slides (%1) in %2 s %3").arg(slides.count()).arg(timer.elapsed() / 1000).arg(error));
-    CHECK(slidesFit(slides, 1280) && looksRight(slides), "LibreOffice: slides fit 1280 and look right");
+    CHECK(slidesFit(slides) && looksRight(slides), "LibreOffice: slides are 1920 x 1080 and look right");
     if(!slides.isEmpty())
         slides.first().image.save(dir + "/libreoffice-slide1.png");
     const QString office = PresentationImport::findLibreOffice();

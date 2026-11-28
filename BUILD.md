@@ -259,7 +259,9 @@ slides need stepping.
   the file before it stops.
 - Slides are drawn at the size Settings > Pictures stores pictures (default:
   fit 1280x1280), so text isn't blurred by a second scaling. PDF pages come
-  out larger on displays scaled above 100 % and are fitted smoothly.
+  out larger on displays scaled above 100 % and are fitted smoothly. (Since
+  2026-11-28 they are drawn for a 1920 x 1080 projector instead: see
+  "Presentation steps".)
 
 Verification: the script on a test deck (German and Russian text, a hidden
 slide, a Cyrillic file name) and its PDF; a harness driving the real Pictures
@@ -762,3 +764,14 @@ On master, with the build deployed again (`Qt6Xml.dll`): `tests/update` 23
 and the push end-to-end run pass. A test package, 0.2.9-test2, was made for
 Florian's laptop without PowerPoint. Not yet tried with an operator or on
 that laptop, and not published.
+
+Slide size (Florian's decision, 2026-11-28): presentations and PDFs are drawn
+to fit 1920 x 1080, the size of the church's projectors, whatever Settings >
+Pictures gives photos (`-Size 1920 -Height 1080` to the import script). A
+slide has no size of its own; at that setting's default of 1280 every slide
+was stretched one and a half times on the projector, which softens text, and
+more than the projector's size would show nothing more. A 4:3 slide comes out
+1440 x 1080. Stills take more room: 1.15 times on a 4:3 picture book, 1.67
+times on a 16:9 deck with photos (184 KB a still instead of 110), measured on
+two of Florian's files. A slide show imported before keeps its size until it
+is imported again. `tests/steps` 60 and `tests/presentations` 21 pass with it.
