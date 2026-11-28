@@ -755,7 +755,10 @@ pictures and a GIF: how the grey flash was found. `tools/presentations/corpus.py
 files: the splitter read all 780; PowerPoint and LibreOffice each drew every
 still of the 21 files with steps and of 25 of the others. Also
 `tests/presentations` 21, `tests/pictures` 42, `tests/screens` 34,
-`tests/bridge` 73, `tests/push` 52 and publisher 14 pass. `tests/update` and
-the push end-to-end run need `npm install` in `push-server/`, which only the
-main checkout has: run them after the merge. Not yet tried with an operator
-or on a laptop without PowerPoint, and not published.
+`tests/bridge` 73, `tests/push` 52 and publisher 14 pass.
+
+Merged into master on Florian's word (2026-11-28, a fast-forward to d1ea200).
+On master, with the build deployed again (`Qt6Xml.dll`): `tests/update` 23
+and the push end-to-end run pass. A test package, 0.2.9-test2, was made for
+Florian's laptop without PowerPoint. Not yet tried with an operator or on
+that laptop, and not published.
