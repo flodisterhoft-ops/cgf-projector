@@ -15,6 +15,11 @@
           "detail": "Effects are simpler. Videos, sounds and animated GIFs play."
         },
         {
+          "kind": "new",
+          "title": "Songs you add or edit go to the library",
+          "detail": "Your version stays on this laptop until it's in the library."
+        },
+        {
           "kind": "changed",
           "title": "Program updates no longer ask you to restart",
           "detail": "The new version opens the next time CGF Projector starts."
