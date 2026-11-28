@@ -5,6 +5,11 @@
       "version": "0.2.9",
       "items": [
         {
+          "kind": "new",
+          "title": "You can now import slides without PowerPoint",
+          "detail": "If needed, it asks to download LibreOffice (about 375 MB)."
+        },
+        {
           "kind": "changed",
           "title": "Program updates no longer ask you to restart",
           "detail": "The new version opens the next time CGF Projector starts."
