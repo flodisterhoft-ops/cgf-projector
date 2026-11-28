@@ -522,7 +522,7 @@ that photos which look upright in Windows sometimes came in sideways.
 Checks: `python tests/pictures/run_tests.py --db <CGF database>` makes its own
 photos with and without the tag and drives the real main window offscreen:
 42 checks pass (it leaves `pictures-tab.png` beside the test exe). Screens 34
-pass. Not yet tried with Valentin's photos, and not published.
+pass. Not yet tried with Valentin's photos.
 
 ## Bibles in the library push (2026-11-27)
 
@@ -552,3 +552,15 @@ warning or flash, waiting while something is presented
 Checks: publisher 14, `tests/push` 52 plus end to end 9 (a held Bible release
 through wrangler dev and the companion, 6 parts of about 0.9 MB), bridge 73,
 `tests/update` 23. All pass.
+
+## App 0.2.8 (2026-11-27)
+
+`library-bibles` (app 0.2.7, release 8, published alone earlier that evening)
+was merged into master beside picture rotation: 6d3bb54. Checks on the merged
+tree: publisher 14, `tests/pictures` 42, `tests/screens` 34, `tests/bridge`
+73, `tests/push` 52 plus end to end, `tests/update` 23. All pass.
+
+Published (Florian's go-ahead) as app 0.2.8, release 9, from 6d3bb54 with the
+launcher: 106 files, 2 uploaded (the app and the companion). The church
+laptop was offline, still on app-0.2.6; it installs only the latest release
+when it next connects, so it goes straight to 0.2.8.
