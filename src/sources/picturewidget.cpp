@@ -30,6 +30,7 @@ PictureWidget::PictureWidget(QWidget *parent) :
     ui->setupUi(this);
     loadSlideShows();
     ui->pushButtonGoLive->setEnabled(false);
+    updateRotateButtons();
 }
 
 PictureWidget::~PictureWidget()
@@ -83,6 +84,44 @@ void PictureWidget::on_listWidgetSlides_currentRowChanged(int currentRow)
             ui->labelPreview->setPixmap(slides.at(currentRow).imagePreview);
         ui->labelPixInfo->setText(tr("Preview slide: ")+slides.at(currentRow).name);
     }
+    updateRotateButtons();
+}
+
+void PictureWidget::updateRotateButtons()
+{
+    const int c = ui->listWidgetSlides->currentRow();
+    const bool on = c >= 0 && c < slides.count();
+    ui->pushButtonRotateLeft->setEnabled(on);
+    ui->pushButtonRotateRight->setEnabled(on);
+}
+
+void PictureWidget::on_pushButtonRotateLeft_clicked()
+{
+    rotateSlide(-90);
+}
+
+void PictureWidget::on_pushButtonRotateRight_clicked()
+{
+    rotateSlide(90);
+}
+
+void PictureWidget::rotateSlide(int degrees)
+{
+    const int c = ui->listWidgetSlides->currentRow();
+    if(c < 0 || c >= slides.count())
+        return;
+    SlideShowItem &slide = slides[c];
+    slide.rotate(degrees);
+
+    // A slide of a saved slide show keeps the turn. A schedule file carries
+    // slide ids from the day it was saved, which may be other slides by now,
+    // so its slides are never written to the database.
+    if(!previewFromSchedule && slide.slideId != -1 && slide.saveImages())
+        slide.rotated = false;
+
+    ui->listWidgetSlides->item(c)->setIcon(QIcon(slide.imageSmall));
+    on_listWidgetSlides_currentRowChanged(c);
+    emit slideRotated(slide, c, degrees);
 }
 
 void PictureWidget::on_listWidgetSlides_doubleClicked(const QModelIndex &index)
@@ -94,11 +133,16 @@ void PictureWidget::on_pushButtonAddImages_clicked()
 {
     QStringList imageFilePaths = QFileDialog::getOpenFileNames(this,tr("Select Images to Open"),".",
                                                                tr("Images(%1)").arg(getSupportedImageFormats()));
+    addImageFiles(imageFilePaths);
+}
 
+void PictureWidget::addImageFiles(const QStringList &imageFilePaths)
+{
     if(imageFilePaths.count()>0)
     {
         this->setCursor(Qt::WaitCursor);
         int i(0);
+        const int firstNew = slides.count();
         QProgressDialog progress(tr("Adding files..."), tr("Cancel"), 0, imageFilePaths.count(), this);
         ui->listWidgetSlides->setIconSize(QSize(100,100));
         foreach(const QString &file, imageFilePaths)
@@ -106,38 +150,9 @@ void PictureWidget::on_pushButtonAddImages_clicked()
             ++i;
             progress.setValue(i);
 
-            QPixmap img;
             SlideShowItem sd;
-            if(!img.load(file))
+            if(!sd.loadFile(file, mySettings.resize ? mySettings.boundWidth : 0))
                 continue; // unreadable or unsupported file: don't add a blank slide
-
-            // set display image. If to resize, resize them
-            if(mySettings.resize)
-            {
-                if(img.width()>mySettings.boundWidth || img.height()>mySettings.boundWidth )
-                    sd.image = img.scaled(mySettings.boundWidth ,mySettings.boundWidth , Qt::KeepAspectRatio);
-                else
-                    sd.image = img;
-            }
-            else
-                sd.image = img;
-
-            // set preview image
-            if(img.width()>400 || img.height()>400)
-                sd.imagePreview = img.scaled(400,400, Qt::KeepAspectRatio);
-            else
-                sd.imagePreview = img;
-
-            // set list image
-            if(img.width()>100 || img.height()>100)
-                sd.imageSmall = img.scaled(100,100, Qt::KeepAspectRatio);
-            else
-                sd.imageSmall = img;
-
-            // set file name
-            QFileInfo f(file);
-            sd.name = f.fileName();
-            sd.path = f.filePath();
 
             // add to slideshow
             slides.append(sd);
@@ -151,6 +166,9 @@ void PictureWidget::on_pushButtonAddImages_clicked()
         }
         this->setCursor(Qt::ArrowCursor);
         ui->pushButtonGoLive->setEnabled(true);
+        // Show the first new picture, ready to turn or send.
+        if(ui->listWidgetSlides->currentRow() < 0 && firstNew < slides.count())
+            ui->listWidgetSlides->setCurrentRow(firstNew);
     }
 }
 
@@ -183,6 +201,8 @@ void PictureWidget::on_pushButtonClearImages_clicked()
     ui->labelPixInfo->setText(tr("Preview slide: "));
     ui->pushButtonGoLive->setEnabled(false);
     currentSlideShow = SlideShow();
+    previewFromSchedule = false;
+    updateRotateButtons();
 }
 
 void PictureWidget::on_pushButtonMoveUp_clicked()
@@ -237,6 +257,7 @@ void PictureWidget::loadSlideShow(int ss_id)
 {
     SlideShow ss;
     ss.loadSlideShow(ss_id);
+    previewFromSchedule = false;
     sendToPreview(ss);
     ui->pushButtonGoLive->setEnabled(true);
 }
@@ -256,11 +277,13 @@ void PictureWidget::sendToPreview(SlideShow &sshow)
         ui->listWidgetSlides->addItem(itm);
     }
     ui->listWidgetSlides->setCurrentRow(0);
+    updateRotateButtons();
 }
 
 void PictureWidget::sendToPreviewFromSchedule(SlideShow &sshow)
 {
     ui->listWidgetSlideShow->clearSelection();
+    previewFromSchedule = true;
     sendToPreview(sshow);
 }
 

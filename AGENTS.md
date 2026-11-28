@@ -127,6 +127,9 @@ stripping what they never used and wiring the app into a central CGF library.
 - **Added 2026-10-31: PowerPoint/PDF import** in the Pictures tab. Each slide
   becomes a picture in a saved slide show, so operators step through it like
   a song (BUILD.md, "PowerPoint and PDF import").
+- **Added 2026-11-27: rotate buttons** in the Pictures tab and the slide show
+  editor, and photos load the right way up (camera rotation tag). See
+  BUILD.md, "Rotating pictures"; `tests/pictures`.
 - Planned add: **Share button** — song/setlist as link or PDF, possibly via
   Telegram (operators use Telegram).
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager

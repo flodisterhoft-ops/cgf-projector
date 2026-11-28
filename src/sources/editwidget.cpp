@@ -579,7 +579,7 @@ void EditWidget::on_toolButtonBrowseBackground_clicked()
 
     if( !filename.isNull() )
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         editSong.background = p;
         QFileInfo fi(filename);
         filename = fi.fileName();

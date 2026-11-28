@@ -32,6 +32,13 @@ QByteArray pixToByte(const QPixmap & pmap)
     return buffer.data();
 }
 
+QPixmap loadPictureFile(const QString &file)
+{
+    QImageReader reader(file);
+    reader.setAutoTransform(true);
+    return QPixmap::fromImage(reader.read());
+}
+
 QPixmap cgfSplashPixmap(const QSize &size, qreal devicePixelRatio)
 {
     const qreal dpr = devicePixelRatio > 0 ? devicePixelRatio : 1.0;

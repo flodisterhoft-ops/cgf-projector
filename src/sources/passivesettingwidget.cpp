@@ -124,7 +124,7 @@ void PassiveSettingWidget::on_buttonBrowseBackgound_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -154,7 +154,7 @@ void PassiveSettingWidget::on_buttonBrowseBackgound2_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings2.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -169,7 +169,7 @@ void PassiveSettingWidget::on_buttonBrowseBackgound3_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings3.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -184,7 +184,7 @@ void PassiveSettingWidget::on_buttonBrowseBackgound4_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings4.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();

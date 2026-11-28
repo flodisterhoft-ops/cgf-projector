@@ -53,6 +53,9 @@ private slots:
     void on_pushButtonRemoveImage_clicked();
     void on_pushButtonMoveUp_clicked();
     void on_pushButtonMoveDown_clicked();
+    void on_pushButtonRotateLeft_clicked();
+    void on_pushButtonRotateRight_clicked();
+    void rotateSlide(int degrees);
     void on_pushButtonSave_clicked();
     void on_pushButtonCancel_clicked();
     void on_listWidgetSlides_currentRowChanged(int currentRow);

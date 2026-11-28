@@ -46,6 +46,8 @@
         <file>icons/print.png</file>
         <file>icons/remove.png</file>
         <file>icons/remove_all.png</file>
+        <file>icons/rotate_left.png</file>
+        <file>icons/rotate_right.png</file>
         <file>icons/save.png</file>
         <file>icons/scheduleAdd.png</file>
         <file>icons/scheduleClear.png</file>

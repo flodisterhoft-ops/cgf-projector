@@ -495,3 +495,31 @@ Published (Florian's go-ahead) as app 0.2.6, release 7, from 13ce2d3 with the
 launcher: 106 files, 1 uploaded (the app). The church laptop reported
 app-0.2.6 installed 5 s later. It still has one picture for both projectors
 until the DisplayLink adapter is in.
+
+## Rotating pictures (2026-11-27)
+
+Valentin, who runs the app, reported that pictures could not be turned and
+that photos which look upright in Windows sometimes came in sideways.
+
+- Sideways photos: phones and cameras store a photo as the sensor saw it and
+  add a tag (Exif orientation) that says which way is up. Windows honours the
+  tag, `QPixmap::load` does not. `loadPictureFile` in `spfunctions.cpp` reads
+  through `QImageReader` with `setAutoTransform(true)`; the Pictures tab, the
+  slide show editor and every background or wallpaper picked from a file use
+  it. Pictures added before this fix stay as they were stored: turn them with
+  the new buttons or add them again.
+- Rotate left and Rotate right (`SlideShowItem::rotate`) beside the up and
+  down arrows in the Pictures tab and in the slide show editor. In the tab, a
+  picture of a saved slide show is written back at once, and the schedule's
+  own copy of it is turned too (`SoftProjector::pictureRotated`). Pictures
+  opened from a schedule item turn in the schedule only: a schedule file
+  carries slide ids from the day it was saved, so they are never written to
+  the database. In the editor the turn is saved with Save. The picture on the
+  projector stays as it is until the next Go Live.
+- Adding pictures selects the first new one, so it shows in the preview.
+- Icons: `python tools/branding/make_rotate_icons.py`.
+
+Checks: `python tests/pictures/run_tests.py --db <CGF database>` makes its own
+photos with and without the tag and drives the real main window offscreen:
+42 checks pass (it leaves `pictures-tab.png` beside the test exe). Screens 34
+pass. Not yet tried with Valentin's photos, and not published.

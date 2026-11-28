@@ -118,6 +118,40 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="pushButtonRotateLeft">
+       <property name="toolTip">
+        <string>Rotate left</string>
+       </property>
+       <property name="accessibleName">
+        <string>Rotate left</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="softprojector.qrc">
+         <normaloff>:/icons/icons/rotate_left.png</normaloff>:/icons/icons/rotate_left.png</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButtonRotateRight">
+       <property name="toolTip">
+        <string>Rotate right</string>
+       </property>
+       <property name="accessibleName">
+        <string>Rotate right</string>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="softprojector.qrc">
+         <normaloff>:/icons/icons/rotate_right.png</normaloff>:/icons/icons/rotate_right.png</iconset>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="horizontalSpacer_2">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
@@ -224,6 +258,8 @@
   <tabstop>pushButtonRemoveImage</tabstop>
   <tabstop>pushButtonMoveUp</tabstop>
   <tabstop>pushButtonMoveDown</tabstop>
+  <tabstop>pushButtonRotateLeft</tabstop>
+  <tabstop>pushButtonRotateRight</tabstop>
   <tabstop>pushButtonSave</tabstop>
   <tabstop>pushButtonCancel</tabstop>
  </tabstops>

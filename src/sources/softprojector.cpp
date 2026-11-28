@@ -150,6 +150,7 @@ SoftProjector::SoftProjector(QWidget *parent)
     connect(pictureWidget, SIGNAL(sendSlideShow(QList<SlideShowItem>&,int,QString)),
             this, SLOT(setPictureList(QList<SlideShowItem>&,int,QString)));
     connect(pictureWidget, SIGNAL(sendToSchedule(SlideShow&)),this,SLOT(addToShcedule(SlideShow&)));
+    connect(pictureWidget, &PictureWidget::slideRotated, this, &SoftProjector::pictureRotated);
     connect(mediaPlayer, SIGNAL(toProjector(VideoInfo&)), this, SLOT(setVideo(VideoInfo&)));
     connect(editWidget, SIGNAL(updateSongFromDatabase(int,int)), songWidget, SLOT(updateSongFromDatabase(int,int)));
     connect(editWidget, SIGNAL(addedNew(Song,int)), songWidget,SLOT(addNewSong(Song,int)));
@@ -2189,6 +2190,49 @@ void SoftProjector::addToShcedule(SlideShow &s)
     Schedule d(s);
     schedule.append(d);
     reloadShceduleList();
+}
+
+void SoftProjector::pictureRotated(const SlideShowItem &slide, int row, int degrees)
+{
+    // The schedule keeps its own copy of every picture: turn that copy too,
+    // or the picture is sideways again when the schedule item is next opened.
+    // The picture on the projector stays as it is until the next Go Live.
+    bool changed = false;
+    const int current = ui->listWidgetSchedule->currentRow();
+    const bool fromSchedule = pictureWidget->isPreviewFromSchedule();
+    for(int i = 0; i < schedule.count(); ++i)
+    {
+        Schedule &item = schedule[i];
+        if(item.stype != "slideshow")
+            continue;
+        QList<SlideShowItem> &list = item.slideshow.slides;
+        if(fromSchedule)
+        {
+            // The preview is this schedule item, slide for slide.
+            if(i == current && row < list.count() && list.at(row).slideId == slide.slideId
+                    && list.at(row).name == slide.name)
+            {
+                list[row].rotate(degrees);
+                changed = true;
+            }
+        }
+        else if(slide.slideId != -1 && item.slideshow.slideShowId == pictureWidget->currentSlideShowId())
+        {
+            for(SlideShowItem &s : list)
+            {
+                if(s.slideId == slide.slideId && s.name == slide.name)
+                {
+                    s.rotate(degrees);
+                    changed = true;
+                }
+            }
+        }
+    }
+    if(changed)
+    {
+        is_schedule_saved = false;
+        updateWindowText();
+    }
 }
 
 void SoftProjector::addToShcedule(VideoInfo &v)

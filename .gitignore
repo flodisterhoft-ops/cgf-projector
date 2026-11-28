@@ -93,6 +93,8 @@ tests/push/out/
 tests/update/out/
 # Front/back projector checks (tests/screens/run_tests.py)
 tests/screens/out/
+# Picture checks (tests/pictures/run_tests.py)
+tests/pictures/out/
 push-server/node_modules/
 push-server/.wrangler/
 push-server/worker-configuration.d.ts

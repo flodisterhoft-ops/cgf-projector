@@ -23,6 +23,56 @@ SlideShowItem::SlideShowItem()
 {
     slideId = -1;
     order = -1;
+    rotated = false;
+}
+
+bool SlideShowItem::loadFile(const QString &file, int bound)
+{
+    const QPixmap img = loadPictureFile(file);
+    if(img.isNull())
+        return false;
+
+    if(bound > 0 && (img.width() > bound || img.height() > bound))
+        image = img.scaled(bound, bound, Qt::KeepAspectRatio);
+    else
+        image = img;
+
+    if(img.width() > 400 || img.height() > 400)
+        imagePreview = img.scaled(400, 400, Qt::KeepAspectRatio);
+    else
+        imagePreview = img;
+
+    if(img.width() > 100 || img.height() > 100)
+        imageSmall = img.scaled(100, 100, Qt::KeepAspectRatio);
+    else
+        imageSmall = img;
+
+    const QFileInfo f(file);
+    name = f.fileName();
+    path = f.filePath();
+    return true;
+}
+
+void SlideShowItem::rotate(int degrees)
+{
+    const QTransform turn = QTransform().rotate(degrees);
+    image = image.transformed(turn);
+    imagePreview = imagePreview.transformed(turn);
+    imageSmall = imageSmall.transformed(turn);
+    rotated = true;
+}
+
+bool SlideShowItem::saveImages() const
+{
+    if(slideId == -1)
+        return false;
+    QSqlQuery sq;
+    sq.prepare("UPDATE Slides SET pix = ?, pix_small = ?, pix_prev = ? WHERE id = ?");
+    sq.addBindValue(pixToByte(image));
+    sq.addBindValue(pixToByte(imageSmall));
+    sq.addBindValue(pixToByte(imagePreview));
+    sq.addBindValue(slideId);
+    return sq.exec();
 }
 
 SlideShowInfo::SlideShowInfo()
@@ -138,13 +188,15 @@ void SlideShow::saveSideShow(QString savelbl, QWidget *ptW, QList<int> delList)
         sq.exec();
         sq.clear();
 
-        // Update slides (order only can be updated)
+        // Update slides: their order, and the pictures of turned ones
         int c(0);
         foreach(const SlideShowItem &si, slides)
         {
             if(si.slideId != -1)
             {
                 sq.exec(QString("UPDATE Slides SET p_order = %1 WHERE id = %2").arg(c).arg(si.slideId));
+                if(si.rotated)
+                    si.saveImages();
                 ++ct;
                 prg.setValue(ct);
             }

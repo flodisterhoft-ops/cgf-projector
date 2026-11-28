@@ -70,6 +70,29 @@ void SlideShowEditor::updateButtonState()
     ui->pushButtonRemoveImage->setEnabled(c>=0 && c<ct);
     ui->pushButtonMoveUp->setEnabled(c>0 && c<ct);
     ui->pushButtonMoveDown->setEnabled(c>=0 && (c<ct-1));
+    ui->pushButtonRotateLeft->setEnabled(c>=0 && c<ct);
+    ui->pushButtonRotateRight->setEnabled(c>=0 && c<ct);
+}
+
+void SlideShowEditor::on_pushButtonRotateLeft_clicked()
+{
+    rotateSlide(-90);
+}
+
+void SlideShowEditor::on_pushButtonRotateRight_clicked()
+{
+    rotateSlide(90);
+}
+
+void SlideShowEditor::rotateSlide(int degrees)
+{
+    // Saved with the slide show: saveSideShow writes turned slides again.
+    const int c = ui->listWidgetSlides->currentRow();
+    if(c < 0 || c >= editSS.slides.count())
+        return;
+    editSS.slides[c].rotate(degrees);
+    ui->listWidgetSlides->item(c)->setIcon(QIcon(editSS.slides.at(c).imageSmall));
+    on_listWidgetSlides_currentRowChanged(c);
 }
 
 void SlideShowEditor::on_pushButtonAddImages_clicked()
@@ -87,37 +110,9 @@ void SlideShowEditor::on_pushButtonAddImages_clicked()
             ++i;
             progress.setValue(i);
 
-            QPixmap img;
             SlideShowItem sd;
-            if(!img.load(file))
+            if(!sd.loadFile(file, mySettings.resize ? mySettings.boundWidth : 0))
                 continue; // unreadable or unsupported file: don't add a blank slide
-            // set display image. If to resize, resize them
-            if(mySettings.resize)
-            {
-                if(img.width()>mySettings.boundWidth || img.height()>mySettings.boundWidth )
-                    sd.image = img.scaled(mySettings.boundWidth ,mySettings.boundWidth , Qt::KeepAspectRatio);
-                else
-                    sd.image = img;
-            }
-            else
-                sd.image = img;
-
-            // set preview image
-            if(img.width()>400 || img.height()>400)
-                sd.imagePreview = img.scaled(400,400, Qt::KeepAspectRatio);
-            else
-                sd.imagePreview = img;
-
-            // set list image
-            if(img.width()>100 || img.height()>100)
-                sd.imageSmall = img.scaled(100,100, Qt::KeepAspectRatio);
-            else
-                sd.imageSmall = img;
-
-            // set file name
-            QFileInfo f(file);
-            sd.name = f.fileName();
-            sd.path = f.filePath();
 
             // add to slideshow
             editSS.slides.append(sd);

@@ -47,6 +47,9 @@ int screenMatches(const QString &identity, const QScreen *screen);
 QString screenIdentityName(const QString &identity);
 bool isAnnounceTitle(QString string);
 QString getSupportedImageFormats();
+// A picture file the right way up. Phones and cameras store photos sideways
+// with a tag that says which way is up; QPixmap's own loading ignores it.
+QPixmap loadPictureFile(const QString &file);
 //class spFunctions
 //{
 //public:

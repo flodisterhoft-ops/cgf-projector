@@ -39,6 +39,16 @@ public:
     QPixmap image;
     QPixmap imageSmall;
     QPixmap imagePreview;
+    // Turned since it was loaded: saveSideShow writes its pictures again.
+    bool rotated;
+
+    // Reads a picture file the right way up; with a bound above 0, larger
+    // pictures are scaled down to fit it. False for an unreadable file.
+    bool loadFile(const QString &file, int bound);
+    // Quarter turns: 90 is clockwise, -90 counter-clockwise.
+    void rotate(int degrees);
+    // Writes the pictures of a slide that is already in the database.
+    bool saveImages() const;
 };
 
 class SlideShowInfo

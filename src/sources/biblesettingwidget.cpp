@@ -925,7 +925,7 @@ void BibleSettingWidget::on_buttonBrowseBackground_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -940,7 +940,7 @@ void BibleSettingWidget::on_buttonBrowseBackground2_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings2.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -955,7 +955,7 @@ void BibleSettingWidget::on_buttonBrowseBackground3_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings3.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -970,7 +970,7 @@ void BibleSettingWidget::on_buttonBrowseBackground4_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings4.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();

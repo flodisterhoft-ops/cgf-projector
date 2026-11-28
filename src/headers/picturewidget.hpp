@@ -42,6 +42,8 @@ public:
 signals:
     void sendSlideShow(QList<SlideShowItem> &slideShow, int row,QString name);
     void sendToSchedule(SlideShow &sshow);
+    // A slide was turned (the slide as it is now, its row, the quarter turn).
+    void slideRotated(const SlideShowItem &slide, int row, int degrees);
 
 protected:
     virtual void changeEvent(QEvent *e);
@@ -54,6 +56,10 @@ public slots:
     void sendToPreviewFromSchedule(SlideShow &sshow);
     void setSettings(SlideShowSettings &settings){mySettings = settings;}
     void importPresentation(const QString &file);
+    void addImageFiles(const QStringList &imageFilePaths);
+    // The slides shown came from a schedule item, not from the saved list.
+    bool isPreviewFromSchedule() const { return previewFromSchedule; }
+    int currentSlideShowId() const { return currentSlideShow.slideShowId; }
 
 private slots:
     void on_pushButtonImport_clicked();
@@ -62,6 +68,10 @@ private slots:
     void on_pushButtonRemoveImage_clicked();
     void on_pushButtonMoveUp_clicked();
     void on_pushButtonMoveDown_clicked();
+    void on_pushButtonRotateLeft_clicked();
+    void on_pushButtonRotateRight_clicked();
+    void rotateSlide(int degrees);
+    void updateRotateButtons();
     void on_pushButtonGoLive_clicked();
     void sendToProjector();
     void on_pushButtonClearImages_clicked();
@@ -79,6 +89,7 @@ private:
     QList<QPixmap> imagesPreview;
     QList<QPixmap> imagesToShow;
     SlideShowSettings mySettings;
+    bool previewFromSchedule = false;
 };
 
 #endif // PICTUREWIDGET_HPP

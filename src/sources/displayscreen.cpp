@@ -1101,7 +1101,7 @@ void DisplayScreen::setNewWallpaper(QString path, bool isToUse)
         wallpaper = QPixmap();
     else
     {
-        wallpaper.load(wallpaperPath);
+        wallpaper = loadPictureFile(wallpaperPath);
         wallpaper = wallpaper.scaled(width(),height());
     }
 }
@@ -1145,7 +1145,7 @@ void DisplayScreen::paintEvent(QPaintEvent *event )
         // Draw the active wallpaper if there is text to display
         if (displayType != "pix" && (wallpaper.width()!=width() || wallpaper.isNull()))
         {
-            wallpaper.load(wallpaperPath);
+            wallpaper = loadPictureFile(wallpaperPath);
             if( !wallpaper.isNull() )
                 wallpaper = wallpaper.scaled(width(),height());
         }

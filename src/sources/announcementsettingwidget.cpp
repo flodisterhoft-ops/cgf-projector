@@ -238,7 +238,7 @@ void AnnouncementSettingWidget::on_buttonBackground_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -253,7 +253,7 @@ void AnnouncementSettingWidget::on_buttonBackground2_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings2.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -268,7 +268,7 @@ void AnnouncementSettingWidget::on_buttonBackground3_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings3.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();
@@ -283,7 +283,7 @@ void AnnouncementSettingWidget::on_buttonBackground4_clicked()
                                                     ".", tr("Images(%1)").arg(getSupportedImageFormats()));
     if(!filename.isNull())
     {
-        QPixmap p(filename);
+        QPixmap p = loadPictureFile(filename);
         mySettings4.backgroundPix = p;
         QFileInfo fi(filename);
         filename = fi.fileName();

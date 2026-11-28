@@ -257,6 +257,7 @@ private slots:
     void addToShcedule(BibleHistory &b);
     void addToShcedule(Song &s);
     void addToShcedule(SlideShow &s);
+    void pictureRotated(const SlideShowItem &slide, int row, int degrees);
     void addToShcedule(VideoInfo &v);
     void addToShcedule(Announcement &a);
     void reloadShceduleList();
