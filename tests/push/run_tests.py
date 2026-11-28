@@ -259,11 +259,32 @@ def e2e(env, versions, expect):
         r = subprocess.run(py + ["push", "--publish-dir", str(publish)], env=env, capture_output=True,
                            text=True, encoding="utf-8")
         print(r.stdout.strip() or r.stderr.strip())
+        # The harness then edits a song; undo it as the Telegram button would.
+        found = []
+        def proposal_arrived():
+            req = urllib.request.Request(f"http://127.0.0.1:{SERVER_PORT}/v1/{CHURCH}/proposals",
+                                         headers={"Authorization": f"Bearer {token}"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                found[:] = json.loads(r.read())["proposals"]
+            return bool(found)
+        got = wait_for(proposal_arrived, 120)
+        p = found[0] if found else {}
+        ok_p = got and p.get("device") == "Push test laptop" and p["proposal"]["proposed"]["title"] == "E2E operator title"
+        print(("ok  :" if ok_p else "FAIL:") + " the server stored the laptop's proposal")
+        if got:
+            req = urllib.request.Request(f"http://127.0.0.1:{SERVER_PORT}/v1/{CHURCH}/proposals/{p['uuid']}",
+                                         data=b'{"undo": true}', method="POST",
+                                         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5).read()
         code = harness.wait(timeout=240)
         show("".join(lines))
+        proposal_arrived()
+        acked = bool(found) and found[0].get("laptop_state") == "undone"
+        print(("ok  :" if acked else "FAIL:") + " the laptop acknowledged the undo to the server")
+        ok = ok_p and acked
         status = server_status(token)
         dev = next((d for d in status["devices"] if d["name"] == "Push test laptop"), {})
-        ok = dev.get("last_version") == 6
+        ok = ok and dev.get("last_version") == 6
         print(("ok  :" if ok else "FAIL:") + f" the server records the laptop at v{dev.get('last_version')}")
         log = (BIN / "cgf-companion.log").read_text("utf-8") if (BIN / "cgf-companion.log").exists() else ""
         logged = all(f"v{v} is in the projector's library" in log for v in (4, 5, 6))

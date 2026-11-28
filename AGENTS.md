@@ -142,6 +142,12 @@ stripping what they never used and wiring the app into a central CGF library.
   songbooks. The library's Bibles: CGF Lyrics `library/tools/projector_bibles.json`
   (Schlachter 2000 v3 is id 14, replacing 13). See docs/library-from-cloud.md
   and docs/song-push.md.
+- **Proposals up (built 2026-11-28, user decision):** a song an operator adds
+  or fixes goes to the CGF Lyrics master accepted by default; Florian gets a
+  Telegram message with Undo. The laptop keeps the operator's text until the
+  master has it. Valentin is not told for now. See docs/proposals-up.md;
+  `tools/import_projector_proposals.py` writes the master under CGF Lyrics'
+  rules.
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
   quick-add upload flow.

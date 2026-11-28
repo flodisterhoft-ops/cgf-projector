@@ -267,6 +267,8 @@ static int runLocal(SoftProjector &w, quint16 port, const QJsonObject &rel)
     return failures ? 1 : 0;
 }
 
+static void editInEditor(SoftProjector &w, int id, const QString &title, const QString &text, bool asNew = false);
+
 static int runE2E(SoftProjector &w, int expected, const QJsonObject &rel)
 {
     const QJsonObject e = rel["expect"].toObject();
@@ -301,6 +303,19 @@ static int runE2E(SoftProjector &w, int expected, const QJsonObject &rel)
               == e["newBibleName"].toString()
               && !dbValue(QString("SELECT id FROM BibleVersions WHERE id = %1").arg(e["oldBible"].toString())).isValid(),
               "the new Bible arrived through server and companion, the old one is gone");
+
+    // Proposals up through the companion and the server, and Florian's Undo back.
+    const int edited0 = e["edited0"].toInt();
+    editInEditor(w, edited0, "E2E operator title", "Verse 1\nE2E operator fix");
+    const QString uuid = dbValue(QString("SELECT uuid FROM CgfProposals WHERE song_id = %1 ORDER BY created_at DESC")
+                                 .arg(edited0)).toString();
+    auto state = [&] { return dbValue(QString("SELECT state FROM CgfProposals WHERE uuid = '%1'").arg(uuid)).toString(); };
+    CHECK(waitUntil([&] { return state() == "sent"; }, 30000), "the companion took the proposal to the push server");
+    qInfo("PROPOSAL SENT");
+    CHECK(waitUntil([&] { return state() == "undone"; }, 90000), "Florian's Undo came back through server and companion");
+    CHECK(dbValue(QString("SELECT song_text FROM Songs WHERE id = %1").arg(edited0)).toString() == e["newText0"].toString(),
+          "and the library's text is back");
+    waitUntil([] { return false; }, 1500); // let the acknowledgement reach the server
     qInfo().noquote() << QString("%1 checks, %2 failed").arg(checks).arg(failures);
     return failures ? 1 : 0;
 }
@@ -308,7 +323,7 @@ static int runE2E(SoftProjector &w, int expected, const QJsonObject &rel)
 // Proposals up (docs/proposals-up.md): the real song editor saves, a program
 // on the bridge plays the companion, and a signed release (v3 -> v4) arrives
 // on top of the operator's changes.
-static void editInEditor(SoftProjector &w, int id, const QString &title, const QString &text, bool asNew = false)
+static void editInEditor(SoftProjector &w, int id, const QString &title, const QString &text, bool asNew)
 {
     EditWidget *ew = w.editWidget;
     SongDatabase sdb;

@@ -588,3 +588,27 @@ Published (Florian's go-ahead) as app 0.2.8, release 9, from 6d3bb54 with the
 launcher: 106 files, 2 uploaded (the app and the companion). The church
 laptop was offline, still on app-0.2.6; it installs only the latest release
 when it next connects, so it goes straight to 0.2.8.
+
+## Proposals up (2026-11-28)
+
+Operators' new songs and song fixes go from the laptops to the CGF Lyrics
+master, accepted by default, with a Telegram message to Florian that has an
+Undo button (his decision, 2026-11-28). Design, protocol and setup:
+`docs/proposals-up.md`. Branch `claude/quizzical-golick-70ddec`.
+
+- App: `src/sources/proposals.cpp` (new, in `softProjector.pro`); the song
+  editor and `LibraryPush::apply` call it. The companion relays the new
+  messages, so app and companion go out together in one release.
+- Push server: `push-server/src/proposals.ts`, a `proposals` table and three
+  routes. Needs a redeploy, then `tools/telegram_setup.py` for the bot's
+  secrets (a second deployment). Both wait for Florian's go-ahead.
+- Florian's PC: `tools/pull_proposals.py` and
+  `tools/import_projector_proposals.py`, which loads CGF Lyrics' own tools and
+  writes the master under its rules.
+
+Checks: server 33, `tools/test_pull_proposals.py` 2, `tests/push` 52 plus
+`--proposals` 30 plus end to end 9 (a proposal and its undo through
+`wrangler dev` and the companion), `tests/proposals/run_import_test.py` on a
+scratch copy of the master.
+
+Not done: the server redeploy, the bot, the app release.
