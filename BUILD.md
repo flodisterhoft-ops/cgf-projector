@@ -524,3 +524,27 @@ warning or flash, waiting while something is presented
 Checks: publisher 14, `tests/push` 52 plus end to end 9 (a held Bible release
 through wrangler dev and the companion, 6 parts of about 0.9 MB), bridge 73,
 `tests/update` 23. All pass.
+
+Published (Florian's go-ahead, "push the latest Schlachter now"):
+- App 0.2.7, release 8, from 7d72fec with the launcher: 106 files, 14
+  uploaded. The church laptop was offline from 20:49, so it installs at its
+  next boot.
+- Push server redeployed with the hold for releases that need a newer app
+  (c83ce38, version `285c420a-36be-4fc4-acb2-aaf7e64fb85c`; server tests 21).
+  Without it, a laptop booting into 0.2.6 could take the Bible release before
+  its update installed.
+- Library v4: `projector_bibles.py republish --no-push` (July songs, Bibles
+  2, 3, 5 and 14 "German: Schlachter 2000 (v3)", 31,171 verses), pushed with
+  this branch's `tools/push_release.py`: v1->v2 and v2->v3 empty, v3->v4 in 6
+  parts (Bible 14 replaced, 13 removed). The server is at v4.
+
+At the laptop's next boot: the old companion installs 0.2.7 and restarts on
+it; its hello reports app-0.2.7, the server sends v4, and the app applies it
+at start (or once a Bible passage leaves the screen). Check: the bridge's
+`hello` at ws://<laptop>:8770/ws lists Bibles 2, 3, 5, 14 and library v4.
+
+Until library-bibles is merged into master, `%USERPROFILE%\.cgf-publish\push.json`
+names the main checkout's `tools/push_release.py`, which has no Bible support.
+A normal `publish_snapshot.py` run is safe with it only while the Bibles stay
+as in v4; a Bible change before the merge must be pushed with this branch's
+tool (`projector_bibles.py republish --no-push`, then `push_release.py push`).

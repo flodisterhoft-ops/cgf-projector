@@ -264,6 +264,17 @@ needed no server change.
 | `GET /v1/<church>/app/files/<sha256>` | laptop or publisher | the stored file |
 | `POST /v1/<church>/app/releases` | publisher token | `{"release": <signed app release>}`; seq must rise, every file uploaded |
 
+A release that names `needs` reaches a laptop only once the app folder it
+reports (`hello.app`, from `cgf-versions.txt`) is new enough: the server keeps
+`needs` in a column of `releases`, and `FEATURE_SINCE` in `release.ts` says
+which app brings each feature (`bibles`: app-0.2.7). Until then the replay on
+hello stops at that release without a `resync` (the releases are there, the
+laptop is not behind), and the live send after a publish skips it. Unknown
+features, and laptops that report no app, never get such a release. Without
+this, a laptop booting into 0.2.6 could take a Bible release before its app
+update installed and count it as applied. Since server version
+`285c420a-36be-4fc4-acb2-aaf7e64fb85c` (2026-11-27).
+
 Tokens go in `Authorization: Bearer`, never in the address. The server stores
 only a hash of each device token. Over the WebSocket:
 
