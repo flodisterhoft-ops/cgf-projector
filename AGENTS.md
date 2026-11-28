@@ -130,6 +130,14 @@ stripping what they never used and wiring the app into a central CGF library.
   slides when the computer has it; otherwise LibreOffice, which the
   companion downloads into the data folder when the operator agrees (user
   decision 2026-11-27; BUILD.md, "LibreOffice for PowerPoint files").
+- **Presentation steps (user decision 2026-11-28):** a slide with animations
+  is one still per click, and a step forward plays a simple effect (fade,
+  wipe, fly, float, zoom, cut). The app never draws shapes itself and never
+  hands the projector to PowerPoint: the office program draws stills, the
+  effect works on the difference between two of them. Videos and sounds in
+  slides play at their step. Florian turned down Google Slides and a full
+  PowerPoint player. BUILD.md, "Presentation steps"; `tests/steps`;
+  `tools/presentations/` checks real files.
 - **Added 2026-11-27: rotate buttons** in the Pictures tab and the slide show
   editor, and photos load the right way up (camera rotation tag). See
   BUILD.md, "Rotating pictures"; `tests/pictures`.

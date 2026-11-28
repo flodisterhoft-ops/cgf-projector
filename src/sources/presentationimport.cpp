@@ -391,6 +391,10 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
             wait.exec();
             worker->wait();
             delete worker;
+            // CGF_IMPORT_STEPS=broken: the checks damage the copy, to see the
+            // import fall back to the file itself.
+            if(ok && qEnvironmentVariable("CGF_IMPORT_STEPS") == "broken")
+                QFile::resize(expanded, 2000);
             if(ok)
                 input = expanded;
             else
@@ -401,8 +405,21 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
         }
     }
 
-    if(failed(runScript(script, work.path(), {"-In", QDir::toNativeSeparators(input), "-Size", QString::number(box)},
-                        progress, detail)))
+    int code = runScript(script, work.path(), {"-In", QDir::toNativeSeparators(input), "-Size", QString::number(box)},
+                         progress, detail);
+    if(code > 0 && code != 2 && input != file)
+    {
+        // The office program would not draw the rewritten copy. The file
+        // itself may still be fine: draw that, one still per slide.
+        AppLog::write("Import of " + file + ": the copy with steps was refused (" + detail + "); drawn without steps");
+        steps.clear();
+        for(const QString &name : QDir(work.path()).entryList({"slide*.png"}, QDir::Files))
+            QFile::remove(work.filePath(name));
+        QDir(work.filePath("office")).removeRecursively();
+        code = runScript(script, work.path(), {"-In", QDir::toNativeSeparators(file), "-Size", QString::number(box)},
+                         progress, detail);
+    }
+    if(failed(code))
         return slides;
 
     const QDir out(work.path());

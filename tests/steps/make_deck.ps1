@@ -7,7 +7,10 @@
 #   slide 2  five lines that fade in one per click, push           6 steps
 #   slide 3  A flies in from the left (click), B wipes up from
 #            the bottom by itself after it, C zooms in (click),
-#            A fades out (click); wipe transition                  5 steps
+#            A fades out (click), C spins (click, nothing new to
+#            see) and D fades in after the spin; wipe transition   6 steps
+#   slides 2 and 3 carry custom data ("tags"), which their copies
+#   must not share: PowerPoint refuses such a file
 #   slide 4  a picture that is there when the slide appears, a
 #            second one that appears by itself, a sound on a click,
 #            an animated picture; cover transition                 3 steps
@@ -43,6 +46,7 @@ try {
     $s.Shapes[1].TextFrame.TextRange.Text = 'Five lines'
     $s.Shapes[2].TextFrame.TextRange.Text = "First line`rSecond line`rThird line`rFourth line`rFifth line"
     [void]$s.TimeLine.MainSequence.AddEffect($s.Shapes[2], $fade, 2, $click)    # by first-level paragraph
+    $s.Tags.Add('CGF', 'slide two')
     $s.SlideShowTransition.EntryEffect = 3853           # push left: the new slide comes from the right
 
     $s = $pres.Slides.Add(3, 12)
@@ -55,6 +59,10 @@ try {
     $e = $seq.AddEffect($b, $wipe, 0, $after); $e.EffectParameters.Direction = 3     # from the bottom
     $e = $seq.AddEffect($c, $zoom, 0, $click)
     $e = $seq.AddEffect($a, $fade, 0, $click); $e.Exit = -1
+    $d = $s.Shapes.AddShape(1, 360, 260, 240, 140); $d.Fill.ForeColor.RGB = 0x800080; $d.Line.Visible = 0; $d.Name = 'D'
+    [void]$seq.AddEffect($c, 61, 0, $click)             # spin: an emphasis, nothing appears
+    [void]$seq.AddEffect($d, $fade, 0, $after)
+    $s.Tags.Add('CGF', 'slide three')
     $s.SlideShowTransition.EntryEffect = 2819           # wipe right: it starts at the left
 
     $s = $pres.Slides.Add(4, 12)

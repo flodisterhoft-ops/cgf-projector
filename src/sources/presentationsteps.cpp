@@ -214,6 +214,65 @@ bool writePackage(const QString &file, const Package &pkg)
     return zip.status() == QZipWriter::NoError;
 }
 
+// The relationships of a slide that is a copy of another. Pictures, media
+// and the layout are shared with the original. Notes, comments and custom
+// data ("tags") belong to one slide only and are left out; PowerPoint
+// refuses a file in which two slides share a tags part. Anything else (a
+// chart, SmartArt, an embedded object) is copied, with what it links to, so
+// every slide has its own.
+QByteArray copyRelationships(Package &pkg, QDomDocument &types, const QString &source, const QString &copyTag, int depth = 0)
+{
+    static const QSet<QString> shared = {QStringLiteral("slideLayout"), QStringLiteral("slideMaster"), QStringLiteral("theme"),
+                                         QStringLiteral("image"), QStringLiteral("hdphoto"), QStringLiteral("media"),
+                                         QStringLiteral("video"), QStringLiteral("audio"), QStringLiteral("hyperlink"),
+                                         QStringLiteral("font"), QStringLiteral("slide")};
+    static const QSet<QString> dropped = {QStringLiteral("notesSlide"), QStringLiteral("tags"), QStringLiteral("comments"),
+                                          QStringLiteral("commentAuthors"), QStringLiteral("customXml")};
+    QDomDocument doc;
+    if(!parse(pkg.parts.value(Package::relsName(source)), doc))
+        return QByteArray();
+    const QString folder = source.left(source.lastIndexOf(QLatin1Char('/')) + 1);
+    QDomElement all = doc.documentElement();
+    for(QDomElement r : children(all, QStringLiteral("Relationship")))
+    {
+        const QString type = r.attribute(QStringLiteral("Type")).section(QLatin1Char('/'), -1);
+        if(dropped.contains(type))
+        {
+            all.removeChild(r);
+            continue;
+        }
+        if(shared.contains(type) || r.attribute(QStringLiteral("TargetMode")) == QLatin1String("External") || depth > 4)
+            continue;
+        const QString written = r.attribute(QStringLiteral("Target"));
+        const QString target = written.startsWith(QLatin1Char('/')) ? written.mid(1) : QDir::cleanPath(folder + written);
+        if(!pkg.has(target))
+            continue;
+        // chart3.xml becomes chart3_cgf7.xml beside it.
+        const int dot = target.lastIndexOf(QLatin1Char('.'));
+        const QString copy = target.left(dot) + QLatin1String("_cgf") + copyTag + target.mid(dot);
+        if(!pkg.has(copy))
+        {
+            pkg.add(copy, pkg.parts.value(target));
+            for(const QDomElement &o : children(types.documentElement(), QStringLiteral("Override")))
+            {
+                if(o.attribute(QStringLiteral("PartName")) != QLatin1Char('/') + target)
+                    continue;
+                QDomElement mine = types.createElement(QStringLiteral("Override"));
+                mine.setAttribute(QStringLiteral("PartName"), QLatin1Char('/') + copy);
+                mine.setAttribute(QStringLiteral("ContentType"), o.attribute(QStringLiteral("ContentType")));
+                types.documentElement().appendChild(mine);
+                break;
+            }
+            const QByteArray below = copyRelationships(pkg, types, target, copyTag, depth + 1);
+            if(!below.isEmpty())
+                pkg.add(Package::relsName(copy), below);
+        }
+        const int slash = written.lastIndexOf(QLatin1Char('/'));
+        r.setAttribute(QStringLiteral("Target"), written.left(slash + 1) + copy.mid(copy.lastIndexOf(QLatin1Char('/')) + 1));
+    }
+    return doc.toByteArray(-1);
+}
+
 // ---------------------------------------------------------------- animations
 
 // What an animation acts on: a whole shape (paragraph -1) or one line of its text.
@@ -403,15 +462,17 @@ QString opposite(const QString &dir)
 }
 
 // The slide's transition as the effect of its first step. A slide without
-// one is a cut, as in PowerPoint.
+// one keeps the app's usual fade between pictures (no effect named), which
+// is what operators know; PowerPoint would cut.
 void readTransition(const QDomElement &slide, SlideStep &step)
 {
-    step.effect = QStringLiteral("cut");
-    step.durationMs = 0;
+    step.effect.clear();
+    step.durationMs = 500;
     QList<QDomElement> found = descendants(slide, QStringLiteral("transition"));
     // A newer transition comes first, an older one PowerPoint 2007 can show
     // second. Take the first one we can do; any other effect is a fade.
     bool any = false;
+    int length = -1;
     for(const QDomElement &t : found)
     {
         const QDomElement kind = t.firstChildElement();
@@ -446,11 +507,15 @@ void readTransition(const QDomElement &slide, SlideStep &step)
             step.durationMs = effect == QLatin1String("cut") ? 0 : qBound(150, duration, 2000);
             return;
         }
-        if(step.durationMs == 0)
-            step.durationMs = qBound(150, duration, 2000);
+        if(length < 0)
+            length = qBound(150, duration, 2000);
     }
+    // Only effects we do not have: a fade as long as the first of them.
     if(any)
+    {
         step.effect = QStringLiteral("fade");
+        step.durationMs = length;
+    }
 }
 
 // ---------------------------------------------------------------- shapes
@@ -890,13 +955,19 @@ struct State
 };
 
 // The slide's XML with the animations and transition taken out and the
-// state's hidden shapes and lines applied.
-QByteArray renderState(const QByteArray &xml, const State &state, const Inherited &inherited)
+// state's hidden shapes and lines applied. A copy also loses its custom data
+// (see copyRelationships).
+QByteArray renderState(const QByteArray &xml, const State &state, const Inherited &inherited, bool copy)
 {
     QDomDocument doc;
     if(!parse(xml, doc))
         return xml;
     QDomElement slide = doc.documentElement();
+    if(copy)
+    {
+        for(QDomElement data : descendants(slide, QStringLiteral("custDataLst")))
+            data.parentNode().removeChild(data);
+    }
     for(QDomElement c = slide.firstChildElement(); !c.isNull();)
     {
         QDomElement next = c.nextSiblingElement();
@@ -1043,6 +1114,7 @@ SlidePlan planSlide(const Package &pkg, const QString &part, const QSizeF &slide
     // Effects that start together are one step.
     QSet<int> played;
     int previousOffset = 0;
+    bool clickWaiting = false;      // a click whose own effects showed nothing new
     for(int i = 0; i < effects.count();)
     {
         const Effect &lead = effects.at(i);
@@ -1050,10 +1122,13 @@ SlidePlan planSlide(const Package &pkg, const QString &part, const QSizeF &slide
         while(end < effects.count() && effects.at(end).start == QLatin1String("withEffect") && !effects.at(end).interactive == !lead.interactive)
             ++end;
 
+        // What follows a click that showed nothing (it only emphasised or
+        // moved something) still waited for that click in PowerPoint.
+        const bool clicked = lead.start == QLatin1String("clickEffect");
         SlideStep step;
         step.slide = slideNumber;
-        step.automatic = lead.start != QLatin1String("clickEffect");
-        const int offset = lead.start == QLatin1String("clickEffect") ? 0 : lead.offsetMs;
+        step.automatic = !clicked && !clickWaiting;
+        const int offset = clicked ? 0 : lead.offsetMs;
         step.delayMs = step.automatic ? qBound(0, offset - previousOffset, 60000) : 0;
         State next = state;
         bool classified = false;
@@ -1130,7 +1205,10 @@ SlidePlan planSlide(const Package &pkg, const QString &part, const QSizeF &slide
             plan.states << state;
             plan.steps << step;
             previousOffset = offset;
+            clickWaiting = false;
         }
+        else if(clicked)
+            clickWaiting = true;
         i = end;
     }
 
@@ -1321,9 +1399,8 @@ bool PresentationSteps::expand(const QString &pptx, const QString &expanded, con
 
         const SlidePlan plan = planSlide(pkg, part, slideSize, deckFolder, mediaDir, ++shown);
         const QByteArray original = pkg.parts.value(part);
-        const QByteArray originalRels = pkg.parts.value(Package::relsName(part));
         const Inherited inherited = inheritedBy(pkg, part);
-        pkg.add(part, renderState(original, plan.states.first(), inherited));
+        pkg.add(part, renderState(original, plan.states.first(), inherited, false));
         steps << plan.steps.first();
 
         // The further states are slides of their own, right after this one.
@@ -1334,20 +1411,10 @@ bool PresentationSteps::expand(const QString &pptx, const QString &expanded, con
             ++added;
             const QString folder = part.left(part.lastIndexOf(QLatin1Char('/')) + 1);
             const QString name = folder + QStringLiteral("cgfstep%1.xml").arg(added);
-            pkg.add(name, renderState(original, plan.states.at(k), inherited));
-
-            QDomDocument relsDoc;
-            if(parse(originalRels, relsDoc))
-            {
-                QDomElement rr = relsDoc.documentElement();
-                for(const QDomElement &r : children(rr, QStringLiteral("Relationship")))
-                {
-                    const QString type = r.attribute(QStringLiteral("Type")).section(QLatin1Char('/'), -1);
-                    if(type == QLatin1String("notesSlide") || type.startsWith(QLatin1String("comment")))
-                        rr.removeChild(r);
-                }
-                pkg.add(Package::relsName(name), relsDoc.toByteArray(-1));
-            }
+            pkg.add(name, renderState(original, plan.states.at(k), inherited, true));
+            const QByteArray relationships = copyRelationships(pkg, types, part, QString::number(added));
+            if(!relationships.isEmpty())
+                pkg.add(Package::relsName(name), relationships);
 
             QDomElement override = types.createElement(QStringLiteral("Override"));
             override.setAttribute(QStringLiteral("PartName"), QLatin1Char('/') + name);

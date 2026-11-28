@@ -133,12 +133,12 @@ int main(int argc, char *argv[])
     // ---------------------------------------------------------------- import
     qputenv("CGF_IMPORT_ENGINE", "powerpoint");
     QList<SlideShowItem> slides = PresentationImport::run(deck, sets, &w, error);
-    const int rows = video ? 18 : 16;
+    const int rows = video ? 19 : 17;
     CHECK(slides.count() == rows && error.isEmpty(), QString("PowerPoint: %1 stills for 6 slides shown (%2) %3").arg(rows).arg(slides.count()).arg(error));
     QList<SlideStep> s;
     for(const SlideShowItem &i : std::as_const(slides))
         s << i.step();
-    while(s.count() < 18)
+    while(s.count() < 19)
         s << SlideStep();
     const int last = rows - 1;
 
@@ -156,19 +156,23 @@ int main(int argc, char *argv[])
     CHECK(s[10].effect == "zoom" && !s[10].automatic, "3.3 zooms in on a click: " + describe(s[10]));
     CHECK(s[11].effect == "fade" && s[11].exit, "3.4 fades out: " + describe(s[11]));
     CHECK(darkPixels(slides[11].image) < darkPixels(slides[10].image), "3.4: the shape is gone from the still");
-    CHECK(s[12].effect == "cover" && s[12].direction == "right" && s[12].media.count() == 1 && s[12].media[0].kind == "gif",
-          "slide 4 covers from the right and has an animated picture: " + describe(s[12]));
-    CHECK(s[13].automatic && s[13].effect == "cut" && s[13].index == 1, "4.1 appears by itself: " + describe(s[13]));
+    const SlideStep waited = slides.value(12).step();
+    CHECK(waited.slide == 3 && waited.index == 5 && waited.effect == "fade" && !waited.automatic,
+          "3.5: a click that only spins a shape shows nothing new, so what follows it is the click: " + describe(waited));
+    CHECK(s[13].effect == "cover" && s[13].direction == "right" && s[13].media.count() == 1 && s[13].media[0].kind == "gif",
+          "slide 4 covers from the right and has an animated picture: " + describe(s[13]));
+    CHECK(s[14].automatic && s[14].effect == "cut" && s[14].index == 1, "4.1 appears by itself: " + describe(s[14]));
     bool sound = false;
-    for(const SlideMedia &m : std::as_const(s[14].media))
+    for(const SlideMedia &m : std::as_const(s[15].media))
         sound = sound || (m.kind == "audio" && m.file.endsWith(".wav") && data.exists("slide-media/" + m.file));
-    CHECK(sound && !s[14].automatic && s[14].slide == 4 && s[14].index == 2, "4.2 plays a sound on a click, kept in the data folder: " + describe(s[14]));
-    CHECK(rows == 16 || (s[15].slide == 5 && s[15].index == 0 && s[15].effect == "cut"), "the hidden slide is left out; slide 5 is the video slide: " + describe(s[15]));
+    CHECK(sound && !s[15].automatic && s[15].slide == 4 && s[15].index == 2, "4.2 plays a sound on a click, kept in the data folder: " + describe(s[15]));
+    CHECK(rows == 17 || (s[16].slide == 5 && s[16].index == 0 && s[16].effect.isEmpty() && s[16].durationMs == 500),
+          "the hidden slide is left out; slide 5, the video slide, has no transition and keeps the usual fade: " + describe(s[16]));
     if(video)
     {
-        const SlideMedia m = s[16].media.value(0);
+        const SlideMedia m = s[17].media.value(0);
         CHECK(m.kind == "video" && m.file.endsWith(".mp4") && qAbs(m.rect.x() - 0.25) < 0.01 && qAbs(m.rect.width() - 0.5) < 0.01
-              && data.exists("slide-media/" + m.file), "5.1 plays the video in its place: " + describe(s[16]));
+              && data.exists("slide-media/" + m.file), "5.1 plays the video in its place: " + describe(s[17]));
     }
     CHECK(s[last].effect == "split" && s[last].direction == "vertical" && s[last].index == 0, "the last slide opens with a split: " + describe(s[last]));
 
@@ -240,26 +244,29 @@ int main(int argc, char *argv[])
     waitUntil([&] { return screen.settled(); }, 2000);
     go(11);
     CHECK(!screen.busy(), "3.4: the shape fades out with the cross-fade");
+    pump(1500);
+    CHECK(list->currentRow() == 11, "3.5 waits for its click");
+    go(12);
     pump(600);
 
     // cover, an animated picture, a step by itself after the transition, a sound
-    go(12);
+    go(13);
     fx = screen.fx();
     CHECK(fx.value("kind") == "fly" && !fx.value("push").toBool() && !fx.value("exit").toBool() && screen.gifs() == 1,
           "slide 4: the new still slides over the old one; the animated picture is on");
-    CHECK(waitUntil([&] { return list->currentRow() == 13; }, 4000), "4.1 follows by itself once the transition is over");
+    CHECK(waitUntil([&] { return list->currentRow() == 14; }, 4000), "4.1 follows by itself once the transition is over");
     CHECK(screen.gifs() == 1, "the animated picture keeps running");
     pump(300);
-    go(14);
+    go(15);
     QObject *soundPlayer = screen.player("slideSound");
     CHECK(soundPlayer->property("source").toUrl().toString().endsWith(".wav"), "4.2: the sound is given to the player: " + soundPlayer->property("source").toUrl().toString());
     CHECK(waitUntil([&] { return soundPlayer->property("playbackState").toInt() == 1; }, 3000), "and it plays");
-    go(15);
+    go(16);
     CHECK(screen.gifs() == 0 && soundPlayer->property("playbackState").toInt() == 0, "the next slide stops the sound and the animated picture");
 
     if(video)
     {
-        go(16);
+        go(17);
         QObject *player = screen.player("slidePlayer");
         QQuickItem *out = screen.item("slideVideo");
         CHECK(player->property("source").toUrl().toString().endsWith(".mp4"), "5.1: the video is given to the player");
@@ -269,7 +276,7 @@ int main(int argc, char *argv[])
         CHECK(waitUntil([&] { return player->property("playbackState").toInt() == 1; }, 4000), "and it plays");
         pump(700);
         w.pds1->dispView->grabWindow().save(dir + "/frame-video.png");
-        go(17);
+        go(18);
         CHECK(player->property("playbackState").toInt() == 0, "the next slide stops the video");
     }
     else
@@ -309,6 +316,10 @@ int main(int argc, char *argv[])
     qputenv("CGF_IMPORT_STEPS", "0");
     slides = PresentationImport::run(deck, sets, &w, error);
     CHECK(slides.count() == (video ? 6 : 5) && !slides.value(1).step().isValid(), QString("steps switched off: one still per slide (%1)").arg(slides.count()));
+    qputenv("CGF_IMPORT_STEPS", "broken");
+    slides = PresentationImport::run(deck, sets, &w, error);
+    CHECK(error.isEmpty() && slides.count() == (video ? 6 : 5) && !slides.value(1).step().isValid(),
+          QString("a copy PowerPoint will not open: the file itself is drawn, one still per slide (%1) %2").arg(slides.count()).arg(error));
     qunsetenv("CGF_IMPORT_STEPS");
 
     if(office)

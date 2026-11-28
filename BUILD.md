@@ -649,3 +649,108 @@ conversion (LibreOffice stopped), a broken file; PowerPoint and PDF as before.
 run once by hand: 141 s on Florian's PC, 373 MB. Also `tests/update` 23,
 `tests/pictures` 42 and `tests/push` 52 plus end to end pass. Not yet tried on
 a laptop without PowerPoint, and not published.
+
+## Presentation steps (2026-11-28)
+
+An imported presentation was one still per slide. Florian asked (2026-11-28)
+for the animations too, reduced to a few cheap ones ("convert all animations
+to something simple like fade in"), for videos and sounds in slides to play,
+and for the import to be built on the presentations people really bring.
+
+What real files use: `tools/presentations/survey.py` on the 780 readable
+.pptx files on Florian's PC (5,479 slides; school work, church services,
+youth evenings). 21 have animations and 21 have transitions. Of the 834
+effects that make something appear or leave, 77 % are a plain fade; then
+float in, zoom, wipe, appear and a few fly-ins. Text built line by line is
+the most common animation by far (741 lines). Fewer than half of the effects
+start on a click; the others start with or after another one. Transitions
+are nearly all fade, with a few wipes and one each of push, cover, uncover
+and split. 39 videos and 9 sounds are inside slides. Garamond is the most
+used font after Calibri.
+
+How it works:
+
+- `PresentationSteps::expand` (`src/sources/presentationsteps.cpp`) reads the
+  .pptx (a zip of XML) and writes a copy in which every step of every slide
+  is a slide of its own, without animations: shapes that have not appeared
+  yet are taken out, text lines that have not appeared yet are made invisible
+  in place (transparent letters, a space for a bullet), so the lines above
+  never move. PowerPoint or LibreOffice then draws that copy as before.
+  `.ppt`, `.pps` and `.odp` are saved as `.pptx` by the office program first
+  (`-ToPptx` in the import script).
+- A step is `SlideStep` (`presentationsteps.hpp`): slide and step number, the
+  effect, its direction and length, whether it follows by itself and after
+  how long, and the media it starts. It is kept as one line of text
+  (`cgf-step:{...}`) in the `Slides.path` column, which slide shows and
+  schedule files already carry, so nothing in the database changes.
+- PowerPoint's effects become ours by what they do, not by their names: a
+  wipe filter is a wipe from that side; a move with a fade is a float; a move
+  alone is a fly-in from its side; a change of size is a zoom; box, circle,
+  diamond and plus are a box opening from the middle; a barn-door filter is a
+  split; visibility alone is a cut; everything else is a fade. Transitions:
+  fade, cut, push, wipe, cover, uncover, split; any other is a fade of its
+  length. A slide without a transition keeps the app's usual fade.
+- Effects that start together are one step; "after previous" starts a step
+  that follows by itself. Sequences that start when a shape is clicked follow
+  as further clicks, because the operator has no mouse on the slide. Steps
+  that show nothing new (an emphasis or a motion path alone) are left out. A
+  video nothing starts gets a step of its own.
+- On the projector (`ProjectorDisplayScreen::renderSlideStep`,
+  `DisplayArea.qml`): one step forward plays the step's effect; any other way
+  to a still (a jump, a step back, the first picture) is the usual fade. The
+  effect works on the part of the picture that differs between the two
+  stills: wipe, split and box show the new still through a growing window
+  over that part; fly, float and zoom move that part, cut out with soft edges
+  from the difference. No shape is drawn separately, so this works the same
+  with PowerPoint and LibreOffice. Push, cover and uncover move whole stills.
+- Videos and sounds are copied into `<data folder>/slide-media` under names
+  made from their content, and play at their step: the video in its place on
+  the slide, sound on display 1 only. Animated GIFs keep moving over the
+  still. A linked video is found where the file says or beside the
+  presentation. Deleting a slide show deletes its media unless another slide
+  show uses the same files.
+- A sound or video set to "hide during show" is left off the stills.
+- Parts a slide cannot share with its copies are dropped (notes, comments,
+  custom data) or copied (charts, SmartArt, theme overrides): PowerPoint
+  refuses a file in which two slides share a "tags" part, which two of
+  Florian's files have.
+- If the office program will not draw the rewritten copy, the file itself is
+  drawn, one still per slide; `CGFProjector.log` says so.
+- LibreOffice gets a longer list of font replacements for fonts that come
+  with Office and not with Windows (`$FontReplacements` in the import script;
+  Garamond, Century Gothic and Montserrat are the common ones in Florian's
+  files), chosen by measured width with `tools/presentations/fonts.py`, and
+  only for fonts the computer lacks.
+
+Not carried over: movement along paths, spins and other emphasis effects (the
+object stays as it is), animations of single chart bars or SmartArt parts
+(the whole chart appears), text that types letter by letter (a wipe), slides
+that advance by themselves after a time, online videos, and sound that runs
+across slides. The stream overlay and the back-screen mirror get every still
+without the motion and without slide sound.
+
+For checks and odd cases: `CGF_IMPORT_STEPS=0` imports one still per slide.
+
+Tools (`tools/presentations/`): `survey.py` counts what a set of files uses;
+`corpus.py` runs the splitter over a set and has PowerPoint or LibreOffice
+draw the copies, to find files they refuse; `fonts.py` measures font widths;
+`stepstool` is the splitter as a command (build with qmake and mingw32-make
+in its folder). Their reports name no files unless asked to.
+
+Releasing: the app now needs `Qt6Xml.dll`. Run `windeployqt` again before
+`push_release.py app-release` (`tests/update` fails on an incomplete package).
+
+Checks: `python tests/steps/run_tests.py --db <CGF database> [--video <file>]
+[--soffice <soffice.exe>]` has PowerPoint make a deck with each kind of
+animation, imports it through PowerPoint and LibreOffice and steps through it
+on the real main window offscreen, watching the projector's effect layer, the
+steps that follow by themselves and the media players: 58 checks pass (it
+leaves `frame-*.png` beside the test exe, the projector in the middle of a
+push, a wipe and a fly-in). `tools/presentations/corpus.py` on Florian's
+files: the splitter read all 780; PowerPoint and LibreOffice each drew every
+still of the 21 files with steps and of 25 of the others. Also
+`tests/presentations` 21, `tests/pictures` 42, `tests/screens` 34,
+`tests/bridge` 73, `tests/push` 52 and publisher 14 pass. `tests/update` and
+the push end-to-end run need `npm install` in `push-server/`, which only the
+main checkout has: run them after the merge. Not yet tried with an operator
+or on a laptop without PowerPoint, and not published.

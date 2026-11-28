@@ -50,6 +50,7 @@ struct SlideStep
     // How this still replaces the one before it. For index 0 it is the
     // slide's transition, otherwise what the appearing or leaving object does.
     //   cut, fade, wipe, split, box, fly, float, zoom; push, cover, uncover (transitions only)
+    // Empty: the slide has no transition, and the app's usual fade is used.
     QString effect;
     // wipe, fly, push, cover, uncover: the side it starts from (left, right, top, bottom);
     // float: up or down; split: horizontal or vertical
