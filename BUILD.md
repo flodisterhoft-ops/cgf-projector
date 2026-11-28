@@ -775,3 +775,30 @@ more than the projector's size would show nothing more. A 4:3 slide comes out
 times on a 16:9 deck with photos (184 KB a still instead of 110), measured on
 two of Florian's files. A slide show imported before keeps its size until it
 is imported again. `tests/steps` 60 and `tests/presentations` 21 pass with it.
+
+The lists show slides (Florian, 2026-11-28, after trying it on his laptop):
+with every still as a list row, his 13-slide picture book was 39 rows. He
+expected what PowerPoint shows: the slides, each complete, with the
+animations happening as he goes forward. Now:
+
+- The Pictures tab, the slide show editor and the live list have one row per
+  slide, showing the slide complete (the last of its stills). The stills
+  themselves stay as they were, one after another in the slide show and in
+  schedule files; `slideRows` in `slideshow.cpp` groups them (a still that is
+  the next step of the slide before it belongs to that slide's row).
+- Next (Enter, the arrows, the projector window's keys and buttons) shows the
+  slide's next step and only after its last step the next slide. Previous
+  goes one step back, and from a slide's first step to the slide before it,
+  complete. Choosing a slide in the list starts it at its first step.
+- In the live list Down and Up, Page Down and Page Up (what a presenter
+  remote sends), Space and Backspace go through the steps as well
+  (`SoftProjector::eventFilter`); the list by itself would jump from slide to
+  slide.
+- Remove, the up and down arrows and Rotate work on a slide with all its
+  stills.
+- The network bridge's `picture` gets `step` and `steps`; `index` and `count`
+  are slides now.
+
+`tests/steps` 74 (the lists, Next and Previous through steps, the keys),
+`tests/presentations` 21, `tests/pictures` 42, `tests/screens` 34 and
+`tests/bridge` 73 pass.

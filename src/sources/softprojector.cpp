@@ -151,6 +151,7 @@ SoftProjector::SoftProjector(QWidget *parent)
             this, SLOT(setPictureList(QList<SlideShowItem>&,int,QString)));
     connect(pictureWidget, SIGNAL(sendToSchedule(SlideShow&)),this,SLOT(addToShcedule(SlideShow&)));
     connect(pictureWidget, &PictureWidget::slideRotated, this, &SoftProjector::pictureRotated);
+    ui->listShow->installEventFilter(this);
     connect(mediaPlayer, SIGNAL(toProjector(VideoInfo&)), this, SLOT(setVideo(VideoInfo&)));
     connect(editWidget, SIGNAL(updateSongFromDatabase(int,int)), songWidget, SLOT(updateSongFromDatabase(int,int)));
     connect(editWidget, SIGNAL(addedNew(Song,int)), songWidget,SLOT(addNewSong(Song,int)));
@@ -707,6 +708,33 @@ void SoftProjector::closeEvent(QCloseEvent *event)
     finishClose(event->isAccepted());
 }
 
+bool SoftProjector::eventFilter(QObject *watched, QEvent *event)
+{
+    // In the live list a picture row can stand for several stills, a slide's
+    // animation steps. Down and Up, and a presenter remote's Page Down and
+    // Page Up, go through them the way Enter and the keys on the projector
+    // window do; the list by itself would jump from slide to slide.
+    if(watched == ui->listShow && event->type() == QEvent::KeyPress && pType == PICTURE)
+    {
+        switch(static_cast<QKeyEvent *>(event)->key())
+        {
+        case Qt::Key_Down:
+        case Qt::Key_PageDown:
+        case Qt::Key_Space:
+            nextSlide();
+            return true;
+        case Qt::Key_Up:
+        case Qt::Key_PageUp:
+        case Qt::Key_Backspace:
+            prevSlide();
+            return true;
+        default:
+            break;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
 void SoftProjector::keyPressEvent(QKeyEvent *event)
 {
     // Will get called when a key is pressed
@@ -856,15 +884,19 @@ void SoftProjector::setPictureList(QList<SlideShowItem> &image_list,int row,QStr
     ui->listShow->setSpacing(1);
     ui->listShow->setIconSize(QSize(100,100));
 
-    foreach(const SlideShowItem &p, pictureShowList)
+    // One row per slide, showing the slide complete: the last of its stills
+    // (an imported presentation's slide has one per animation step).
+    pictureRows = slideRows(pictureShowList);
+    for(int r = 0; r < pictureRows.count(); ++r)
     {
         QListWidgetItem *itm = new QListWidgetItem;
-        QIcon ico(p.imageSmall);
-        itm->setIcon(ico);
+        itm->setIcon(QIcon(pictureShowList.at(lastStillOfRow(pictureRows, r, pictureShowList.count())).imageSmall));
         ui->listShow->addItem(itm);
     }
 
-    ui->listShow->setCurrentRow(row);
+    // row is a still of the list: that one goes on the screen.
+    pictureStill = row;
+    ui->listShow->setCurrentRow(row < 0 ? -1 : rowOfStill(pictureRows, row));
     ui->listShow->setFocus();
     new_list = false;
     updateScreen();
@@ -996,7 +1028,7 @@ void SoftProjector::updateScreen()
     if(slideStepTimer)
         slideStepTimer->stop();
     if(!showing || pType != PICTURE || currentRow < 0 || new_list)
-        shownPictureRow = -1;
+        shownPictureStill = -1;
 
     if(!showing)
     {
@@ -1261,13 +1293,24 @@ void SoftProjector::showAnnounce(int currentRow)
 
 void SoftProjector::showPicture(int currentRow)
 {
-    // A still of an imported presentation comes on with its step's effect
-    // when the operator went one step forward, as a click does in PowerPoint.
-    // Reached any other way (a jump, a step back, the first picture) it
-    // fades in like every other picture. Sound plays on display 1 only.
-    const SlideShowItem &item = pictureShowList.at(currentRow);
+    // The row is a slide. A slide of an imported presentation can be several
+    // stills, one for each step of its animations: the one wanted
+    // (pictureStill) when it belongs to this row, else the row's first.
+    const int first = pictureRows.value(currentRow, -1);
+    const int last = lastStillOfRow(pictureRows, currentRow, pictureShowList.count());
+    if(pictureStill < first || pictureStill > last)
+        pictureStill = first;
+    const int still = pictureStill;
+    if(still < 0 || still >= pictureShowList.count())
+        return;
+
+    // A still comes on with its step's effect when the operator went one
+    // step forward, as a click does in PowerPoint. Reached any other way (a
+    // jump, a step back, the first picture) it fades in like every other
+    // picture. Sound plays on display 1 only.
+    const SlideShowItem &item = pictureShowList.at(still);
     const SlideStep step = item.step();
-    const bool forward = step.isValid() && shownPictureRow >= 0 && currentRow == shownPictureRow + 1;
+    const bool forward = step.isValid() && shownPictureStill >= 0 && still == shownPictureStill + 1;
     pds1->renderSlideStep(item.image, mySettings.slideSets, step, forward, true);
     if(hasDisplayScreen2)
         pds2->renderSlideStep(item.image, mySettings.slideSets, step, forward, false);
@@ -1275,24 +1318,30 @@ void SoftProjector::showPicture(int currentRow)
         pds3->renderSlideStep(item.image, mySettings.slideSets, step, forward, false);
     if(hasDisplayScreen4)
         pds4->renderSlideStep(item.image, mySettings.slideSets, step, forward, false);
-    shownPictureRow = currentRow;
+    shownPictureStill = still;
 
-    // The next step follows by itself (PowerPoint's "after previous" and
-    // "with previous"): after this slide's transition, or the time
+    // The slide's next step follows by itself (PowerPoint's "after previous"
+    // and "with previous"): after this slide's transition, or the time
     // PowerPoint gives it after this step began.
-    if(currentRow + 1 >= pictureShowList.count())
+    if(still >= last)
         return;
-    const SlideStep next = pictureShowList.at(currentRow + 1).step();
-    if(!step.isValid() || !next.isValid() || !next.automatic || next.slide != step.slide || next.index != step.index + 1)
+    const SlideStep next = pictureShowList.at(still + 1).step();
+    if(!step.isValid() || !next.isValid() || !next.automatic)
         return;
     if(!slideStepTimer)
     {
         slideStepTimer = new QTimer(this);
         slideStepTimer->setSingleShot(true);
         connect(slideStepTimer, &QTimer::timeout, this, [this] {
+            // updateScreen() stops the timer whenever anything else happens,
+            // so the still it was started for is still the one on the screen.
             const int row = ui->listShow->currentRow();
-            if(showing && pType == PICTURE && row == shownPictureRow && row + 1 < ui->listShow->count())
-                ui->listShow->setCurrentRow(row + 1);
+            if(showing && pType == PICTURE && pictureStill == shownPictureStill
+                    && pictureStill < lastStillOfRow(pictureRows, row, pictureShowList.count()))
+            {
+                ++pictureStill;
+                updateScreen();
+            }
         });
     }
     slideStepTimer->start(qMax(50, next.delayMs + (step.index == 0 ? qMax(500, step.durationMs) : 0)));
@@ -2077,6 +2126,14 @@ void SoftProjector::nextSlide()
 {
     // selects next item in the show list
     int current = ui->listShow->currentRow();
+    if(pType == PICTURE && current >= 0 && pictureStill >= pictureRows.value(current, 0)
+            && pictureStill < lastStillOfRow(pictureRows, current, pictureShowList.count()))
+    {
+        // This slide has more steps to show before the next slide.
+        ++pictureStill;
+        updateScreen();
+        return;
+    }
     if(ui->rbMultiVerse->isChecked())
     {
         // if multiple is selected, select last one
@@ -2096,6 +2153,25 @@ void SoftProjector::prevSlide()
 {
     // selects previous item in the show list
     int current = ui->listShow->currentRow();
+    if(pType == PICTURE && current >= 0)
+    {
+        if(pictureStill > pictureRows.value(current, 0)
+                && pictureStill <= lastStillOfRow(pictureRows, current, pictureShowList.count()))
+        {
+            // One step back within this slide.
+            --pictureStill;
+            updateScreen();
+            return;
+        }
+        if(current > 0)
+        {
+            // Back from a slide's first step: the slide before it, complete,
+            // the way it was left.
+            pictureStill = lastStillOfRow(pictureRows, current - 1, pictureShowList.count());
+            ui->listShow->setCurrentRow(current - 1);
+            return;
+        }
+    }
     if(ui->rbMultiVerse->isChecked())
     {
         // if multiple is selected, select first one

@@ -111,13 +111,19 @@ void SoftProjector::publishLive(bool textCleared)
         break;
     }
     case PICTURE:
-        if(row >= 0 && row < pictureShowList.count())
+        if(row >= 0 && row < pictureRows.count())
         {
-            const SlideShowItem &item = pictureShowList.at(row);
+            // The row is a slide; a slide of an imported presentation can be
+            // several stills (its animation steps). index and count are
+            // slides, step and steps the stills of this one.
+            const int first = pictureRows.at(row), last = lastStillOfRow(pictureRows, row, pictureShowList.count());
+            const int still = pictureStill >= first && pictureStill <= last ? pictureStill : first;
+            const SlideShowItem &item = pictureShowList.at(still);
             picture = item.image;
             live["kind"] = "picture";
             live["picture"] = QJsonObject{{"name", item.name}, {"index", row},
-                                          {"count", int(pictureShowList.count())},
+                                          {"count", int(pictureRows.count())},
+                                          {"step", still - first}, {"steps", last - first + 1},
                                           {"key", QString::number(item.image.cacheKey())}};
         }
         break;

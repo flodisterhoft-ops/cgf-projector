@@ -50,14 +50,28 @@ void SlideShowEditor::loadSlideShow()
     ui->listWidgetSlides->setCurrentRow(0);
 }
 
+// One row per slide: an imported presentation's slide can be several stills
+// (its animation steps, slideRows in slideshow.hpp). The row shows the
+// finished slide, and Remove, the arrows and Rotate work on all its stills.
+int SlideShowEditor::firstStill(int row) const
+{
+    return rows.value(row, -1);
+}
+
+int SlideShowEditor::lastStill(int row) const
+{
+    return lastStillOfRow(rows, row, editSS.slides.count());
+}
+
 void SlideShowEditor::reloadSlides()
 {
+    rows = slideRows(editSS.slides);
     ui->listWidgetSlides->clear();
-    foreach(const SlideShowItem &ssi, editSS.slides)
+    ui->listWidgetSlides->setIconSize(QSize(100,100));
+    for(int r = 0; r < rows.count(); ++r)
     {
         QListWidgetItem *itm = new QListWidgetItem;
-        QIcon ico(ssi.imageSmall);
-        itm->setIcon(ico);
+        itm->setIcon(QIcon(editSS.slides.at(lastStill(r)).imageSmall));
         ui->listWidgetSlides->addItem(itm);
     }
 }
@@ -65,7 +79,7 @@ void SlideShowEditor::reloadSlides()
 void SlideShowEditor::updateButtonState()
 {
     int c = ui->listWidgetSlides->currentRow();
-    int ct = editSS.slides.count();
+    int ct = rows.count();
 
     ui->pushButtonRemoveImage->setEnabled(c>=0 && c<ct);
     ui->pushButtonMoveUp->setEnabled(c>0 && c<ct);
@@ -88,10 +102,11 @@ void SlideShowEditor::rotateSlide(int degrees)
 {
     // Saved with the slide show: saveSideShow writes turned slides again.
     const int c = ui->listWidgetSlides->currentRow();
-    if(c < 0 || c >= editSS.slides.count())
+    if(c < 0 || c >= rows.count())
         return;
-    editSS.slides[c].rotate(degrees);
-    ui->listWidgetSlides->item(c)->setIcon(QIcon(editSS.slides.at(c).imageSmall));
+    for(int i = firstStill(c); i <= lastStill(c); ++i)
+        editSS.slides[i].rotate(degrees);
+    ui->listWidgetSlides->item(c)->setIcon(QIcon(editSS.slides.at(lastStill(c)).imageSmall));
     on_listWidgetSlides_currentRowChanged(c);
 }
 
@@ -103,8 +118,8 @@ void SlideShowEditor::on_pushButtonAddImages_clicked()
     {
         this->setCursor(Qt::WaitCursor);
         int i(0);
+        const int selected = ui->listWidgetSlides->currentRow();
         QProgressDialog progress(tr("Adding files..."), tr("Cancel"), 0, imageFilePaths.count(), this);
-        ui->listWidgetSlides->setIconSize(QSize(100,100));
         foreach(const QString &file, imageFilePaths)
         {
             ++i;
@@ -116,15 +131,10 @@ void SlideShowEditor::on_pushButtonAddImages_clicked()
 
             // add to slideshow
             editSS.slides.append(sd);
-
-            // add to slide show list
-            QListWidgetItem *itm = new QListWidgetItem;
-            QIcon ico(sd.imageSmall);
-
-            itm->setIcon(ico);
-            ui->listWidgetSlides->addItem(itm);
         }
         this->setCursor(Qt::ArrowCursor);
+        reloadSlides();
+        ui->listWidgetSlides->setCurrentRow(selected);
         updateButtonState();
     }
 
@@ -133,10 +143,12 @@ void SlideShowEditor::on_pushButtonAddImages_clicked()
 void SlideShowEditor::on_pushButtonRemoveImage_clicked()
 {
     int c = ui->listWidgetSlides->currentRow();
-    if(c>=0 && c<editSS.slides.count())
+    if(c>=0 && c<rows.count())
     {
-        deleteList.append(editSS.slides.at(c).slideId);
-        editSS.slides.removeAt(c);
+        const int first = firstStill(c), size = lastStill(c) - first + 1;
+        for(int i = first; i < first + size; ++i)
+            deleteList.append(editSS.slides.at(i).slideId);
+        editSS.slides.remove(first, size);
         reloadSlides();
         updateButtonState();
     }
@@ -145,12 +157,11 @@ void SlideShowEditor::on_pushButtonRemoveImage_clicked()
 void SlideShowEditor::on_pushButtonMoveUp_clicked()
 {
     int c = ui->listWidgetSlides->currentRow();
-    int u = c-1;
-    if(u>=0)
+    if(c>0 && c<rows.count())
     {
-        editSS.slides.move(c,u);
+        moveSlideRowUp(editSS.slides, rows, c);
         reloadSlides();
-        ui->listWidgetSlides->setCurrentRow(u);
+        ui->listWidgetSlides->setCurrentRow(c-1);
         updateButtonState();
     }
 }
@@ -158,12 +169,12 @@ void SlideShowEditor::on_pushButtonMoveUp_clicked()
 void SlideShowEditor::on_pushButtonMoveDown_clicked()
 {
     int c = ui->listWidgetSlides->currentRow();
-    int d = c+1;
-    if(d<editSS.slides.count())
+    if(c>=0 && c+1<rows.count())
     {
-        editSS.slides.move(c,d);
+        // Down is the row below moving up.
+        moveSlideRowUp(editSS.slides, rows, c+1);
         reloadSlides();
-        ui->listWidgetSlides->setCurrentRow(d);
+        ui->listWidgetSlides->setCurrentRow(c+1);
         updateButtonState();
     }
 }
@@ -204,10 +215,10 @@ void SlideShowEditor::on_pushButtonCancel_clicked()
 
 void SlideShowEditor::on_listWidgetSlides_currentRowChanged(int currentRow)
 {
-    if(currentRow>=0)
+    if(currentRow>=0 && currentRow<rows.count())
     {
-        ui->labelPreview->setPixmap(editSS.slides.at(currentRow).imagePreview);
-        ui->labelPixInfo->setText(tr("Preview slide: %1").arg(editSS.slides.at(currentRow).name));
+        ui->labelPreview->setPixmap(editSS.slides.at(lastStill(currentRow)).imagePreview);
+        ui->labelPixInfo->setText(tr("Preview slide: %1").arg(editSS.slides.at(firstStill(currentRow)).name));
         updateButtonState();
     }
 }

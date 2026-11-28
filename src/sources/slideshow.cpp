@@ -241,3 +241,45 @@ void SlideShow::saveSideShow(QString savelbl, QWidget *ptW, QList<int> delList)
     ++ct;
     prg.setValue(ct);
 }
+
+QList<int> slideRows(const QList<SlideShowItem> &slides)
+{
+    QList<int> rows;
+    SlideStep before;
+    for(int i = 0; i < slides.count(); ++i)
+    {
+        // A further step of the slide the still before it shows?
+        const SlideStep step = slides.at(i).step();
+        if(i == 0 || !step.isValid() || !before.isValid() || step.slide != before.slide || step.index != before.index + 1)
+            rows << i;
+        before = step;
+    }
+    return rows;
+}
+
+int lastStillOfRow(const QList<int> &rows, int row, int count)
+{
+    if(row < 0 || row >= rows.count())
+        return -1;
+    return row + 1 < rows.count() ? rows.at(row + 1) - 1 : count - 1;
+}
+
+int rowOfStill(const QList<int> &rows, int still)
+{
+    int row = -1;
+    for(int r = 0; r < rows.count() && rows.at(r) <= still; ++r)
+        row = r;
+    return row;
+}
+
+void moveSlideRowUp(QList<SlideShowItem> &slides, const QList<int> &rows, int row)
+{
+    if(row < 1 || row >= rows.count())
+        return;
+    const int first = rows.at(row), size = lastStillOfRow(rows, row, slides.count()) - first + 1;
+    const int target = rows.at(row - 1);
+    const QList<SlideShowItem> moved = slides.mid(first, size);
+    slides.remove(first, size);
+    for(int i = 0; i < size; ++i)
+        slides.insert(target + i, moved.at(i));
+}
