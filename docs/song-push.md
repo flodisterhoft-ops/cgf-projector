@@ -107,10 +107,9 @@ On the laptop (from the install package) the program and the data live apart:
    rest downloaded and checked against their hash. Then the folder gets its
    name, `cgf-versions.txt` switches to it, and older folders are deleted
    (one still running stays until next time). The running app is not touched.
-4. The next start opens the new version. If the app is open, the status bar
-   shows "CGF Projector 0.2.1 is ready" with What's new and Restart now; the
-   button is disabled while anything is on the projector. Nobody has to click
-   it: the next start opens the new version anyway.
+4. The next start opens the new version and shows what changed in the What's
+   new window (docs/whats-new.md). Nobody is asked to restart. (Until 0.2.8 a
+   bar at the bottom right offered "Restart now".)
 
 Because the companion starts at Windows sign-in and keeps running, an update
 published during the week is usually installed before anyone opens the app

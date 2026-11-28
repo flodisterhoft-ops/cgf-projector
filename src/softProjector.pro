@@ -182,7 +182,9 @@ RESOURCES += web.qrc
 SOURCES += sources/librarypush.cpp \
     sources/softprojectorsync.cpp \
     sources/cgfsignature.cpp \
-    sources/softprojectorupdate.cpp
+    sources/softprojectorupdate.cpp \
+    sources/whatsnew.cpp
 HEADERS += headers/librarypush.hpp \
+    headers/whatsnew.hpp \
     headers/cgfsignature.hpp
 win32: LIBS += -lbcrypt

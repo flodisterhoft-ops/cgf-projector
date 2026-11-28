@@ -130,6 +130,12 @@ stripping what they never used and wiring the app into a central CGF library.
 - **Added 2026-11-27: rotate buttons** in the Pictures tab and the slide show
   editor, and photos load the right way up (camera rotation tag). See
   BUILD.md, "Rotating pictures"; `tests/pictures`.
+- **What's new window (user decision 2026-11-28, app 0.2.9):** at the first
+  start after the program or the library changed, one window lists the
+  changes with icons and tags (New, Changed, Fixed, Removed); batches show
+  counts, not song lists. It replaces the "Restart now" bar. Program items
+  live in `src/whats-new.json`; add one per release before publishing
+  (docs/whats-new.md).
 - Planned add: **Share button** — song/setlist as link or PDF, possibly via
   Telegram (operators use Telegram).
 - **Library from the cloud only (user decision 2026-11-27):** Bibles and

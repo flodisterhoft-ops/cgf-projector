@@ -140,7 +140,7 @@ def fresh_app_db(v3, expect):
     church laptop in November 2026), which is the second Bible on the screen;
     display 2 shows the library's old German Bible."""
     db = BIN / "spData.sqlite"
-    for p in (db, BIN / "spData.sqlite-journal", BIN / "cgf-companion.log"):
+    for p in (db, BIN / "spData.sqlite-journal", BIN / "cgf-companion.log", BIN / "cgf-whats-new.json"):
         p.unlink(missing_ok=True)
     shutil.copyfile(v3, db)
     con = sqlite3.connect(db)

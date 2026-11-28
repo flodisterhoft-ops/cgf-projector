@@ -321,6 +321,9 @@ QJsonObject LibraryPush::finish(int to, const Pending &release)
     emit libraryChanged(changes.songs, changes.deletedSongs, changes.songbooks);
     if(!changes.bibles.isEmpty() || !changes.deletedBibles.isEmpty())
         emit biblesChanged(changes.bibles, changes.deletedBibles, changes.replaces);
+    if(!changes.songEvents.isEmpty() || !changes.bookEvents.isEmpty() || !changes.bibleEvents.isEmpty())
+        emit libraryRecorded(QJsonObject{{"songs", changes.songEvents}, {"songbooks", changes.bookEvents},
+                                         {"bibles", changes.bibleEvents}});
     return result(to, QStringLiteral("applied"));
 }
 
@@ -340,16 +343,35 @@ QString LibraryPush::apply(int to, const Pending &release, Changes &changes)
     if(!db.transaction())
         return db.lastError().text();
 
+    // What each row does, for the What's new window: looked up before it is written.
+    QSqlQuery songLook(db), bookLook(db);
+    songLook.prepare(QStringLiteral("SELECT number, title FROM Songs WHERE id = ?"));
+    bookLook.prepare(QStringLiteral("SELECT name FROM Songbooks WHERE id = ?"));
+    auto look = [](QSqlQuery &l, qint64 id) {
+        l.addBindValue(id);
+        return l.exec() && l.next();
+    };
+
     QString error;
     for(const QJsonObject &body : release.bodies) // in part order
     {
         const QJsonArray books = body.value(QStringLiteral("songbooks")).toArray();
         const QJsonArray booksGone = body.value(QStringLiteral("songbooks_deleted")).toArray();
         songbooks = songbooks || !books.isEmpty() || !booksGone.isEmpty();
+        for(const QJsonValue &v : books)
+        {
+            const QJsonObject row = v.toObject();
+            const qint64 id = row.value(QStringLiteral("id")).toInteger();
+            changes.bookEvents << QJsonObject{{"id", id}, {"s", look(bookLook, id) ? "updated" : "added"},
+                                              {"name", row.value(QStringLiteral("name")).toString()}};
+        }
         if(!upsertRows(db, QStringLiteral("Songbooks"), books, bookCols, {}, 0, nullptr, error))
             break;
         for(const QJsonValue &id : booksGone)
         {
+            if(look(bookLook, id.toInteger()))
+                changes.bookEvents << QJsonObject{{"id", id.toInteger()}, {"s", "removed"},
+                                                  {"name", bookLook.value(0).toString()}};
             q.prepare(QStringLiteral("DELETE FROM Songbooks WHERE id = ?"));
             q.addBindValue(id.toInteger());
             if(!q.exec())
@@ -360,6 +382,14 @@ QString LibraryPush::apply(int to, const Pending &release, Changes &changes)
         }
         if(!error.isEmpty())
             break;
+        for(const QJsonValue &v : body.value(QStringLiteral("songs")).toArray())
+        {
+            const QJsonObject row = v.toObject();
+            const qint64 id = row.value(QStringLiteral("id")).toInteger();
+            changes.songEvents << QJsonObject{{"id", id}, {"s", look(songLook, id) ? "updated" : "added"},
+                                              {"n", row.value(QStringLiteral("number")).toInt()},
+                                              {"t", row.value(QStringLiteral("title")).toString()}};
+        }
         if(!upsertRows(db, QStringLiteral("Songs"), body.value(QStringLiteral("songs")).toArray(), songCols,
                        localSongColumns, localSongBand, &songs, error))
             break;
@@ -371,6 +401,9 @@ QString LibraryPush::apply(int to, const Pending &release, Changes &changes)
                 error = QStringLiteral("cannot remove song %1").arg(id);
                 break;
             }
+            if(look(songLook, id))
+                changes.songEvents << QJsonObject{{"id", id}, {"s", "removed"}, {"n", songLook.value(0).toInt()},
+                                                  {"t", songLook.value(1).toString()}};
             q.prepare(QStringLiteral("DELETE FROM Songs WHERE id = ?"));
             q.addBindValue(id);
             if(!q.exec())
@@ -480,18 +513,19 @@ QString LibraryPush::applyBibles(const Pending &release, Changes &changes)
     // Bibles this laptop has that the library does not (a hand import).
     if(hasLibrary)
     {
-        QList<qint64> local;
-        if(!q.exec(QStringLiteral("SELECT id FROM BibleVersions")))
+        QList<QPair<qint64, QString>> local;
+        if(!q.exec(QStringLiteral("SELECT id, bible_name FROM BibleVersions")))
             return q.lastError().text();
         while(q.next())
-            local << q.value(0).toLongLong();
-        for(qint64 id : std::as_const(local))
-            if(!keep.contains(id))
+            local << qMakePair(q.value(0).toLongLong(), q.value(1).toString().trimmed());
+        for(const auto &b : std::as_const(local))
+            if(!keep.contains(b.first))
             {
-                const QString e = removeBible(id);
+                const QString e = removeBible(b.first);
                 if(!e.isEmpty())
                     return e;
-                changes.deletedBibles << QString::number(id);
+                changes.deletedBibles << QString::number(b.first);
+                changes.bibleEvents << QJsonObject{{"id", b.first}, {"s", "removed"}, {"name", b.second}};
             }
     }
 
@@ -504,6 +538,11 @@ QString LibraryPush::applyBibles(const Pending &release, Changes &changes)
     {
         const qint64 id = m.value(QStringLiteral("id")).toInteger();
         const QString idText = QString::number(id);
+        q.prepare(QStringLiteral("SELECT 1 FROM BibleVersions WHERE id = ?"));
+        q.addBindValue(id);
+        const bool existed = q.exec() && q.next();
+        changes.bibleEvents << QJsonObject{{"id", id}, {"s", existed ? "updated" : "added"},
+                                           {"name", m.value(QStringLiteral("bible_name")).toString().trimmed()}};
         const QString e = removeBible(id);
         if(!e.isEmpty())
             return e;

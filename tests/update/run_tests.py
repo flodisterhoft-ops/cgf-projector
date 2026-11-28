@@ -11,7 +11,7 @@ on port 8789 with a throwaway publisher; the snapshot is only read.
 It installs the package into a test "laptop" folder, then:
   t2: one new file      the companion downloads just that, copies the rest, switches
   app via the launcher  runs offscreen, marks itself healthy; a song push still lands
-  t3 while the app runs the app is told a restart is ready; app-t1 is tidied away
+  t3 while the app runs the app is told it opens next time; app-t1 is tidied away
   t4 that crashes       the launcher goes back to t3 by itself and never retries t4
 The installed app runs without Qt on PATH, so the package must be complete.
 """
@@ -240,7 +240,7 @@ def run(env, tool_env, app_env, token, db):
     t3 = derived_build(t2, "t3", extra_file="update-test-t3.txt")
     release(env, t3, "t3", "Third test version")
     check(wait_for(lambda: state().get("current") == "app-t3", 120), "the laptop switches to app-t3")
-    check(wait_for(lambda: "App update t3 is ready" in text("CGFProjector.log"), 30), "the open app offers the restart")
+    check(wait_for(lambda: "App update t3 is ready; it opens at the next start" in text("CGFProjector.log"), 30), "the open app knows the new version opens at the next start")
     check("told the projector that app-t3 is ready" in text("cgf-companion.log"), "the companion told the app")
     check(not (LAPTOP / "app-t1").exists() and (LAPTOP / "app-t2").exists(),
           "app-t1 is tidied away; app-t2 (still running) stays")

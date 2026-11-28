@@ -588,3 +588,23 @@ Published (Florian's go-ahead) as app 0.2.8, release 9, from 6d3bb54 with the
 launcher: 106 files, 2 uploaded (the app and the companion). The church
 laptop was offline, still on app-0.2.6; it installs only the latest release
 when it next connects, so it goes straight to 0.2.8.
+
+## What's new window (2026-11-28)
+
+Florian asked for a window at the first start after an update instead of the
+bar at the bottom right, with icons, short lines and counts instead of song
+lists for big batches, mainly for Valentin (docs/whats-new.md).
+
+- `WhatsNewDialog` (`whatsnew.cpp`) opens 1.5 s after start on an installed
+  laptop when something changed since it last opened; Help > What's new opens
+  it again. Program items come from `src/whats-new.json` (in the resources);
+  library changes are recorded per applied release (`LibraryPush::
+  libraryRecorded`) in `cgf-whats-new.json` beside the database.
+- The update bar and its Restart now button are gone; an installed update
+  only logs "App update X is ready; it opens at the next start".
+- Wording: the window's texts were reviewed with GPT Astra 6.2 on high effort
+  (Florian's request) and taken as it wrote them.
+
+Checks: `tests/push` 69 (17 new: what was recorded, the lines, the 5-song
+limit, 5,000 songs, shown once, Help menu, two screenshots) plus end to end
+9, `tests/update` 23, bridge 73, screens 34, pictures 42, publisher 14.

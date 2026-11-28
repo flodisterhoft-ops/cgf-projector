@@ -1,0 +1,40 @@
+{
+  "about": "What the What's new window lists for each program version (docs/whats-new.md). Newest first; the first entry is this build's version. Wording reviewed with GPT Astra 6.2 on 2026-11-28.",
+  "versions": [
+    {
+      "version": "0.2.9",
+      "items": [
+        {
+          "kind": "changed",
+          "title": "Program updates no longer ask you to restart",
+          "detail": "The new version opens the next time CGF Projector starts."
+        }
+      ]
+    },
+    {
+      "version": "0.2.8",
+      "items": [
+        {
+          "kind": "new",
+          "title": "New photos load the right way up",
+          "detail": "Rotate any picture in the Pictures tab or slide show editor."
+        }
+      ]
+    },
+    {
+      "version": "0.2.7",
+      "items": [
+        {
+          "kind": "new",
+          "title": "Bibles now update automatically",
+          "detail": "Updates wait while a passage is selected for projection, even if hidden."
+        },
+        {
+          "kind": "removed",
+          "title": "Local tools for managing Bibles and songbooks",
+          "detail": "The CGF library supplies both. You can still add songs."
+        }
+      ]
+    }
+  ]
+}

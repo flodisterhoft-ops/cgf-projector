@@ -26,6 +26,7 @@
 #include "../headers/librarypush.hpp"
 #include "../headers/livebridge.hpp"
 #include "../headers/biblewidget.hpp"
+#include "../headers/whatsnew.hpp"
 #include "ui_softprojector.h"
 
 #include <QCoreApplication>
@@ -42,6 +43,10 @@ void SoftProjector::setupLibraryPush()
     libraryPush = new LibraryPush(dataDir, this);
     connect(libraryPush, &LibraryPush::libraryChanged, this, &SoftProjector::applyLibraryChanges);
     connect(libraryPush, &LibraryPush::biblesChanged, this, &SoftProjector::applyBibleChanges);
+    // Shown at the next start, never during a service (whatsnew.hpp).
+    connect(libraryPush, &LibraryPush::libraryRecorded, this, [dataDir](const QJsonObject &changes) {
+        WhatsNew::recordLibrary(dataDir, changes);
+    });
 
     // Screen settings that name a Bible this laptop no longer has (a snapshot
     // install, or a hand import the library removed).
