@@ -175,6 +175,7 @@ static void checkWhatsNew(const QJsonObject &e, const QString &oldBibleName)
     const QStringList program = titles(c, "Program");
     CHECK(program == QStringList({"new: Bibles now update automatically", "new: New photos load the right way up",
                                   "new: You can now import slides without PowerPoint",
+                                  "new: Imported slides now build up click by click",
                                   "changed: Program updates no longer ask you to restart",
                                   "removed: Local tools for managing Bibles and songbooks"}),
           "program changes since 0.2.6, new first: " + program.join(" | "));

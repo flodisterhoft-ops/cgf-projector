@@ -10,6 +10,11 @@
           "detail": "If needed, it asks to download LibreOffice (about 375 MB)."
         },
         {
+          "kind": "new",
+          "title": "Imported slides now build up click by click",
+          "detail": "Effects are simpler. Videos, sounds and animated GIFs play."
+        },
+        {
           "kind": "changed",
           "title": "Program updates no longer ask you to restart",
           "detail": "The new version opens the next time CGF Projector starts."
