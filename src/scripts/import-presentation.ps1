@@ -3,8 +3,9 @@
 #
 #   -In       PowerPoint file (.pptx .ppt .pptm .ppsx .pps .odp) or PDF
 #   -Out      folder for slide0001.png, slide0002.png, ...
-#   -Size     each slide is drawn to fit a Size x Size box (PDF pages come out
-#             larger on displays scaled above 100 %; the app fits them again)
+#   -Size     each slide is drawn to fit a box Size wide and -Height high
+#   -Height   (Size x Size without it; PDF pages come out larger on displays
+#             scaled above 100 %; the app fits them again)
 #   -Soffice  LibreOffice's soffice.exe, for computers without PowerPoint
 #   -Profile  folder for LibreOffice's own settings, kept apart from a
 #             LibreOffice the person uses themselves
@@ -25,6 +26,7 @@ param(
     [Parameter(Mandatory = $true)][string]$In,
     [Parameter(Mandatory = $true)][string]$Out,
     [int]$Size = 1920,
+    [int]$Height = 0,
     [string]$Soffice = '',
     [string]$Profile = '',
     [ValidateSet('auto', 'powerpoint', 'libreoffice')][string]$Engine = 'auto',
@@ -35,8 +37,10 @@ $ErrorActionPreference = 'Stop'
 # UTF-8 without a byte-order mark, so messages in any language reach the app
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
+if ($Height -le 0) { $Height = $Size }
+
 function Get-FitSize([double]$w, [double]$h) {
-    $scale = [math]::Min($Size / $w, $Size / $h)
+    $scale = [math]::Min($Size / $w, $Height / $h)
     return @([int][math]::Round($w * $scale), [int][math]::Round($h * $scale))
 }
 
