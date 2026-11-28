@@ -216,12 +216,17 @@ cd push-server && npm test                                   # 33, 12 of them pr
 python tools/test_pull_proposals.py                          # 2
 python tests/push/run_tests.py --db <snapshot>               # --proposals: 30 checks
 python tests/push/run_tests.py --db <snapshot> --e2e         # + a proposal and its undo through wrangler dev
-python tests/proposals/run_import_test.py --scratch <folder> # the importer on a scratch copy of the master
+python tests/proposals/run_import_test.py --scratch <folder> # the importer on a scratch copy of the master, 20 checks
 ```
 
 The importer test copies the master into the scratch folder (2.4 GB; delete
 it afterwards), makes made-up proposals for real songs of the newest
-snapshot and runs apply, undo and keep, each through the full gate.
+snapshot and runs apply, undo and keep, each through the full gate. It
+passed on 2026-11-28 against the master of 2026-11-27 (10,927 live songs)
+with snapshot v4: all three runs committed past `verify_db.py
+--strict-current`. The scratch copy grows to about 9 GB with its
+checkpoints. A run on anything but the master writes its checkpoint and
+report beside that copy, never into CGF Lyrics.
 
 ## Not covered yet
 

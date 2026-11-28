@@ -608,7 +608,8 @@ Undo button (his decision, 2026-11-28). Design, protocol and setup:
 
 Checks: server 33, `tools/test_pull_proposals.py` 2, `tests/push` 52 plus
 `--proposals` 30 plus end to end 9 (a proposal and its undo through
-`wrangler dev` and the companion), `tests/proposals/run_import_test.py` on a
-scratch copy of the master.
+`wrangler dev` and the companion), `tests/proposals/run_import_test.py` 20 on a
+scratch copy of the master (apply, undo and keep, each past `verify_db.py
+--strict-current`). The master itself was never written.
 
 Not done: the server redeploy, the bot, the app release.
