@@ -18,6 +18,7 @@
 ***************************************************************************/
 
 #include "../headers/bridgeserver.hpp"
+#include "../headers/librarypush.hpp"
 
 #include <QBuffer>
 #include <QCoreApplication>
@@ -233,6 +234,13 @@ void BridgeServer::openDatabase()
     db.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=2000"));
     if(!db.open())
         qWarning("Network bridge cannot read the database: %s", qPrintable(db.lastError().text()));
+}
+
+void BridgeServer::reloadBibles()
+{
+    bibles = QJsonArray();
+    bookNames.clear();
+    loadBibles();
 }
 
 void BridgeServer::loadBibles()
@@ -809,7 +817,8 @@ QJsonObject BridgeServer::helloMessage() const
     return QJsonObject{{"type", "hello"}, {"protocol", 1}, {"app", "CGF Projector"},
                        {"host", QHostInfo::localHostName()}, {"port", port},
                        {"addresses", addresses}, {"bibles", bibles}, {"sample", sample},
-                       {"library", QJsonObject{{"version", libraryVersion}}},
+                       {"library", QJsonObject{{"version", libraryVersion},
+                                               {"features", QJsonArray::fromStringList(LibraryPush::features())}}},
                        {"app", QJsonObject{{"folder", QFileInfo(QCoreApplication::applicationDirPath()).fileName()},
                                            {"version", QCoreApplication::applicationVersion()}}}};
 }

@@ -23,6 +23,7 @@
 
 #include "../headers/softprojector.hpp"
 #include "../headers/livebridge.hpp"
+#include "../headers/librarypush.hpp"
 #include "ui_softprojector.h"
 
 #include <QJsonArray>
@@ -46,6 +47,8 @@ void SoftProjector::publishLive(bool textCleared)
 {
     liveTextCleared = textCleared;
     refreshUpdateBar();
+    if(libraryPush)
+        libraryPush->setBibleOnScreen(bibleOnScreen());
     if(!liveBridge)
         return;
 

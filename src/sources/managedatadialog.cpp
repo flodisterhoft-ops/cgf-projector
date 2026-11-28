@@ -32,6 +32,14 @@ ManageDataDialog::ManageDataDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    // Bibles and songbooks come only from the central library, through the
+    // cloud (docs/library-from-cloud.md): the lists here are read-only.
+    for(QPushButton *b : {ui->import_bible_pushButton, ui->edit_bible_pushButton,
+                          ui->export_bible_pushButton, ui->delete_bible_pushButton,
+                          ui->import_songbook_pushButton, ui->edit_songbook_pushButton,
+                          ui->export_songbook_pushButton, ui->delete_songbook_pushButton})
+        b->hide();
+
     // Set tables
     bible_model = new BiblesModel;
     songbook_model = new SongbooksModel;

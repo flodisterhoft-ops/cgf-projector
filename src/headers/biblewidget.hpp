@@ -53,6 +53,9 @@ public slots:
     void setHiddenSplitterState(QByteArray& state);
     void setShownSplitterState(QByteArray& state);
     void loadBibles(QString initialId);
+    // The operator's Bible changed in the database (a library release):
+    // load it again, keeping the book, chapter and selected verses.
+    void reloadBible();
     void sendToProjector(bool add_to_history);
     void setSettings(BibleVersionSettings& sets);
     BibleHistory getCurrentVerse();

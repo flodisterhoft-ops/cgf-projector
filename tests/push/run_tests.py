@@ -72,9 +72,12 @@ def build(env):
 
 def make_versions(base, publish):
     """v3 = the given snapshot; v4 edits two songs, removes one and adds one;
-    v5 adds a songbook with a song in it. All edits are made-up test text."""
+    v5 adds a songbook with a song in it; v6 replaces the library's German
+    Bible (the snapshot's last Bible id, OLD) by a new Bible OLD+1 whose
+    Psalm 23:1 is made-up test text, and records OLD -> OLD+1 in
+    CgfBibleReplaces. All edits are made-up test text."""
     publish.mkdir(parents=True, exist_ok=True)
-    v3, v4, v5 = (publish / f"spData-cgf-v{n}.sqlite" for n in (3, 4, 5))
+    v3, v4, v5, v6 = (publish / f"spData-cgf-v{n}.sqlite" for n in (3, 4, 5, 6))
     shutil.copyfile(base, v3)
     con = sqlite3.connect(v3)
     ids = [r[0] for r in con.execute("SELECT id FROM Songs WHERE id <= 500000 ORDER BY id LIMIT 3")]
@@ -101,14 +104,41 @@ def make_versions(base, publish):
                 (max_id + 2, max_book + 1, "Push test song in a new book", "Verse 1\nIn a new book"))
     con.commit()
     con.close()
+    shutil.copyfile(v5, v6)
+    con = sqlite3.connect(v6)
+    old = con.execute("SELECT MAX(id) FROM BibleVersions").fetchone()[0]
+    new = old + 1
+    con.execute("INSERT INTO BibleVersions (id, bible_name, abbreviation, information, right_to_left) "
+                "SELECT ?, 'Push test Bible (v9)', abbreviation, information, right_to_left FROM BibleVersions WHERE id = ?",
+                (new, old))
+    con.execute("INSERT INTO BibleBooks SELECT ?, id, book_name, chapter_count FROM BibleBooks WHERE bible_id = ? "
+                "ORDER BY rowid", (new, old))
+    con.execute("INSERT INTO BibleVerse SELECT verse_id, ?, book, chapter, verse, verse_text FROM BibleVerse "
+                "WHERE CAST(bible_id AS INTEGER) = ? ORDER BY rowid", (str(new), old))
+    con.execute("UPDATE BibleVerse SET verse_text = 'Push test psalm text' WHERE CAST(bible_id AS INTEGER) = ? "
+                "AND verse_id = 'B019C023V001'", (new,))
+    verses = con.execute("SELECT COUNT(*) FROM BibleVerse WHERE CAST(bible_id AS INTEGER) = ?", (new,)).fetchone()[0]
+    for t in ("BibleVerse", "BibleBooks"):
+        con.execute(f"DELETE FROM {t} WHERE CAST(bible_id AS INTEGER) = ?", (old,))
+    con.execute("DELETE FROM BibleVersions WHERE id = ?", (old,))
+    con.execute("CREATE TABLE CgfBibleReplaces (old_id TEXT PRIMARY KEY, new_id TEXT NOT NULL)")
+    con.execute("INSERT INTO CgfBibleReplaces VALUES (?, ?)", (str(old), str(new)))
+    library = [r[0] for r in con.execute("SELECT id FROM BibleVersions ORDER BY id")]
+    con.commit()
+    con.close()
     expect = {"edited0": ids[0], "edited1": ids[1], "deleted": ids[2], "added": max_id + 1,
               "addedTitle": "Push test new song", "newTitle0": old_title0 + " (push test)",
-              "newText0": new_text0, "newBook": "Push test book", "addedInBook": max_id + 2}
-    return v3, v4, v5, expect
+              "newText0": new_text0, "newBook": "Push test book", "addedInBook": max_id + 2,
+              "oldBible": str(old), "newBible": str(new), "newBibleName": "Push test Bible (v9)",
+              "newBibleVerses": verses, "library": [str(i) for i in library]}
+    return v3, v4, v5, v6, expect
 
 
 def fresh_app_db(v3, expect):
-    """The laptop: v3 plus its own quick-add and a local usage count."""
+    """The laptop: v3 plus its own quick-add, a local usage count and a Bible
+    imported by hand under the id the library's new Bible will get (as on the
+    church laptop in November 2026), which is the second Bible on the screen;
+    display 2 shows the library's old German Bible."""
     db = BIN / "spData.sqlite"
     for p in (db, BIN / "spData.sqlite-journal", BIN / "cgf-companion.log"):
         p.unlink(missing_ok=True)
@@ -117,12 +147,23 @@ def fresh_app_db(v3, expect):
     con.execute("INSERT INTO Songs (id, songbook_id, number, title, song_text) VALUES (500001, 1, 1, "
                 "'Laptop quick-add', 'Verse 1\nlocal')")
     con.execute("UPDATE Songs SET count = 42 WHERE id = ?", (expect["edited0"],))
+    old, new = expect["oldBible"], expect["newBible"]
+    con.execute("INSERT INTO BibleVersions (id, bible_name, abbreviation, information, right_to_left) "
+                "VALUES (?, 'Hand import', '', '', 0)", (int(new),))
+    con.execute("INSERT INTO BibleBooks SELECT ?, id, book_name, chapter_count FROM BibleBooks WHERE bible_id = ?",
+                (int(new), int(old)))
+    con.execute("INSERT INTO BibleVerse SELECT verse_id, ?, book, chapter, verse, 'hand import text' FROM BibleVerse "
+                "WHERE CAST(bible_id AS INTEGER) = ? LIMIT 50", (new, int(old)))
+    con.execute("UPDATE Settings SET sets = ? WHERE type = 'bible1'",
+                (f"primary = 2\nsecondary = {new}\ntrinary = 3\noperator = same",))
+    con.execute("UPDATE Settings SET sets = ? WHERE type = 'bible2'",
+                (f"primary = {old}\nsecondary = none\ntrinary = none",))
     con.commit()
     con.close()
     (BIN / "version.txt").write_text("3\n", encoding="utf-8")
 
 
-def make_releases(v3, v4, v5, expect, key):
+def make_releases(v3, v4, v5, v6, expect, key):
     saved = pr.PART_BUDGET
     pr.PART_BUDGET = 1  # one song per part, to exercise multi-part releases
     try:
@@ -130,12 +171,21 @@ def make_releases(v3, v4, v5, expect, key):
     finally:
         pr.PART_BUDGET = saved
     r45 = pr.build_parts(pr.compute_delta(v4, v5), CHURCH, 4, 5, v5.name, "test", key)
+    pr.PART_BUDGET = 300 * 1024  # a Bible in several parts
+    try:
+        r56 = pr.build_parts(pr.compute_delta(v5, v6), CHURCH, 5, 6, v6.name, "test", key)
+    finally:
+        pr.PART_BUDGET = saved
+    # A release asking for something no app version understands.
+    future = json.dumps({"kind": "cgf-release", "v": 1, "church": CHURCH, "from": 6, "to": 7, "part": 1,
+                         "parts": 1, "needs": ["teleport"], "songs": []}, separators=(",", ":"))
+    future_part = {"type": "release", "payload": future, "sig": pr.sign(key, future), "key": pr.key_id(key)}
     empty = {"songbooks": [], "songbooks_deleted": [], "songs_deleted": [], "other_changes": False,
              "summary": {}, "songs": []}
     bad = dict(empty, songs=[{"id": 500002, "title": "Not allowed", "song_text": "x"}])
     tampered = dict(r34[0])
     tampered["payload"] = tampered["payload"].replace("Push test", "Forged")
-    return {"expect": expect, "r34": r34, "r45": r45, "tampered": tampered,
+    return {"expect": expect, "r34": r34, "r45": r45, "r56": r56, "future67": future_part, "tampered": tampered,
             "bad56": pr.build_parts(bad, CHURCH, 5, 6, "x", "x", key),
             "gap78": pr.build_parts(empty, CHURCH, 7, 8, "x", "x", key)}
 
@@ -154,7 +204,7 @@ def show(stderr):
             print(line)
 
 
-def e2e(env, v3, v4, expect):
+def e2e(env, versions, expect):
     print("--- end to end: wrangler dev + companion")
     companion = REPO / "src" / "win32_build" / "bin" / "cgf-companion.exe"
     if not companion.exists():
@@ -169,14 +219,17 @@ def e2e(env, v3, v4, expect):
                    env=env, check=True, stdout=subprocess.DEVNULL)
     token = (cfg_dir / "publish-token.txt").read_text("utf-8").strip()
 
+    # v3 -> v6: two song releases, then a Bible release at the publisher's
+    # real part size, which the app holds while a passage is on the projector.
     publish = OUT / "publish-e2e"
     shutil.rmtree(publish, ignore_errors=True)
     publish.mkdir()
-    shutil.copyfile(v3, publish / v3.name)
-    shutil.copyfile(v4, publish / v4.name)
+    for v in versions:
+        shutil.copyfile(v, publish / v.name)
+    last = versions[-1]
     (publish / "manifest.json").write_text(json.dumps({
-        "content_version": 4, "file": v4.name, "sha256": pr.file_sha256(v4),
-        "bytes": v4.stat().st_size, "published_at": "test"}), "utf-8")
+        "content_version": 6, "file": last.name, "sha256": pr.file_sha256(last),
+        "bytes": last.stat().st_size, "published_at": "test"}), "utf-8")
 
     state = OUT / "wrangler-state"
     shutil.rmtree(state, ignore_errors=True)
@@ -191,8 +244,8 @@ def e2e(env, v3, v4, expect):
             sys.exit("wrangler dev did not start")
         subprocess.run(py + ["add-device", "Push test laptop", "--out", str(BIN / "cgf-cloud.json")],
                        env=env, check=True, stdout=subprocess.DEVNULL)
-        fresh_app_db(v3, expect)
-        harness = subprocess.Popen([str(BIN / "push_tests.exe"), "--e2e", "4"], cwd=OUT, env=env,
+        fresh_app_db(versions[0], expect)
+        harness = subprocess.Popen([str(BIN / "push_tests.exe"), "--e2e", "6"], cwd=OUT, env=env,
                                    stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         lines = []
         threading.Thread(target=lambda: lines.extend(harness.stderr), daemon=True).start()
@@ -203,15 +256,18 @@ def e2e(env, v3, v4, expect):
         r = subprocess.run(py + ["push", "--publish-dir", str(publish)], env=env, capture_output=True,
                            text=True, encoding="utf-8")
         print(r.stdout.strip() or r.stderr.strip())
-        code = harness.wait(timeout=120)
+        code = harness.wait(timeout=240)
         show("".join(lines))
         status = server_status(token)
         dev = next((d for d in status["devices"] if d["name"] == "Push test laptop"), {})
-        ok = dev.get("last_version") == 4
+        ok = dev.get("last_version") == 6
         print(("ok  :" if ok else "FAIL:") + f" the server records the laptop at v{dev.get('last_version')}")
         log = (BIN / "cgf-companion.log").read_text("utf-8") if (BIN / "cgf-companion.log").exists() else ""
-        logged = "v4 is in the projector's library" in log
-        print(("ok  :" if logged else "FAIL:") + " the companion log records the release")
+        logged = all(f"v{v} is in the projector's library" in log for v in (4, 5, 6))
+        print(("ok  :" if logged else "FAIL:") + " the companion log records v4, v5 and v6")
+        held = "v6 changes Bibles" in log
+        print(("ok  :" if held else "FAIL:") + " the companion log records that the projector held the Bible release")
+        logged = logged and held
         return 0 if code == 0 and ok and logged else 1
     finally:
         if harness and harness.poll() is None:
@@ -268,9 +324,9 @@ def main():
     BIN.mkdir(parents=True, exist_ok=True)
     build(env)
 
-    v3, v4, v5, expect = make_versions(pathlib.Path(args.db), OUT / "publish")
+    v3, v4, v5, v6, expect = make_versions(pathlib.Path(args.db), OUT / "publish")
     key = ec.generate_private_key(ec.SECP256R1())
-    (BIN / "releases.json").write_text(json.dumps(make_releases(v3, v4, v5, expect, key)), "utf-8")
+    (BIN / "releases.json").write_text(json.dumps(make_releases(v3, v4, v5, v6, expect, key)), "utf-8")
 
     print("--- app and bridge")
     fresh_app_db(v3, expect)
@@ -279,7 +335,7 @@ def main():
     (BIN / "cgf-companion.exe").unlink(missing_ok=True)
     code = run_harness(args, dict(env, CGF_NO_COMPANION="1"), ["--local"])
     if args.e2e:
-        code = e2e(env, v3, v4, expect) or code
+        code = e2e(env, [v3, v4, v5, v6], expect) or code
     sys.exit(code)
 
 
