@@ -248,7 +248,8 @@ slides need stepping.
 
 - PowerPoint files (.pptx .ppt .pptm .ppsx .pps .odp) are exported by
   PowerPoint on the same computer, through COM. Hidden slides are left out.
-  Without PowerPoint the app says so: PDF files import without it.
+  Without PowerPoint, LibreOffice does it since 2026-11-28 ("LibreOffice for
+  PowerPoint files" below).
 - PDF pages are drawn by Windows (`Windows.Data.Pdf`, Windows 8.1 and later),
   so no Office and no extra Qt module (Qt PDF would have meant a new download
   and a bigger deployment).
@@ -588,6 +589,66 @@ Published (Florian's go-ahead) as app 0.2.8, release 9, from 6d3bb54 with the
 launcher: 106 files, 2 uploaded (the app and the companion). The church
 laptop was offline, still on app-0.2.6; it installs only the latest release
 when it next connects, so it goes straight to 0.2.8.
+
+## LibreOffice for PowerPoint files (2026-11-28)
+
+Valentin's laptop has no PowerPoint, so "Import PowerPoint or PDF" refused
+his presentation. Florian's decision (2026-11-27): PowerPoint when the
+computer has it, LibreOffice otherwise, fetched when it is first needed.
+Microsoft's online converter (Graph, `format=pdf`) was ruled out: its
+documentation limits conversion to files of 2 MB.
+
+- Order, in `src/scripts/import-presentation.ps1`: PowerPoint through COM;
+  without it LibreOffice (`soffice --headless --convert-to pdf`), whose PDF
+  the existing page drawing turns into slides; with neither, exit code 2.
+  Hidden slides are left out either way. A file that is neither a zip (pptx,
+  odp) nor Office's older container (ppt) is refused before LibreOffice sees
+  it, because LibreOffice would import a text file as one page of text.
+- `PresentationImport::findLibreOffice` looks in the data folder
+  (`libreoffice/program/soffice.exe` beside the database), then for an
+  installed LibreOffice (registry, Program Files).
+- With neither program the app asks once: "Download LibreOffice now?"
+  (about 375 MB). The companion does it, `cgf-companion --fetch-libreoffice
+  --data-dir <folder>` (`src/companion/fetchoffice.cpp`), so the app itself
+  stays off the internet. It downloads LibreOffice 26.2.7 from The Document
+  Foundation (download.documentfoundation.org, then the archive server),
+  accepts only the file whose SHA-256 is built in, and unpacks it with
+  `msiexec /a` into `<data folder>/libreoffice`. That is Windows Installer's
+  unpack-only mode: no administrator rights, nothing in the Start menu,
+  nothing registered. Dictionaries, menu translations, help and spare icon
+  sets are removed afterwards (1.5 GB becomes about 740 MB; the slides come
+  out pixel for pixel the same). The import then runs again by itself.
+- LibreOffice keeps its settings in `<data folder>/libreoffice-profile`, apart
+  from a LibreOffice the person uses themselves. The script writes one
+  setting there: PowerPoint's default font, Aptos, exists only inside Office,
+  and LibreOffice would replace it with a wider font and a serif italic.
+  Calibri is on every Windows computer and 4.5 % narrower than Aptos, so no
+  line gets longer than in PowerPoint.
+- A newer LibreOffice: change the two addresses and the SHA-256 in
+  `fetchoffice.cpp` together (the hash is on the download server, `<file>.sha256`).
+- For checks and odd cases: `CGF_IMPORT_ENGINE=libreoffice` or `powerpoint`
+  forces one program, `CGF_LIBREOFFICE` names a soffice.exe,
+  `CGF_LIBREOFFICE_URL` another address for the same file.
+
+How it looks: the test deck (German and Russian text, a picture, gradient and
+shadow, rotated text, WordArt, a table) drawn by both programs side by side.
+Layout, pictures, shapes and the table match; the font differs (Calibri for
+Aptos) and LibreOffice shrinks overflowing text a little more. Animations,
+videos and sound are not carried over, as with PowerPoint. The first import
+after the download took 20 to 40 s (LibreOffice sets itself up), later ones
+about 5 s, the same as PowerPoint.
+
+Checks: `python tests/presentations/run_tests.py --db <CGF database> --msi
+<LibreOffice msi>` drives the real main window offscreen as a computer
+without PowerPoint and serves the installer from this computer: Cancel at the
+question, a failed download, a file with the wrong SHA-256, the real download
+and unpacking (in a folder with spaces in its path), imports afterwards
+without a question, a Cyrillic file name, the Pictures tab, Cancel during the
+conversion (LibreOffice stopped), a broken file; PowerPoint and PDF as before.
+21 checks pass. The companion's real download from the official server was
+run once by hand: 141 s on Florian's PC, 373 MB. Also `tests/update` 23,
+`tests/pictures` 42 and `tests/push` 52 plus end to end pass. Not yet tried on
+a laptop without PowerPoint, and not published.
 
 ## What's new window (2026-11-28)
 

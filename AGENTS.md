@@ -126,7 +126,10 @@ stripping what they never used and wiring the app into a central CGF library.
   machines via sync later).
 - **Added 2026-10-31: PowerPoint/PDF import** in the Pictures tab. Each slide
   becomes a picture in a saved slide show, so operators step through it like
-  a song (BUILD.md, "PowerPoint and PDF import").
+  a song (BUILD.md, "PowerPoint and PDF import"). PowerPoint draws the
+  slides when the computer has it; otherwise LibreOffice, which the
+  companion downloads into the data folder when the operator agrees (user
+  decision 2026-11-27; BUILD.md, "LibreOffice for PowerPoint files").
 - **Added 2026-11-27: rotate buttons** in the Pictures tab and the slide show
   editor, and photos load the right way up (camera rotation tag). See
   BUILD.md, "Rotating pictures"; `tests/pictures`.
