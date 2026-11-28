@@ -66,6 +66,10 @@ private:
     QProgressDialog progress;
     QList<int> deleteList;
     SlideShowSettings mySettings;
+    // The list's rows: the first still of each (slideRows in slideshow.hpp).
+    QList<int> rows;
+    int firstStill(int row) const;
+    int lastStill(int row) const;
 };
 
 #endif // SLIDESHOWEDITOR_HPP

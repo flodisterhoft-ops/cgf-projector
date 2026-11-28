@@ -120,7 +120,10 @@ after the kind:
 "song":         {"id": 123, "number": 245, "title": "…", "songbook": "…",
                  "stanzaTitle": "Verse 1", "text": "line\nline", "index": 0, "count": 5}
 "announcement": {"title": "…", "text": "…", "index": 0, "count": 3}
-"picture":      {"name": "…", "index": 2, "count": 10, "url": "/media/picture/40"}
+"picture":      {"name": "…", "index": 2, "count": 10, "step": 0, "steps": 1,
+                 "url": "/media/picture/40"}   // index, count: slides; step, steps: the
+                                               // stills of this slide (an imported
+                                               // presentation's animation steps)
 "video":        {"name": "clip.mp4", "seq": 41, "url": "/media/video/41",
                  "mime": "video/mp4", "audioOnly": false}
 ```

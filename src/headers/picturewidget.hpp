@@ -90,6 +90,12 @@ private:
     QList<QPixmap> imagesToShow;
     SlideShowSettings mySettings;
     bool previewFromSchedule = false;
+    // The slide list's rows: the first still of each (slideRows in
+    // slideshow.hpp). A row can be several stills of slides.
+    QList<int> rows;
+    int firstStill(int row) const;
+    int lastStill(int row) const;
+    void refreshSlideList(int selectRow);
 };
 
 #endif // PICTUREWIDGET_HPP

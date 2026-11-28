@@ -79,4 +79,15 @@ public slots:
     void saveSideShow(QString savelbl, QWidget *ptW, QList<int> delList);
 };
 
+// The stills of a slide show as the rows of a list: one row per slide. A
+// slide of an imported presentation can be several stills in a row, one for
+// each step of its animations; the lists show the last of them, the finished
+// slide, the way PowerPoint lists slides. Any other picture is a row of its
+// own. slideRows gives the index of each row's first still.
+QList<int> slideRows(const QList<SlideShowItem> &slides);
+int lastStillOfRow(const QList<int> &rows, int row, int count);
+int rowOfStill(const QList<int> &rows, int still);
+// Moves a row, with all its stills, in front of the row above it.
+void moveSlideRowUp(QList<SlideShowItem> &slides, const QList<int> &rows, int row);
+
 #endif // SLIDESHOW_HPP

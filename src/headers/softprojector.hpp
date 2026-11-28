@@ -129,10 +129,16 @@ private:
     // until it comes back.
     bool displayScreenLost;
     QTimer *screenChangeTimer;
-    // Presentation steps (showPicture): the picture row on the projector, -1
-    // when it shows something else, and the timer for a step that follows
-    // the one before it by itself.
-    int shownPictureRow = -1;
+    // Pictures live. The list has one row per slide; a slide of an imported
+    // presentation can be several stills, one for each step of its
+    // animations, and Next walks through them before it goes to the next
+    // row (showPicture, nextSlide, prevSlide). pictureRows: the first still
+    // of each row. pictureStill: the still wanted. shownPictureStill: the
+    // still on the projector, -1 when it shows something else. The timer
+    // starts a step that follows the one before it by itself.
+    QList<int> pictureRows;
+    int pictureStill = -1;
+    int shownPictureStill = -1;
     QTimer *slideStepTimer = nullptr;
     // The screen each display (1-4) is on now; see resolveDisplayScreens().
     // Fallback: display 1 is on a screen other than its own projector's.
@@ -310,6 +316,7 @@ private slots:
 protected:
     void closeEvent(QCloseEvent *event);
     void keyPressEvent(QKeyEvent *event);
+    bool eventFilter(QObject *watched, QEvent *event) override;
 };
 
 #endif // SOFTPROJECTOR_HPP

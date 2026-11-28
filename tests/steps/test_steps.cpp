@@ -20,6 +20,7 @@
 #undef protected
 #include "ui_softprojector.h"
 #include "ui_picturewidget.h"
+#include "ui_slideshoweditor.h"
 #include "presentationimport.hpp"
 #include "presentationsteps.hpp"
 
@@ -217,10 +218,19 @@ int main(int argc, char *argv[])
     }
     CHECK(s[last].effect == "split" && s[last].direction == "vertical" && s[last].index == 0, "the last slide opens with a split: " + describe(s[last]));
 
-    // ---------------------------------------------------------------- saved, reloaded, live
+    // ---------------------------------------------------------------- saved, reloaded, the lists
     pw->importPresentation(deck);
     pump(300);
-    CHECK(pw->slides.count() == rows && pw->slides.value(8).step().effect == "fly", "the Pictures tab has the steps");
+    const int shown = video ? 6 : 5;        // the slides shown: the rows of every list
+    QListWidget *tab = pw->ui->listWidgetSlides;
+    CHECK(pw->slides.count() == rows && pw->slides.value(8).step().effect == "fly", "the Pictures tab has every still");
+    CHECK(tab->count() == shown, QString("and lists the slides, one row each, not their steps (%1 rows)").arg(tab->count()));
+    CHECK(tab->item(1)->icon().pixmap(100, 100).toImage() == pw->slides.at(6).imageSmall.toImage(),
+          "a row shows its slide complete: the last of its stills");
+    tab->setCurrentRow(1);
+    CHECK(pw->ui->labelPixInfo->text().endsWith("Slide 2")
+          && darkPixels(pw->ui->labelPreview->pixmap()) > darkPixels(pw->slides.at(1).imagePreview),
+          "the preview shows the complete slide too: " + pw->ui->labelPixInfo->text());
     SlideShow reloaded;
     reloaded.loadSlideShow(pw->currentSlideShowId());
     bool same = reloaded.slides.count() == rows;
@@ -228,20 +238,52 @@ int main(int argc, char *argv[])
         same = reloaded.slides[i].step().toText() == slides[i].step().toText() && reloaded.slides[i].name == slides[i].name;
     CHECK(same, "saved and loaded again, every still keeps its step");
 
+    // The arrows and Remove take a slide with all its stills.
+    pw->ui->pushButtonMoveDown->click();
+    CHECK(pw->slides.count() == rows && pw->slides.at(1).step().slide == 3 && pw->slides.at(7).step().slide == 2
+          && pw->slides.at(12).step().index == 5 && tab->currentRow() == 2,
+          "Move down takes slide 2 with its six stills past slide 3");
+    pw->ui->pushButtonMoveUp->click();
+    CHECK(pw->slides.at(1).step().slide == 2 && pw->slides.at(7).step().slide == 3 && tab->currentRow() == 1, "Move up brings it back");
+    pw->ui->pushButtonRemoveImage->click();
+    CHECK(pw->slides.count() == rows - 6 && tab->count() == shown - 1 && pw->slides.at(1).step().slide == 3,
+          "Remove takes the slide's six stills out together");
+    pw->loadSlideShow(pw->currentSlideShowId());
+    pump(200);
+    {
+        // The slide show editor lists slides the same way.
+        SlideShowEditor e;
+        e.setSlideShow(reloaded);
+        const int listed = e.ui->listWidgetSlides->count();
+        e.ui->listWidgetSlides->setCurrentRow(1);
+        e.ui->pushButtonRemoveImage->click();
+        CHECK(listed == shown && e.editSS.slides.count() == rows - 6 && e.deleteList.count() == 6
+              && e.ui->listWidgetSlides->count() == shown - 1,
+              QString("the slide show editor: one row per slide (%1), and Remove takes a slide's six stills").arg(listed));
+        e.ui->pushButtonCancel->click();
+    }
+
+    // ---------------------------------------------------------------- live
+    tab->setCurrentRow(0);
     pw->sendToProjector();
     pump(800);
     Screen screen{w.pds1->dispView->rootObject()};
     QListWidget *list = w.ui->listShow;
-    auto go = [&](int row) { list->setCurrentRow(row); pump(40); };
+    auto next = [&] { w.nextSlide(); pump(40); };
+    // The list row, and the still wanted and on the projector.
+    auto at = [&](int row, int still) { return list->currentRow() == row && w.pictureStill == still && w.shownPictureStill == still; };
+    auto where = [&] { return QString("(row %1, still %2)").arg(list->currentRow()).arg(w.shownPictureStill); };
     const QSize size = w.pds1->imGen.getScreenSize();
     const double sx = size.width() / 1280.0;
-    CHECK(w.pictureShowList.count() == rows && list->currentRow() == 0 && !screen.busy(), "live at the first still, no effect running");
+    CHECK(list->count() == shown && w.pictureShowList.count() == rows && at(0, 0) && !screen.busy(),
+          "live: one row per slide, at the first still, no effect running " + where());
+    CHECK(list->item(1)->icon().pixmap(100, 100).toImage() == pw->slides.at(6).imageSmall.toImage(), "the live list shows the slides complete");
 
     // push: both stills move
-    go(1);
+    next();
     QVariantMap fx = screen.fx();
-    CHECK(fx.value("kind") == "fly" && fx.value("push").toBool() && fx.value("dir") == "right" && screen.busy(),
-          "next: the push starts (" + screen.kind() + ")");
+    CHECK(at(1, 1) && fx.value("kind") == "fly" && fx.value("push").toBool() && fx.value("dir") == "right" && screen.busy(),
+          "Next: slide 2 comes in with its push (" + screen.kind() + ") " + where());
     pump(500);
     const double mid = screen.item("fxSprite")->x();
     CHECK(mid > 0 && mid < size.width(), QString("half a second in, the new still is on its way in from the right (x %1)").arg(mid));
@@ -249,19 +291,22 @@ int main(int argc, char *argv[])
     CHECK(waitUntil([&] { return screen.settled(); }, 3000), "the push ends with the new still alone");
 
     // fade: the new still fades in over the old one, which stays as it is
-    go(2);
-    CHECK(screen.kind() == "fade" && screen.busy(), "a line fades in: " + screen.kind());
+    next();
+    CHECK(at(1, 2) && screen.kind() == "fade" && screen.busy(),
+          "Next again: the row stays on slide 2 and its first line fades in " + where());
     pump(200);
     const double faded = screen.item("fxClipA")->opacity();
     CHECK(faded > 0.05 && faded < 0.95 && qMax(screen.item("backImage1")->opacity(), screen.item("backImage2")->opacity()) > 0.99,
           QString("over the old still, which does not dim meanwhile (new still at %1)").arg(faded));
     w.pds1->dispView->grabWindow().save(dir + "/frame-fade.png");
     CHECK(waitUntil([&] { return screen.settled(); }, 2000), "and ends with the new still alone");
-    go(3); go(4); go(5); go(6);
+    next(); next(); next(); next();
+    CHECK(at(1, 6), "four more: the slide is complete, the row still the same " + where());
 
     // wipe over the whole picture
-    go(7);
-    CHECK(screen.kind() == "wipe" && screen.fx().value("dir") == "left", "slide 3: the wipe starts");
+    next();
+    CHECK(at(2, 7) && screen.kind() == "wipe" && screen.fx().value("dir") == "left",
+          "Next after a slide's last step goes to the next slide: its wipe starts " + where());
     pump(600);
     const double window = screen.item("fxClipA")->width();
     CHECK(window > 0 && window < size.width(), QString("the window grows from the left (%1 wide)").arg(window));
@@ -269,87 +314,118 @@ int main(int argc, char *argv[])
     waitUntil([&] { return screen.settled(); }, 3000);
 
     // fly: only the shape moves; then the next step follows by itself
-    go(8);
+    next();
     fx = screen.fx();
-    CHECK(fx.value("kind") == "fly" && !fx.value("push").toBool() && qAbs(fx.value("x").toDouble() - 80 * sx) < 6
+    CHECK(at(2, 8) && fx.value("kind") == "fly" && !fx.value("push").toBool() && qAbs(fx.value("x").toDouble() - 80 * sx) < 6
           && qAbs(fx.value("w").toDouble() - 320 * sx) < 12,
           QString("3.1: the shape flies, and only the shape (x %1, w %2)").arg(fx.value("x").toDouble()).arg(fx.value("w").toDouble()));
     pump(120);
     const double flying = screen.item("fxSprite")->x();
     CHECK(flying < fx.value("x").toDouble(), QString("it comes from the left (x %1)").arg(flying));
     w.pds1->dispView->grabWindow().save(dir + "/frame-fly.png");
-    CHECK(waitUntil([&] { return list->currentRow() == 9; }, 2000), "3.2 follows by itself");
+    CHECK(waitUntil([&] { return w.shownPictureStill == 9; }, 2000) && list->currentRow() == 2, "3.2 follows by itself; the row stays " + where());
     CHECK(screen.kind() == "wipe" && screen.fx().value("dir") == "bottom", "with its wipe from the bottom");
     pump(1500);
-    CHECK(list->currentRow() == 9 && screen.settled(), "and there it waits for the next click");
+    CHECK(at(2, 9) && screen.settled(), "and there it waits for the next click");
 
-    go(10);
-    CHECK(screen.kind() == "zoom", "3.3: zoom");
+    next();
+    CHECK(at(2, 10) && screen.kind() == "zoom", "3.3: zoom");
     pump(150);
     const double scale = screen.item("fxSprite")->scale();
     CHECK(scale > 0.3 && scale < 1.0, QString("the shape grows (scale %1)").arg(scale));
     waitUntil([&] { return screen.settled(); }, 2000);
-    go(11);
-    CHECK(screen.kind() == "fade", "3.4: the shape fades out");
+    next();
+    CHECK(at(2, 11) && screen.kind() == "fade", "3.4: the shape fades out");
     pump(1500);
-    CHECK(list->currentRow() == 11, "3.5 waits for its click");
-    go(12);
+    CHECK(at(2, 11), "3.5 waits for its click");
+    next();
     pump(600);
 
     // cover, an animated picture, a step by itself after the transition, a sound
-    go(13);
+    next();
     fx = screen.fx();
-    CHECK(fx.value("kind") == "fly" && !fx.value("push").toBool() && !fx.value("exit").toBool() && screen.gifs() == 1,
-          "slide 4: the new still slides over the old one; the animated picture is on");
-    CHECK(waitUntil([&] { return list->currentRow() == 14; }, 4000), "4.1 follows by itself once the transition is over");
+    CHECK(at(3, 13) && fx.value("kind") == "fly" && !fx.value("push").toBool() && !fx.value("exit").toBool() && screen.gifs() == 1,
+          "slide 4: the new still slides over the old one; the animated picture is on " + where());
+    CHECK(waitUntil([&] { return w.shownPictureStill == 14; }, 4000) && list->currentRow() == 3, "4.1 follows by itself once the transition is over");
     CHECK(screen.gifs() == 1, "the animated picture keeps running");
     pump(300);
-    go(15);
+    next();
     QObject *soundPlayer = screen.player("slideSound");
-    CHECK(soundPlayer->property("source").toUrl().toString().endsWith(".wav"), "4.2: the sound is given to the player: " + soundPlayer->property("source").toUrl().toString());
+    CHECK(at(3, 15) && soundPlayer->property("source").toUrl().toString().endsWith(".wav"), "4.2: the sound is given to the player: " + soundPlayer->property("source").toUrl().toString());
     CHECK(waitUntil([&] { return soundPlayer->property("playbackState").toInt() == 1; }, 3000), "and it plays");
-    go(16);
-    CHECK(screen.gifs() == 0 && soundPlayer->property("playbackState").toInt() == 0, "the next slide stops the sound and the animated picture");
+    next();     // the next slide: the video slide, or without one the last
+    CHECK(at(4, 16) && screen.gifs() == 0 && soundPlayer->property("playbackState").toInt() == 0, "the next slide stops the sound and the animated picture " + where());
 
     if(video)
     {
-        go(17);
+        next();
         QObject *player = screen.player("slidePlayer");
         QQuickItem *out = screen.item("slideVideo");
-        CHECK(player->property("source").toUrl().toString().endsWith(".mp4"), "5.1: the video is given to the player");
+        CHECK(at(4, 17) && player->property("source").toUrl().toString().endsWith(".mp4"), "5.1: the video is given to the player");
         CHECK(qAbs(out->x() - 320 * sx) < 3 && qAbs(out->y() - 200 * sx) < 3 && qAbs(out->width() - 640 * sx) < 3
               && qAbs(out->height() - 360 * sx) < 3,
               QString("in its place on the slide (%1, %2, %3 x %4)").arg(out->x()).arg(out->y()).arg(out->width()).arg(out->height()));
         CHECK(waitUntil([&] { return player->property("playbackState").toInt() == 1; }, 4000), "and it plays");
         pump(700);
         w.pds1->dispView->grabWindow().save(dir + "/frame-video.png");
-        go(18);
+        next();
         CHECK(player->property("playbackState").toInt() == 0, "the next slide stops the video");
     }
-    else
-        go(last);
-    CHECK(screen.kind() == "split" && screen.fx().value("dir") == "vertical", "the last slide: split");
+    CHECK(at(shown - 1, last) && screen.kind() == "split" && screen.fx().value("dir") == "vertical", "the last slide: split " + where());
     waitUntil([&] { return screen.settled(); }, 3000);
+    next();
+    CHECK(at(shown - 1, last), "Next on the last still stays there");
 
-    // Any other way to a still: the usual fade, never a step effect.
-    go(last - 1);
-    CHECK(!screen.busy(), "a step back fades");
-    go(3);
-    CHECK(!screen.busy(), "a jump fades");
+    // Back: the slide before, complete; then step by step. Always the usual fade.
+    w.prevSlide();
+    pump(40);
+    CHECK(at(shown - 2, last - 1) && !screen.busy(), "Previous from a slide's first step shows the slide before it complete, with a fade " + where());
+    pump(600);
+    if(video)
+    {
+        w.prevSlide();
+        pump(40);
+        CHECK(at(shown - 2, last - 2) && !screen.busy(), "Previous again goes one step back within that slide " + where());
+        pump(600);
+    }
+
+    // Choosing a slide in the list starts it at its first step.
+    list->setCurrentRow(1);
+    pump(40);
+    CHECK(at(1, 1) && !screen.busy(), "choosing a slide in the list shows its first step, with a fade " + where());
+    pump(600);
+
+    // The keys in the list go through the steps too.
+    QKeyEvent down(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+    QKeyEvent page(QEvent::KeyPress, Qt::Key_PageDown, Qt::NoModifier);
+    QKeyEvent up(QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier);
+    QApplication::sendEvent(list, &down);
+    pump(40);
+    CHECK(at(1, 2), "Down in the live list shows the slide's next step; the row stays " + where());
+    QApplication::sendEvent(list, &page);
+    pump(40);
+    CHECK(at(1, 3), "so does a presenter remote's Page Down " + where());
+    QApplication::sendEvent(list, &up);
+    pump(40);
+    CHECK(at(1, 2), "Up goes one step back " + where());
     pump(600);
 
     // A step about to follow by itself is called off when the operator moves or hides.
-    go(7); go(8);
-    go(3);
+    list->setCurrentRow(2);
+    pump(40);
+    next();                 // 3.1; 3.2 would follow by itself
+    list->setCurrentRow(1);
     pump(1500);
-    CHECK(list->currentRow() == 3, "moving away calls off the step that was about to follow");
-    go(7); go(8);
+    CHECK(at(1, 1), "moving away calls off the step that was about to follow " + where());
+    list->setCurrentRow(2);
+    pump(40);
+    next();
     w.ui->actionHide->trigger();
     pump(1500);
-    CHECK(list->currentRow() == 8 && w.shownPictureRow == -1, "so does Hide");
+    CHECK(list->currentRow() == 2 && w.pictureStill == 8 && w.shownPictureStill == -1, "so does Hide");
     w.ui->actionShow->trigger();
     pump(100);
-    CHECK(!screen.busy(), "Show brings the still back with a fade");
+    CHECK(w.shownPictureStill == 8 && !screen.busy(), "Show brings the same still back with a fade");
     pump(1200);
 
     // ---------------------------------------------------------------- other ways in
