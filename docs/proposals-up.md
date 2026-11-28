@@ -179,6 +179,7 @@ for Florian.
 ## Setup (Florian, once, needs his go-ahead to deploy)
 
 1. Redeploy the push server: `cd push-server; npm test; npx wrangler deploy`.
+   Done 2026-11-28: version `81f3914b-0fbe-41f0-a135-2e3bbf741079`.
 2. In Telegram, open @BotFather, `/newbot`, choose a name. Keep the token to
    yourself: not in chat, a repository or a log. Send the new bot any message.
 3. In a normal PowerShell window in this repository:

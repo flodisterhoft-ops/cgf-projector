@@ -612,4 +612,11 @@ Checks: server 33, `tools/test_pull_proposals.py` 2, `tests/push` 52 plus
 scratch copy of the master (apply, undo and keep, each past `verify_db.py
 --strict-current`). The master itself was never written.
 
-Not done: the server redeploy, the bot, the app release.
+Deployed (Florian's go-ahead, 2026-11-28) from this branch: Worker version
+`81f3914b-0fbe-41f0-a135-2e3bbf741079` at push.cgfvernon.ca, after 33 server
+tests. Checked live: status still answers (library v4, app release
+app-0.2.8, the church laptop last seen on app-0.2.6), the proposals list is
+empty, and the Telegram route refuses calls without its secret (401). The
+bot's secrets are not set yet, so proposals would be stored and nobody told.
+
+Not done: the bot (`tools/telegram_setup.py`, Florian), the app release.
