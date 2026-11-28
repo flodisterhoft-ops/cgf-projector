@@ -6,7 +6,12 @@ export default defineConfig({
 		cloudflareTest({
 			wrangler: { configPath: "./wrangler.jsonc" },
 			miniflare: {
-				bindings: { PUBLISH_TOKEN: "test-publish-token" },
+				bindings: {
+					PUBLISH_TOKEN: "test-publish-token",
+					TELEGRAM_BOT_TOKEN: "test-bot-token",
+					TELEGRAM_CHAT_ID: "42",
+					TELEGRAM_WEBHOOK_SECRET: "test-hook-secret",
+				},
 			},
 		}),
 	],

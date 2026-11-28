@@ -21,10 +21,28 @@ import {
 	type ReleaseRow,
 	SHA256,
 } from "./release";
+import {
+	describe as describeProposal,
+	keyboard,
+	laptopState,
+	NOTIFY_DELAY_MS,
+	parseProposal,
+	type Proposal,
+	PROPOSALS_PER_DAY,
+	stateLine,
+	STATES,
+	telegram,
+	UUID,
+} from "./proposals";
 
 export interface PushEnv {
 	CHURCH: DurableObjectNamespace<ChurchPush>;
 	PUBLISH_TOKEN?: string;
+	// Telegram (docs/proposals-up.md). Secrets, set by tools/telegram_setup.py.
+	// Without them proposals are stored and nobody is told.
+	TELEGRAM_BOT_TOKEN?: string;
+	TELEGRAM_CHAT_ID?: string;
+	TELEGRAM_WEBHOOK_SECRET?: string;
 }
 
 const CHURCH_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -89,6 +107,21 @@ export default {
 			headers.set("X-CGF-Church", church);
 			headers.set("X-CGF-Token-Hash", await sha256Hex(token));
 			return stub.fetch(new Request(request.url, { method: "GET", headers }));
+		}
+
+		// Telegram's calls when Florian presses Undo or Keep under a message.
+		if (route.length === 1 && route[0] === "telegram" && request.method === "POST") {
+			const given = request.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
+			if (!env.TELEGRAM_WEBHOOK_SECRET || !given || !(await sameSecret(given, env.TELEGRAM_WEBHOOK_SECRET)))
+				return json({ error: "unauthorized" }, 401);
+			let update: Record<string, unknown>;
+			try {
+				update = await request.json();
+			} catch {
+				return json({ ok: true });
+			}
+			await stub.telegramUpdate(church, update);
+			return json({ ok: true });
 		}
 
 		const token = bearer(request);
@@ -205,6 +238,25 @@ export default {
 		if (route.length === 1 && route[0] === "status" && request.method === "GET") {
 			return json(await stub.status(church));
 		}
+		if (route.length === 1 && route[0] === "proposals" && request.method === "GET") {
+			const state = url.searchParams.get("state");
+			return json({ proposals: await stub.listProposals(church, state) });
+		}
+		if (route.length === 2 && route[0] === "proposals" && request.method === "POST") {
+			if (!UUID.test(route[1])) return json({ error: "bad uuid" }, 400);
+			let body: { state?: unknown; undo?: unknown; note?: unknown };
+			try {
+				body = await request.json();
+			} catch {
+				return json({ error: "body is not JSON" }, 400);
+			}
+			const state = typeof body.state === "string" ? body.state : null;
+			if (state !== null && !STATES.includes(state as never)) return json({ error: "bad state" }, 400);
+			const undo = typeof body.undo === "boolean" ? body.undo : null;
+			const note = typeof body.note === "string" ? body.note.slice(0, 500) : null;
+			const result = await stub.setProposal(church, route[1], state, undo, note);
+			return json(result, "error" in result ? 404 : 200);
+		}
 		return json({ error: "not found" }, 404);
 	},
 } satisfies ExportedHandler<PushEnv>;
@@ -268,6 +320,30 @@ export class ChurchPush extends DurableObject<PushEnv> {
 			// Added with Bible releases (2026-11-27): what a release needs, comma-separated.
 			const rcols = this.sql.exec<{ name: string }>("PRAGMA table_info(releases)").toArray().map((c) => c.name);
 			if (!rcols.includes("needs")) this.sql.exec("ALTER TABLE releases ADD COLUMN needs TEXT NOT NULL DEFAULT ''");
+			// Added with proposals (2026-11-28): operators' songs on their way to the master.
+			this.sql.exec(`
+				CREATE TABLE IF NOT EXISTS proposals (
+					church_id TEXT NOT NULL,
+					uuid TEXT NOT NULL,
+					device TEXT NOT NULL,
+					kind TEXT NOT NULL,
+					song_id INTEGER NOT NULL,
+					title TEXT NOT NULL,
+					payload TEXT NOT NULL,
+					received_at TEXT NOT NULL,
+					updated_at TEXT NOT NULL,
+					state TEXT NOT NULL DEFAULT 'new',
+					undo INTEGER NOT NULL DEFAULT 0,
+					note TEXT,
+					notified INTEGER NOT NULL DEFAULT 0,
+					notify_tries INTEGER NOT NULL DEFAULT 0,
+					tg_message_id INTEGER,
+					tg_text TEXT,
+					laptop_state TEXT,
+					PRIMARY KEY (church_id, uuid)
+				);
+				CREATE INDEX IF NOT EXISTS proposals_device ON proposals (church_id, device, song_id);
+			`);
 		});
 		// Keep-alives are answered without waking the object.
 		ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
@@ -314,6 +390,15 @@ export class ChurchPush extends DurableObject<PushEnv> {
 			this.replay(ws, a, version);
 			const app = this.latestApp(a.church);
 			if (app) ws.send(app.envelope);
+			// Only a laptop with the app open can act on Florian's choices.
+			if (version !== null) this.sendStates(ws, a);
+		} else if (m.type === "proposal") {
+			ws.send(JSON.stringify(await this.storeProposal(a, m)));
+		} else if (m.type === "proposalStateAck" && typeof m.uuid === "string" && typeof m.state === "string") {
+			this.sql.exec(
+				"UPDATE proposals SET laptop_state = ? WHERE church_id = ? AND uuid = ? AND device = ?",
+				m.state.slice(0, 20), a.church, m.uuid, a.device,
+			);
 		} else if (m.type === "ack" && version !== null) {
 			this.touch(a.church, a.device, version);
 		} else if (m.type === "status") {
@@ -560,6 +645,203 @@ export class ChurchPush extends DurableObject<PushEnv> {
 			.toArray()[0];
 		return row?.app_folder ?? null;
 	}
+
+	// ----------------------------------------------------------------------
+	// Proposals (docs/proposals-up.md)
+
+	private async storeProposal(a: Attachment, m: Record<string, unknown>) {
+		const uuid = typeof m.uuid === "string" ? m.uuid : "";
+		const p = parseProposal(m);
+		if (typeof p === "string") return { type: "proposalStored", uuid, status: "rejected", reason: p };
+		const have = this.sql
+			.exec("SELECT 1 FROM proposals WHERE church_id = ? AND uuid = ?", a.church, p.uuid)
+			.toArray()[0];
+		if (have) return { type: "proposalStored", uuid, status: "duplicate" };
+		const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+		const today = this.sql
+			.exec<{ n: number }>(
+				"SELECT COUNT(*) AS n FROM proposals WHERE church_id = ? AND device = ? AND received_at > ?",
+				a.church, a.device, since,
+			)
+			.one().n;
+		// Refused for now, sent again later: the laptop keeps it queued.
+		if (today >= PROPOSALS_PER_DAY) return { type: "proposalStored", uuid, status: "later", reason: "too many today" };
+
+		// A change to the same song that nobody was told about yet replaces the
+		// earlier one, so Florian gets one message for one fix.
+		const t = now();
+		this.sql.exec(
+			`UPDATE proposals SET state = 'replaced', notified = 1, updated_at = ?
+			 WHERE church_id = ? AND device = ? AND song_id = ? AND state = 'new' AND notified = 0`,
+			t, a.church, a.device, p.song_id,
+		);
+		this.sql.exec(
+			`INSERT INTO proposals (church_id, uuid, device, kind, song_id, title, payload, received_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			a.church, p.uuid, a.device, p.kind, p.song_id, String(p.proposed.title ?? ""), JSON.stringify(p), t, t,
+		);
+		await this.scheduleNotify(NOTIFY_DELAY_MS);
+		return { type: "proposalStored", uuid, status: "stored" };
+	}
+
+	private async scheduleNotify(ms: number) {
+		const at = await this.ctx.storage.getAlarm();
+		const want = Date.now() + ms;
+		if (at === null || at > want) await this.ctx.storage.setAlarm(want);
+	}
+
+	private telegramReady(): boolean {
+		return !!this.env.TELEGRAM_BOT_TOKEN && !!this.env.TELEGRAM_CHAT_ID;
+	}
+
+	private async telegramCall(method: string, body: object): Promise<Record<string, unknown> | null> {
+		try {
+			const r = await telegram.fetch(`${telegram.api}/bot${this.env.TELEGRAM_BOT_TOKEN}/${method}`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			});
+			const out = (await r.json()) as Record<string, unknown>;
+			// Never log the address: it holds the token.
+			if (!out.ok) console.error(`Telegram ${method} failed`, out.description);
+			return out.ok ? out : null;
+		} catch (e) {
+			console.error(`Telegram ${method} failed`, String(e));
+			return null;
+		}
+	}
+
+	// Tell Florian about proposals nobody has told him about. A failed send is
+	// tried again by a later alarm, at most ten times.
+	async alarm(): Promise<void> {
+		if (!this.telegramReady()) return;
+		const rows = this.sql
+			.exec<{ church_id: string; uuid: string; device: string; song_id: number; payload: string; received_at: string }>(
+				`SELECT church_id, uuid, device, song_id, payload, received_at FROM proposals
+				 WHERE notified = 0 AND notify_tries < 10 ORDER BY received_at LIMIT 20`,
+			)
+			.toArray();
+		let failed = false;
+		for (const r of rows) {
+			const p = JSON.parse(r.payload) as Proposal;
+			const again =
+				this.sql
+					.exec(
+						`SELECT 1 FROM proposals WHERE church_id = ? AND device = ? AND song_id = ? AND uuid <> ?
+						 AND state <> 'replaced' AND received_at <= ?`,
+						r.church_id, r.device, r.song_id, r.uuid, r.received_at,
+					)
+					.toArray().length > 0;
+			const text = describeProposal(p, r.device, again);
+			const sent = await this.telegramCall("sendMessage", {
+				chat_id: this.env.TELEGRAM_CHAT_ID,
+				text,
+				reply_markup: keyboard(r.uuid, 0),
+			});
+			const id = (sent?.result as { message_id?: number } | undefined)?.message_id ?? null;
+			if (sent)
+				this.sql.exec(
+					"UPDATE proposals SET notified = 1, tg_message_id = ?, tg_text = ? WHERE church_id = ? AND uuid = ?",
+					id, text, r.church_id, r.uuid,
+				);
+			else {
+				failed = true;
+				this.sql.exec("UPDATE proposals SET notify_tries = notify_tries + 1 WHERE church_id = ? AND uuid = ?", r.church_id, r.uuid);
+			}
+		}
+		const more = this.sql.exec("SELECT 1 FROM proposals WHERE notified = 0 AND notify_tries < 10 LIMIT 1").toArray().length > 0;
+		if (more) await this.ctx.storage.setAlarm(Date.now() + (failed ? 5 * 60_000 : 1_000));
+	}
+
+	// Undo or Keep, pressed under a message in Florian's chat only.
+	async telegramUpdate(church: string, update: Record<string, unknown>) {
+		const q = update.callback_query as
+			| { id?: string; data?: string; message?: { chat?: { id?: number | string }; message_id?: number } }
+			| undefined;
+		if (!q || typeof q.data !== "string") return;
+		const chat = String(q.message?.chat?.id ?? "");
+		if (!this.env.TELEGRAM_CHAT_ID || chat !== String(this.env.TELEGRAM_CHAT_ID)) return;
+		const m = /^(undo|keep):(.+)$/.exec(q.data);
+		if (!m || !UUID.test(m[2])) return;
+		const r = await this.setProposal(church, m[2], null, m[1] === "undo", null);
+		await this.telegramCall("answerCallbackQuery", {
+			callback_query_id: q.id,
+			text: "error" in r ? "That change is no longer here." : m[1] === "undo" ? "Undone" : "Kept",
+		});
+	}
+
+	// Florian's tools and the Telegram buttons: a new state, the undo flag, a note.
+	async setProposal(church: string, uuid: string, state: string | null, undo: boolean | null, note: string | null) {
+		const row = this.proposalRow(church, uuid);
+		if (!row) return { error: "no such proposal" };
+		this.sql.exec(
+			`UPDATE proposals SET state = COALESCE(?, state), undo = COALESCE(?, undo), note = COALESCE(?, note), updated_at = ?
+			 WHERE church_id = ? AND uuid = ?`,
+			state, undo === null ? null : undo ? 1 : 0, note, now(), church, uuid,
+		);
+		const after = this.proposalRow(church, uuid)!;
+		if (after.undo !== row.undo && row.tg_message_id && this.telegramReady())
+			await this.telegramCall("editMessageText", {
+				chat_id: this.env.TELEGRAM_CHAT_ID,
+				message_id: row.tg_message_id,
+				text: (row.tg_text ?? "") + stateLine(after.undo),
+				reply_markup: keyboard(uuid, after.undo),
+			});
+		for (const ws of this.ctx.getWebSockets(after.device)) this.sendStates(ws, { church, device: after.device });
+		return this.publicRow(after);
+	}
+
+	private proposalRow(church: string, uuid: string) {
+		return this.sql
+			.exec<{
+				uuid: string; device: string; kind: string; song_id: number; title: string; payload: string;
+				received_at: string; updated_at: string; state: string; undo: number; note: string | null;
+				notified: number; laptop_state: string | null; tg_message_id: number | null; tg_text: string | null;
+			}>(
+				`SELECT uuid, device, kind, song_id, title, payload, received_at, updated_at, state, undo, note, notified,
+				        laptop_state, tg_message_id, tg_text
+				 FROM proposals WHERE church_id = ? AND uuid = ?`,
+				church, uuid,
+			)
+			.toArray()[0];
+	}
+
+	private publicRow(r: NonNullable<ReturnType<ChurchPush["proposalRow"]>>) {
+		const { payload, tg_message_id, tg_text, ...rest } = r;
+		return { ...rest, undo: !!r.undo, notified: !!r.notified, proposal: JSON.parse(payload) };
+	}
+
+	async listProposals(church: string, state: string | null) {
+		const uuids = this.sql
+			.exec<{ uuid: string }>(
+				state
+					? "SELECT uuid FROM proposals WHERE church_id = ? AND state = ? ORDER BY received_at"
+					: "SELECT uuid FROM proposals WHERE church_id = ? ORDER BY received_at",
+				...(state ? [church, state] : [church]),
+			)
+			.toArray();
+		return uuids.map((u) => this.publicRow(this.proposalRow(church, u.uuid)!));
+	}
+
+	// Tell a laptop what became of its proposals, when that changed since it last heard.
+	private sendStates(ws: WebSocket, a: Attachment) {
+		const rows = this.sql
+			.exec<{ uuid: string; song_id: number; state: string; undo: number; laptop_state: string | null }>(
+				"SELECT uuid, song_id, state, undo, laptop_state FROM proposals WHERE church_id = ? AND device = ? ORDER BY received_at",
+				a.church, a.device,
+			)
+			.toArray();
+		for (const r of rows) {
+			const s = laptopState(r.state, r.undo);
+			if (s === null || s === (r.laptop_state ?? "pending")) continue;
+			try {
+				ws.send(JSON.stringify({ type: "proposalState", uuid: r.uuid, song_id: r.song_id, state: s }));
+			} catch {
+				// it hears with its next hello
+			}
+		}
+	}
+
 
 	// Send a laptop every release from its version onward, in order. If the
 	// chain is broken (it was offline longer than the releases kept here), it
