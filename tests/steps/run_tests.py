@@ -4,7 +4,8 @@
     python tests/steps/run_tests.py --db <CGF database> [--video <short video>]
                                     [--soffice <LibreOffice's soffice.exe>]
     python tests/steps/run_tests.py --db <CGF database> --record <presentation>
-                                    --frames <folder> [--stills N] [--engine libreoffice]
+                                    --frames <folder> [--stills N] [--slides A-B]
+                                    [--engine libreoffice]
 
 PowerPoint on this computer makes the deck (make_deck.ps1) and draws its
 stills. With --video the deck gets a slide with that video (any short .mp4);
@@ -13,11 +14,14 @@ example CGF Lyrics' library/exports/publish/spData-cgf-v3.sqlite) is copied
 into tests/steps/out/bin first; the original is only read. The main window
 runs on Qt's offscreen platform; sounds and the video really play, muted.
 It leaves frame-*.png beside the test exe: the projector in the middle of a
-push, a wipe and a fly-in. Uses the Qt 6.8.3 / MinGW toolchain from BUILD.md.
+push, a wipe, a fly-in and an uncover. Uses the Qt 6.8.3 / MinGW toolchain
+from BUILD.md.
 
---record runs no checks: it imports the presentation, steps through its first
-N stills and saves what the projector shows into --frames, as pictures and,
-with Pillow installed, as recording.gif. For a look at a real file.
+--record runs no checks: it imports the presentation, presses Next through it
+the way an operator does and saves what the projector shows into --frames, as
+pictures and, with Pillow installed, as recording.gif. For a look at a real
+file. --stills N records only the first N stills, --slides 20-23 only those
+slides (numbered as the list shows them, hidden slides left out).
 """
 
 import argparse
@@ -78,6 +82,7 @@ def main():
     ap.add_argument("--record", help="a presentation to step through and record, instead of the checks")
     ap.add_argument("--frames", help="folder for the recording")
     ap.add_argument("--stills", type=int, default=0, help="record only this many stills")
+    ap.add_argument("--slides", help="record only these slides, for example 20-23")
     ap.add_argument("--engine", choices=("powerpoint", "libreoffice"), help="the program that draws the recording's slides")
     ap.add_argument("--qt", default=str(pathlib.Path.home() / "Qt"), help="aqt install folder (default ~/Qt)")
     args = ap.parse_args()
@@ -103,12 +108,14 @@ def main():
     powershell = windows / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
     command = [str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(HERE / "make_deck.ps1"),
                "-Out", str(bin_dir / "steps-deck.pptx"), "-Old", str(bin_dir / "steps-deck.ppt"),
+               "-Transitions", str(bin_dir / "transitions-deck.pptx"),
                "-Picture", str(REPO / "src" / "icons" / "splash.png"), "-Sound", str(windows / "Media" / "chimes.wav"),
                "-Gif", str(bin_dir / "two-frames.gif")]
     if args.video:
         command += ["-Video", str(pathlib.Path(args.video).resolve())]
     deck = subprocess.run(command, capture_output=True, text=True)
-    if deck.returncode != 0 or not (bin_dir / "steps-deck.pptx").is_file():
+    if deck.returncode != 0 or not (bin_dir / "steps-deck.pptx").is_file() \
+            or not (bin_dir / "transitions-deck.pptx").is_file():
         sys.exit("PowerPoint could not make the deck: " + deck.stdout + deck.stderr)
 
     # One 1080p screen. The path must be relative (a "C:" in it ends the
@@ -133,6 +140,7 @@ def main():
         env["CGF_RECORD_DECK"] = str(pathlib.Path(args.record).resolve())
         env["CGF_RECORD_OUT"] = str(frames)
         env["CGF_RECORD_STILLS"] = str(args.stills)
+        env["CGF_RECORD_SLIDES"] = args.slides or ""
         if args.engine:
             env["CGF_IMPORT_ENGINE"] = args.engine
     exe = OUT / "bin" / "steps_tests.exe"
@@ -141,20 +149,25 @@ def main():
     for line in result.stderr.splitlines():
         if line.startswith(("ok  :", "FAIL:")) or " checks, " in line or line.startswith(("recorded", "import failed")):
             print(line)
-    if args.record and result.returncode == 0:
+    if args.record and result.returncode in (0, 1) and (frames / "times.txt").is_file():
         try:
             from PIL import Image
         except ImportError:
             print(f"the pictures are in {frames} (install Pillow for recording.gif)")
         else:
-            rows = [line.split() for line in (frames / "times.txt").read_text().splitlines()]
-            pictures = [Image.open(frames / name).convert("RGB").quantize(64, method=Image.Quantize.MEDIANCUT) for name, _ in rows]
+            rows = [line.split()[:2] for line in (frames / "times.txt").read_text().splitlines()]
+
+            def picture(name):
+                return Image.open(frames / name).convert("RGB").quantize(64, method=Image.Quantize.MEDIANCUT)
+
             stamps = [int(ms) for _, ms in rows]
             lengths = [max(20, b - a) for a, b in zip(stamps, stamps[1:])] + [1500]
-            pictures[0].save(frames / "recording.gif", save_all=True, append_images=pictures[1:], duration=lengths,
-                             loop=0, optimize=False)
-            print(f"{frames / 'recording.gif'}: {len(pictures)} pictures, {sum(lengths) / 1000:.0f} s")
-    if result.returncode not in (0, 1):
+            # One picture at a time: a long recording is thousands of them.
+            picture(rows[0][0]).save(frames / "recording.gif", save_all=True,
+                                     append_images=(picture(name) for name, _ in rows[1:]),
+                                     duration=lengths, loop=0, optimize=False)
+            print(f"{frames / 'recording.gif'}: {len(rows)} pictures, {sum(lengths) / 1000:.0f} s")
+    if result.returncode not in (0, 1) or (args.record and result.returncode):
         print(result.stderr[-3000:])
     sys.exit(result.returncode)
 
