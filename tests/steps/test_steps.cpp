@@ -95,6 +95,44 @@ struct Screen
     }
 };
 
+// Not a check: imports a presentation, steps through it live and saves what
+// the projector shows as numbered pictures, with the time of each, for a look
+// at the effects on a real file (run_tests.py --record).
+static int record(SoftProjector &w, const SlideShowSettings &sets, const QString &deck, const QString &outDir, int maxStills)
+{
+    QString error;
+    QList<SlideShowItem> list = PresentationImport::run(deck, sets, &w, error);
+    if(list.isEmpty()) { qCritical().noquote() << "import failed:" << error; return 2; }
+    if(maxStills > 0)
+        list = list.mid(0, maxStills);
+    QDir().mkpath(outDir);
+    QFile times(outDir + "/times.txt");
+    times.open(QIODevice::WriteOnly | QIODevice::Text);
+    QElapsedTimer clock; clock.start();
+    int frames = 0;
+    auto shoot = [&](int ms) {
+        QElapsedTimer t; t.start();
+        while(t.elapsed() < ms)
+        {
+            pump(40);
+            const QString name = QString("frame%1.png").arg(++frames, 5, 10, QChar('0'));
+            w.pds1->dispView->grabWindow().scaledToWidth(640, Qt::SmoothTransformation).save(outDir + "/" + name);
+            times.write(QString("%1 %2").arg(name).arg(clock.elapsed()).toUtf8() + '\n');
+        }
+    };
+    w.setPictureList(list, 0, "Recording");
+    QListWidget *rows = w.ui->listShow;
+    shoot(1200);
+    for(int row = 1; row < list.count(); row = rows->currentRow() + 1)
+    {
+        if(rows->currentRow() < row)        // a step that follows by itself may be there already
+            rows->setCurrentRow(row);
+        shoot(qMax(list.at(rows->currentRow()).step().durationMs, 300) + 900);
+    }
+    qInfo().noquote() << QString("recorded %1 pictures of %2 stills").arg(frames).arg(list.count());
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     qputenv("QT_QUICK_BACKEND", "software");
@@ -129,6 +167,9 @@ int main(int argc, char *argv[])
     pw->setSettings(sets);
     w.mySettings.slideSets = sets;
     QString error;
+    if(!qEnvironmentVariableIsEmpty("CGF_RECORD_DECK"))
+        return record(w, sets, qEnvironmentVariable("CGF_RECORD_DECK"), qEnvironmentVariable("CGF_RECORD_OUT"),
+                      qEnvironmentVariableIntValue("CGF_RECORD_STILLS"));
 
     // ---------------------------------------------------------------- import
     qputenv("CGF_IMPORT_ENGINE", "powerpoint");
@@ -207,9 +248,15 @@ int main(int argc, char *argv[])
     w.pds1->dispView->grabWindow().save(dir + "/frame-push.png");
     CHECK(waitUntil([&] { return screen.settled(); }, 3000), "the push ends with the new still alone");
 
-    // fade: no effect layer, the usual cross-fade
+    // fade: the new still fades in over the old one, which stays as it is
     go(2);
-    CHECK(!screen.busy() && screen.root->property("tranTime").toInt() == 500, "a line fades in with the usual cross-fade");
+    CHECK(screen.kind() == "fade" && screen.busy(), "a line fades in: " + screen.kind());
+    pump(200);
+    const double faded = screen.item("fxClipA")->opacity();
+    CHECK(faded > 0.05 && faded < 0.95 && qMax(screen.item("backImage1")->opacity(), screen.item("backImage2")->opacity()) > 0.99,
+          QString("over the old still, which does not dim meanwhile (new still at %1)").arg(faded));
+    w.pds1->dispView->grabWindow().save(dir + "/frame-fade.png");
+    CHECK(waitUntil([&] { return screen.settled(); }, 2000), "and ends with the new still alone");
     go(3); go(4); go(5); go(6);
 
     // wipe over the whole picture
@@ -243,7 +290,7 @@ int main(int argc, char *argv[])
     CHECK(scale > 0.3 && scale < 1.0, QString("the shape grows (scale %1)").arg(scale));
     waitUntil([&] { return screen.settled(); }, 2000);
     go(11);
-    CHECK(!screen.busy(), "3.4: the shape fades out with the cross-fade");
+    CHECK(screen.kind() == "fade", "3.4: the shape fades out");
     pump(1500);
     CHECK(list->currentRow() == 11, "3.5 waits for its click");
     go(12);

@@ -133,9 +133,9 @@ Rectangle {
 
     // ---- Presentation steps (projectordisplayscreen.cpp, renderSlideStep) ----
     // One still replaces another with a simple effect on the part that
-    // changed. fx: kind (wipe, split, box, fly, float, zoom), dir, exit,
+    // changed. fx: kind (fade, wipe, split, box, fly, float, zoom), dir, exit,
     // duration, the changed part x y w h and the still's corner sx sy, all in
-    // screen pixels; push when both stills move (a slide transition).
+    // screen pixels; push when both stills move, whole for a slide transition.
     property real fxT: 1
     property var fx: ({ kind: "" })
     property var fxIncoming: null
@@ -148,7 +148,8 @@ Rectangle {
         anchors.fill: parent
         visible: false
 
-        // Wipe, split and box: the new still, seen through a growing window.
+        // Fade, wipe, split and box: the new still over the old one, fading
+        // in or seen through a growing window.
         Item { id: fxClipA; objectName: "fxClipA"; clip: true; Image { id: fxStillA; objectName: "fxStillA"; cache: false } }
         Item { id: fxClipB; objectName: "fxClipB"; clip: true; Image { id: fxStillB; objectName: "fxStillB"; cache: false } }
         // Fly, float and zoom: the changed part by itself, moving.
@@ -176,18 +177,26 @@ Rectangle {
         id: slideMediaLayer
         anchors.fill: parent
 
-        Repeater
+        // Not while a slide's transition runs: the picture would sit still
+        // in its place while its slide is on the way in.
+        Item
         {
-            model: dispArea.slideGifs
-            AnimatedImage
+            anchors.fill: parent
+            visible: !(fxLayer.visible && dispArea.fx.whole === true)
+
+            Repeater
             {
-                required property var modelData
-                source: modelData.source
-                x: modelData.x
-                y: modelData.y
-                width: modelData.w
-                height: modelData.h
-                playing: true
+                model: dispArea.slideGifs
+                AnimatedImage
+                {
+                    required property var modelData
+                    source: modelData.source
+                    x: modelData.x
+                    y: modelData.y
+                    width: modelData.w
+                    height: modelData.h
+                    playing: true
+                }
             }
         }
 
@@ -557,7 +566,12 @@ Rectangle {
         if(f.kind === "")
             return
         var x = f.x, y = f.y, w = f.w, h = f.h
-        if(f.kind === "wipe")
+        if(f.kind === "fade")
+        {
+            fxWindow(fxClipA, fxStillA, x, y, w, h)
+            fxClipA.opacity = t
+        }
+        else if(f.kind === "wipe")
         {
             if(f.dir === "left") fxWindow(fxClipA, fxStillA, x, y, w * t, h)
             else if(f.dir === "right") fxWindow(fxClipA, fxStillA, x + w * (1 - t), y, w * t, h)
@@ -617,6 +631,7 @@ Rectangle {
         fxSprite.visible = moving
         fxSpriteOut.visible = moving && spec.push
         fxClipA.visible = !moving
+        fxClipA.opacity = 1
         fxClipB.visible = spec.kind === "split"
         // Leaving: the still without it is underneath at once. Arriving: the
         // old still stays until the effect is over. Both moving: neither.

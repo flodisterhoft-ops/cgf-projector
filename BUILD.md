@@ -703,6 +703,9 @@ How it works:
   over that part; fly, float and zoom move that part, cut out with soft edges
   from the difference. No shape is drawn separately, so this works the same
   with PowerPoint and LibreOffice. Push, cover and uncover move whole stills.
+  A fade lays the new still over the old one and fades it in: the app's usual
+  cross-fade of two layers dips toward black half way, which made a white
+  slide flash grey every time a line appeared.
 - Videos and sounds are copied into `<data folder>/slide-media` under names
   made from their content, and play at their step: the video in its place on
   the slide, sound on display 1 only. Animated GIFs keep moving over the
@@ -744,9 +747,11 @@ Checks: `python tests/steps/run_tests.py --db <CGF database> [--video <file>]
 [--soffice <soffice.exe>]` has PowerPoint make a deck with each kind of
 animation, imports it through PowerPoint and LibreOffice and steps through it
 on the real main window offscreen, watching the projector's effect layer, the
-steps that follow by themselves and the media players: 58 checks pass (it
+steps that follow by themselves and the media players: 60 checks pass (it
 leaves `frame-*.png` beside the test exe, the projector in the middle of a
-push, a wipe and a fly-in). `tools/presentations/corpus.py` on Florian's
+push, a wipe and a fly-in). With `--record <presentation> --frames <folder>`
+it runs no checks and records the projector stepping through a real file, as
+pictures and a GIF: how the grey flash was found. `tools/presentations/corpus.py` on Florian's
 files: the splitter read all 780; PowerPoint and LibreOffice each drew every
 still of the 21 files with steps and of 25 of the others. Also
 `tests/presentations` 21, `tests/pictures` 42, `tests/screens` 34,

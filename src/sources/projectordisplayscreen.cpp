@@ -524,26 +524,31 @@ void ProjectorDisplayScreen::renderSlideStep(QPixmap slide, SlideShowSettings &s
 
     if(animate && step.isValid() && isNewBack)
     {
-        const QString kind = step.effect;
+        // A slide without a transition names no effect: a fade.
+        const QString kind = step.effect.isEmpty() ? QStringLiteral("fade") : step.effect;
         fadeTime = qBound(100, step.durationMs, 2000);
         const bool whole = step.index == 0;     // a slide's transition works on the whole picture
         const bool sameSize = !before.isNull() && before.size() == after.size();
         if(kind == QLatin1String("cut"))
             tranType = TR_NONE;
-        else if(kind == QLatin1String("fade") || kind.isEmpty() || !sameSize)
-            tranType = TR_FADE;
+        else if(!sameSize)
+            tranType = TR_FADE;     // nothing to compare with: the usual cross-fade
         else
         {
             const bool moves = kind == QLatin1String("fly") || kind == QLatin1String("float") || kind == QLatin1String("zoom");
             const bool slides = kind == QLatin1String("push") || kind == QLatin1String("cover") || kind == QLatin1String("uncover");
+            const bool window = kind == QLatin1String("wipe") || kind == QLatin1String("split") || kind == QLatin1String("box");
             QVariantMap fx;
+            fx.insert("kind", "fade");
             fx.insert("dir", step.direction);
             fx.insert("duration", fadeTime);
             fx.insert("sx", at.x());
             fx.insert("sy", at.y());
+            fx.insert("whole", whole);
             fx.insert("exit", step.exit || kind == QLatin1String("uncover"));
             fx.insert("push", kind == QLatin1String("push"));
-            QRect region(QPoint(0, 0), after.size());
+            const QRect all(QPoint(0, 0), after.size());
+            QRect region = all;
             if(whole && slides)
             {
                 // The whole still moves: the new one in, the old one out, or both.
@@ -552,35 +557,40 @@ void ProjectorDisplayScreen::renderSlideStep(QPixmap slide, SlideShowSettings &s
                     setEffectImage("fxSpriteOut", before);
                 setEffectImage("fxSprite", kind == QLatin1String("uncover") ? before : after);
             }
-            else if(whole)
+            else if(!whole && (moves || window))
             {
-                fx.insert("kind", kind);        // wipe, split or box over the whole picture
-                setEffectImage("fxStillA", after);
-                setEffectImage("fxStillB", after);
-            }
-            else
-            {
+                // Only what changed: seen through a growing window, or cut out and moved.
                 QImage sprite;
                 region = changedRect(before.toImage(), after.toImage(), (step.exit ? before : after).toImage(),
                                      moves ? &sprite : nullptr);
-                fx.insert("kind", kind);
-                if(moves)
-                    setEffectImage("fxSprite", QPixmap::fromImage(sprite));
-                else
+                // Nearly everything changed: a fade says it better.
+                if(qint64(region.width()) * region.height() > qint64(all.width()) * all.height() * 85 / 100)
+                    region = all;
+                else if(moves && !region.isEmpty())
                 {
-                    setEffectImage("fxStillA", after);
-                    setEffectImage("fxStillB", after);
+                    fx.insert("kind", kind);
+                    setEffectImage("fxSprite", QPixmap::fromImage(sprite));
                 }
+                else if(window)
+                    fx.insert("kind", kind);
+            }
+            else if(whole && window)
+                fx.insert("kind", kind);
+            if(fx.value("kind") != QLatin1String("fly") && !(moves && fx.value("kind") == kind))
+            {
+                // Wipe, split, box and fade show the new still over the old
+                // one. That fade has no dip toward black half way, which the
+                // usual cross-fade of two layers has.
+                setEffectImage("fxStillA", after);
+                setEffectImage("fxStillB", after);
             }
             fx.insert("x", at.x() + region.x());
             fx.insert("y", at.y() + region.y());
             fx.insert("w", region.width());
             fx.insert("h", region.height());
-            // Nothing to see changed, or nearly everything did: a plain fade says it better.
-            const bool huge = !whole && qint64(region.width()) * region.height() > qint64(after.width()) * after.height() * 85 / 100;
             if(region.isEmpty())
-                tranType = TR_NONE;
-            else if(!huge && (fx.value("kind").toString() == kind || slides))
+                tranType = TR_NONE;     // nothing to see changed
+            else
                 stepEffect = fx;
         }
     }
