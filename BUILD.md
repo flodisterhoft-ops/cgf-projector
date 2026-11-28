@@ -891,3 +891,31 @@ Seen while recording: with the 134 stills loaded the test program held
 1.3 GB. A slide show's pictures are kept decoded while it is open
 (`SlideShow::loadSlideShow`), about 8 MB for each 1920 x 1080 still, where
 the 1280 x 720 of before took 3.7 MB. Not changed here.
+
+## App 0.2.9 (2026-11-28)
+
+One combined release, so the offline church laptop restarts once (Florian's
+go-ahead): song proposals (`claude/quizzical-golick-70ddec`), the What's new
+window (`whats-new` 88ad4a5) and master c686c80 (LibreOffice import,
+presentation steps, slides at 1920 x 1080, picture lists by slide). Branch
+`release-0.2.9` at e7998d5; the only conflicts were lines both sides added.
+
+Built and tested from a short checkout, `C:\Users\Disterhoft\CGF\rel-0.2.9`:
+push 69 + proposals 30 + end to end 9, update 23, bridge 73, screens 34,
+pictures 42, steps 78, presentations 21, server 33, publisher 14, pull 2.
+`tests/presentations` fails from a deep worktree such as
+`.claude\worktrees\quizzical-golick-70ddec`: the test's LibreOffice profile
+then needs paths past Windows' 260 characters
+(`user\extensions\bundled\registry\...\backenddb.xml` is 112 below it), and
+LibreOffice exits without a PDF. Run it from a short path. Installed laptops
+keep the profile at about 55 characters.
+
+Published as app release 10 (107 files, 4 uploaded), with the launcher. No
+laptop was connected.
+
+Second laptop: Florian's Book5 Pro 360 is registered as "Book5 Pro 360"
+(his request: every push reaches it too). Its package,
+`CGFProjector-0.2.9.zip` with library v4 and `--seq 10`, and its
+`cgf-cloud.json` are in `C:\Users\Disterhoft\CGF\install-packages\book5pro360\`
+(his Windows user only), sent by Taildrop to `book5pro360`. Installing it
+over the older copy there keeps its songs and settings.
