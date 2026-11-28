@@ -4,6 +4,7 @@
 // throwaway key by tools/push_release.py), then runs:
 //   push_tests --local      releases sent straight to the bridge, as the
 //                           companion would; checks the database and the UI
+//   push_tests --proposals  operators' changes on their way up (docs/proposals-up.md)
 //   push_tests --e2e <v>    waits until the companion, connected to a local
 //                           push server, has brought the library to version v
 
@@ -21,11 +22,13 @@
 #include "librarypush.hpp"
 #include "songwidget.hpp"
 #include "biblewidget.hpp"
+#include "editwidget.hpp"
 #undef private
 #undef protected
 #include "ui_softprojector.h"
 #include "ui_songwidget.h"
 #include "ui_biblewidget.h"
+#include "ui_editwidget.h"
 
 static int checks = 0, failures = 0;
 #define CHECK(cond, msg) do { ++checks; if(!(cond)) { ++failures; qWarning().noquote() << "FAIL:" << (msg); } else qInfo().noquote() << "ok  :" << (msg); } while(0)
@@ -302,6 +305,162 @@ static int runE2E(SoftProjector &w, int expected, const QJsonObject &rel)
     return failures ? 1 : 0;
 }
 
+// Proposals up (docs/proposals-up.md): the real song editor saves, a program
+// on the bridge plays the companion, and a signed release (v3 -> v4) arrives
+// on top of the operator's changes.
+static void editInEditor(SoftProjector &w, int id, const QString &title, const QString &text, bool asNew = false)
+{
+    EditWidget *ew = w.editWidget;
+    SongDatabase sdb;
+    ew->setEdit(sdb.getSongWithSongbook(id));
+    if(asNew) ew->is_new = true; // setNew() asks for a songbook in a dialog
+    ew->ui->lineEditTitle->setText(title);
+    ew->ui->textEditSong->setPlainText(text);
+    ew->on_btnSave_clicked();
+}
+
+static QString proposalState(const QString &uuid)
+{
+    return dbValue(QString("SELECT state FROM CgfProposals WHERE uuid = '%1'").arg(uuid)).toString();
+}
+
+static void sendJson(Client &c, const QJsonObject &o)
+{
+    c.ws.sendTextMessage(QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact)));
+}
+
+static int runProposals(SoftProjector &w, quint16 port, const QJsonObject &rel)
+{
+    const QJsonObject e = rel["expect"].toObject();
+    const int edited0 = e["edited0"].toInt(), edited1 = e["edited1"].toInt(), added = e["added"].toInt();
+    SongWidget *sw = w.songWidget;
+    SongDatabase sdb;
+    const QString v3Text0 = sdb.getSong(edited0).songText;
+    const QString v3Title1 = sdb.getSong(edited1).title;
+    const QString v3Text1 = sdb.getSong(edited1).songText;
+
+    Client c;
+    CHECK(c.open(QString("ws://127.0.0.1:%1/ws").arg(port)), "the companion connects to the bridge");
+    c.waitFor("hello");
+
+    // Offline: the change waits in the database.
+    editInEditor(w, edited0, "Operator title", "Verse 1\nOperator fix line");
+    CHECK(c.waitFor("proposal", nullptr, 500).isEmpty(), "with no companion ready, nothing is sent");
+    CHECK(dbValue(QString("SELECT state FROM CgfProposals WHERE song_id = %1").arg(edited0)).toString() == "queued",
+          "the change to a library song is queued");
+    CHECK(dbValue(QString("SELECT title FROM Songs WHERE id = %1").arg(edited0)).toString() == "Operator title",
+          "the song list's database has the operator's text");
+
+    sendJson(c, {{"type", "proposalsReady"}});
+    QJsonObject p0 = c.waitFor("proposal");
+    CHECK(p0["kind"].toString() == "edit" && p0["song_id"].toInt() == edited0, "proposalsReady: the queued edit is sent");
+    CHECK(p0["base"].toObject()["song_text"].toString() == v3Text0 && p0["proposed"].toObject()["title"].toString() == "Operator title",
+          "it carries the library's text and the operator's");
+    CHECK(p0["library_version"].toInt() == 3 && !p0["user"].toString().isEmpty() && !p0["proposed"].toObject().contains("background"),
+          "with the library version and the Windows user, and no fonts or backgrounds");
+    const QString uuid0 = p0["uuid"].toString();
+    sendJson(c, {{"type", "proposalStored"}, {"uuid", uuid0}, {"status", "stored"}});
+    CHECK(waitUntil([&] { return proposalState(uuid0) == "sent"; }), "stored on the server: sent");
+
+    // A display-only change makes no proposal.
+    {
+        EditWidget *ew = w.editWidget;
+        ew->setEdit(sdb.getSongWithSongbook(edited1));
+        ew->ui->checkBoxSongSettings->setChecked(!ew->ui->checkBoxSongSettings->isChecked());
+        ew->on_btnSave_clicked();
+        CHECK(c.waitFor("proposal", nullptr, 500).isEmpty(), "a change of song settings only is not proposed");
+    }
+
+    // Another edit, which Florian's importer applies before the next release.
+    editInEditor(w, edited1, v3Title1, v3Text1 + "\nOperator added line");
+    const QString uuid1 = c.waitFor("proposal")["uuid"].toString();
+    sendJson(c, {{"type", "proposalStored"}, {"uuid", uuid1}, {"status", "stored"}});
+    waitUntil([&] { return proposalState(uuid1) == "sent"; });
+    sendJson(c, {{"type", "proposalState"}, {"uuid", uuid1}, {"state", "applied"}});
+    const QJsonObject ack1 = c.waitFor("proposalStateResult");
+    CHECK(ack1["uuid"].toString() == uuid1 && ack1["state"].toString() == "applied" && proposalState(uuid1) == "applied",
+          "applied in the master: acknowledged");
+
+    // A new song, accepted into the library.
+    const int bookSong = dbValue(QString("SELECT id FROM Songs WHERE songbook_id = %1 AND id <= 500000 LIMIT 1")
+                                 .arg(e["addedBook"].toInt())).toInt();
+    editInEditor(w, bookSong, e["addedTitle"].toString(), "Verse 1\nA new song", true);
+    const QJsonObject pn = c.waitFor("proposal");
+    const int quick = pn["song_id"].toInt();
+    CHECK(pn["kind"].toString() == "new" && quick > 500000 && !pn.contains("base"), QString("a quick-add is proposed as new (%1)").arg(quick));
+    sendJson(c, {{"type", "proposalStored"}, {"uuid", pn["uuid"]}, {"status", "stored"}});
+    waitUntil([&] { return proposalState(pn["uuid"].toString()) == "sent"; });
+    sendJson(c, {{"type", "proposalState"}, {"uuid", pn["uuid"]}, {"state", "applied"}});
+    c.waitFor("proposalStateResult");
+    QSqlQuery q;
+    q.exec(QString("UPDATE Songs SET count = 5, date = '11:27:2026' WHERE id = %1").arg(quick));
+
+    // The operator fixes the first song again after it was sent.
+    editInEditor(w, edited0, "Operator title", "Verse 1\nOperator fix line\nOperator second fix");
+    const QJsonObject p2 = c.waitFor("proposal");
+    const QString uuid2 = p2["uuid"].toString();
+    CHECK(p2["replaces"].toString() == uuid0 && p2["base"].toObject()["song_text"].toString() == "Verse 1\nOperator fix line",
+          "saved again after sending: a new proposal that follows the first");
+    CHECK(proposalState(uuid0) == "superseded", "the first one is superseded");
+    sendJson(c, {{"type", "proposalStored"}, {"uuid", uuid2}, {"status", "stored"}});
+    waitUntil([&] { return proposalState(uuid2) == "sent"; });
+
+    // A server refusal ends a proposal, "later" keeps it.
+    editInEditor(w, e["deleted"].toInt(), "Will be refused", "Verse 1\nx");
+    const QString uuidR = c.waitFor("proposal")["uuid"].toString();
+    sendJson(c, {{"type", "proposalStored"}, {"uuid", uuidR}, {"status", "later"}});
+    waitUntil([] { return false; }, 200);
+    CHECK(proposalState(uuidR) == "queued", "'later' keeps it queued");
+    sendJson(c, {{"type", "proposalStored"}, {"uuid", uuidR}, {"status", "rejected"}, {"reason", "test"}});
+    CHECK(waitUntil([&] { return proposalState(uuidR) == "rejected"; }), "a refused proposal is not sent again");
+
+    // The first song is live; the release must not change the screen.
+    Song live = sdb.getSongWithSongbook(edited0);
+    sw->sendToProjector(live, 0);
+    const QString liveBefore = w.current_song.songText;
+
+    QJsonObject r;
+    for(const QJsonValue &part : rel["r34"].toArray()) r = c.release(part);
+    CHECK(r["status"].toString() == "applied" && r["version"].toInt() == 4, "the release v3 -> v4 applies on top");
+    CHECK(dbValue(QString("SELECT song_text FROM Songs WHERE id = %1").arg(edited0)).toString()
+          == "Verse 1\nOperator fix line\nOperator second fix", "the operator's change stays until the master has it");
+    CHECK(QJsonDocument::fromJson(dbValue(QString("SELECT library FROM CgfProposals WHERE uuid = '%1'").arg(uuid2)).toString().toUtf8())
+          .object()["song_text"].toString() == e["newText0"].toString(), "the library's new text is kept for an undo");
+    const int row0 = modelRow(sw, edited0);
+    CHECK(row0 >= 0 && sw->songs_model->song_list.at(row0).title == "Operator title", "the song list shows the operator's title");
+    CHECK(dbValue(QString("SELECT song_text FROM Songs WHERE id = %1").arg(edited1)).toString() == v3Text1 + "\nPush test extra line"
+          && proposalState(uuid1) == "done", "an applied change ends with the release: the library's text");
+    CHECK(!dbValue(QString("SELECT id FROM Songs WHERE id = %1").arg(quick)).isValid() && proposalState(pn["uuid"].toString()) == "done",
+          "the accepted quick-add gives way to its library copy");
+    CHECK(dbValue(QString("SELECT count FROM Songs WHERE id = %1").arg(added)).toInt() == 5
+          && dbValue(QString("SELECT date FROM Songs WHERE id = %1").arg(added)).toString() == "11:27:2026",
+          "its usage count moves to the library copy");
+    CHECK(modelRow(sw, quick) < 0 && !inAllSongs(sw, quick) && modelRow(sw, added) >= 0, "the song list shows it once");
+    CHECK(dbValue("SELECT title FROM Songs WHERE id = 500001").toString() == "Laptop quick-add", "other quick-adds are untouched");
+
+    // Florian presses Undo, then Keep.
+    sendJson(c, {{"type", "proposalState"}, {"uuid", uuid2}, {"state", "undone"}});
+    CHECK(c.waitFor("proposalStateResult")["state"].toString() == "undone", "undo is acknowledged");
+    CHECK(dbValue(QString("SELECT song_text FROM Songs WHERE id = %1").arg(edited0)).toString() == e["newText0"].toString()
+          && dbValue(QString("SELECT title FROM Songs WHERE id = %1").arg(edited0)).toString() == e["newTitle0"].toString(),
+          "undo: the library's text is back");
+    CHECK(waitUntil([&] { const int r0 = modelRow(sw, edited0); return r0 >= 0 && sw->songs_model->song_list.at(r0).title == e["newTitle0"].toString(); }),
+          "the song list shows the library's title again");
+    CHECK(w.current_song.songText == liveBefore, "the song on the projector is not changed by the release or the undo");
+    sendJson(c, {{"type", "proposalState"}, {"uuid", uuid2}, {"state", "pending"}});
+    c.waitFor("proposalStateResult");
+    CHECK(dbValue(QString("SELECT song_text FROM Songs WHERE id = %1").arg(edited0)).toString()
+          == "Verse 1\nOperator fix line\nOperator second fix" && proposalState(uuid2) == "sent",
+          "keep: the operator's text again");
+    sendJson(c, {{"type", "proposalState"}, {"uuid", uuid0}, {"state", "undone"}});
+    CHECK(c.waitFor("proposalStateResult")["uuid"].toString() == uuid0
+          && dbValue(QString("SELECT song_text FROM Songs WHERE id = %1").arg(edited0)).toString()
+          == "Verse 1\nOperator fix line\nOperator second fix", "a superseded proposal's state changes nothing");
+
+    qInfo().noquote() << QString("%1 checks, %2 failed").arg(checks).arg(failures);
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char *argv[])
 {
     const QString mode = argc > 1 ? QString::fromLatin1(argv[1]) : QString("--local");
@@ -327,6 +486,8 @@ int main(int argc, char *argv[])
     waitUntil([] { return false; }, 300); // let the main window report the library version
 
     const QJsonObject rel = readJson(dir + "/releases.json");
+    if(mode == "--proposals")
+        return runProposals(w, port, rel);
     if(mode == "--e2e")
         return runE2E(w, argc > 2 ? QString::fromLatin1(argv[2]).toInt() : 4, rel);
     return runLocal(w, port, rel);

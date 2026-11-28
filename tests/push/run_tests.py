@@ -127,7 +127,7 @@ def make_versions(base, publish):
     con.commit()
     con.close()
     expect = {"edited0": ids[0], "edited1": ids[1], "deleted": ids[2], "added": max_id + 1,
-              "addedTitle": "Push test new song", "newTitle0": old_title0 + " (push test)",
+              "addedTitle": "Push test new song", "addedBook": book, "newTitle0": old_title0 + " (push test)",
               "newText0": new_text0, "newBook": "Push test book", "addedInBook": max_id + 2,
               "oldBible": str(old), "newBible": str(new), "newBibleName": "Push test Bible (v9)",
               "newBibleVerses": verses, "library": [str(i) for i in library]}
@@ -337,6 +337,9 @@ def main():
                                         "utf-8")
     (BIN / "cgf-companion.exe").unlink(missing_ok=True)
     code = run_harness(args, dict(env, CGF_NO_COMPANION="1"), ["--local"])
+    print("--- proposals up")
+    fresh_app_db(v3, expect)
+    code = run_harness(args, dict(env, CGF_NO_COMPANION="1"), ["--proposals"]) or code
     if args.e2e:
         code = e2e(env, [v3, v4, v5, v6], expect) or code
     sys.exit(code)

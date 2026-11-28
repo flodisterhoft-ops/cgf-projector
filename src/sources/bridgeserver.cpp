@@ -769,6 +769,9 @@ void BridgeServer::onWsMessage(const QString &text)
     }
     else if(type == QLatin1String("appUpdate") && c && c->peerAddress().isLoopback())
         emit appUpdateReady(m); // the companion installed a new version
+    else if((type == QLatin1String("proposalsReady") || type == QLatin1String("proposalStored")
+             || type == QLatin1String("proposalState")) && c && c->peerAddress().isLoopback())
+        emit proposalMessage(m, quintptr(c)); // docs/proposals-up.md
 }
 
 void BridgeServer::setLibraryVersion(int version)

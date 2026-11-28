@@ -67,6 +67,8 @@ signals:
     void releaseReceived(const QJsonObject &envelope, quintptr client);
     // The companion installed a newer app version (folder, version, notes).
     void appUpdateReady(const QJsonObject &update);
+    // From the companion: proposals (docs/proposals-up.md)
+    void proposalMessage(const QJsonObject &message, quintptr client);
 
 private slots:
     void onTcpConnection();

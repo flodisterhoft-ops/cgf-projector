@@ -24,6 +24,7 @@
 
 #include "../headers/softprojector.hpp"
 #include "../headers/librarypush.hpp"
+#include "../headers/proposals.hpp"
 #include "../headers/livebridge.hpp"
 #include "../headers/biblewidget.hpp"
 #include "ui_softprojector.h"
@@ -42,6 +43,12 @@ void SoftProjector::setupLibraryPush()
     libraryPush = new LibraryPush(dataDir, this);
     connect(libraryPush, &LibraryPush::libraryChanged, this, &SoftProjector::applyLibraryChanges);
     connect(libraryPush, &LibraryPush::biblesChanged, this, &SoftProjector::applyBibleChanges);
+    proposals = new Proposals(this);
+    proposals->setLibraryVersion(libraryPush->version());
+    connect(libraryPush, &LibraryPush::versionChanged, proposals, &Proposals::setLibraryVersion);
+    connect(proposals, &Proposals::songsChanged, this, [this](const QList<int> &songs, const QList<int> &deleted) {
+        applyLibraryChanges(songs, deleted, false);
+    });
 
     // Screen settings that name a Bible this laptop no longer has (a snapshot
     // install, or a hand import the library removed).
@@ -67,6 +74,19 @@ void SoftProjector::setupLibraryPush()
         if(heldReleaseClient)
             liveBridge->replyToClient(heldReleaseClient, r);
         heldReleaseClient = 0;
+    });
+    // Proposals up (docs/proposals-up.md): the companion says when it can
+    // take them; until then they wait in the database.
+    connect(liveBridge, &LiveBridge::proposalMessage, this, [this](const QJsonObject &m, quintptr client) {
+        if(m.value(QStringLiteral("type")).toString() == QLatin1String("proposalsReady"))
+            proposalClient = client;
+        const QJsonObject answer = proposals->handleMessage(m);
+        if(!answer.isEmpty())
+            liveBridge->replyToClient(client, answer);
+    });
+    connect(proposals, &Proposals::outgoing, this, [this](const QJsonObject &m) {
+        if(proposalClient)
+            liveBridge->replyToClient(proposalClient, m);
     });
     connect(liveBridge, &LiveBridge::bridgeStarted, this, &SoftProjector::startCompanion);
 }

@@ -62,6 +62,7 @@ private slots:
 private:
     void connectBridge();
     void connectServer();
+    void offerProposals();
     void sendHello();
     void sendNextToApp();
     void stop(const QString &why);

@@ -23,6 +23,9 @@ export interface Proposal {
 	created_at: string;
 	user: string;
 	library_version: number | null;
+	// The laptop's earlier proposal for the same song, when it was sent before
+	// this one was saved: the importer applies them in turn.
+	replaces: string | null;
 }
 
 // Server states (set by Florian's tools): new → received → applied, or undone.
@@ -70,7 +73,8 @@ export function parseProposal(m: Record<string, unknown>): Proposal | string {
 	const user = typeof m.user === "string" ? m.user.slice(0, 60) : "";
 	const created = typeof m.created_at === "string" ? m.created_at.slice(0, 40) : "";
 	const lv = typeof m.library_version === "number" && Number.isInteger(m.library_version) ? m.library_version : null;
-	return { uuid: m.uuid, kind: m.kind, song_id: id, base, proposed, created_at: created, user, library_version: lv };
+	const replaces = typeof m.replaces === "string" && UUID.test(m.replaces) ? m.replaces : null;
+	return { uuid: m.uuid, kind: m.kind, song_id: id, base, proposed, created_at: created, user, library_version: lv, replaces };
 }
 
 function lines(text: unknown): string[] {

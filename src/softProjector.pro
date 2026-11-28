@@ -180,9 +180,11 @@ RESOURCES += web.qrc
 # program (companion/) and the bridge (docs/song-push.md). bcrypt checks the
 # publisher's signature.
 SOURCES += sources/librarypush.cpp \
+    sources/proposals.cpp \
     sources/softprojectorsync.cpp \
     sources/cgfsignature.cpp \
     sources/softprojectorupdate.cpp
 HEADERS += headers/librarypush.hpp \
+    headers/proposals.hpp \
     headers/cgfsignature.hpp
 win32: LIBS += -lbcrypt

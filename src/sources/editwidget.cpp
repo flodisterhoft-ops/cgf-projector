@@ -20,6 +20,7 @@
 #include "../headers/editwidget.hpp"
 #include "ui_editwidget.h"
 #include "../headers/song.hpp"
+#include "../headers/proposals.hpp"
 
 EditWidget::EditWidget(QWidget *parent) :
     QWidget(parent),
@@ -87,14 +88,20 @@ void EditWidget::on_btnSave_clicked()
             sq.last();
             newSong.songID = sq.value(0).toInt();
 
+            Proposals::recordSave(newSong.songID, QJsonObject(), true);
             emit addedNew(newSong,song_to_edit_id);
         }
     }
     else
     {
+        // The text before the save: the proposal for the library starts from it.
+        const QJsonObject before = Proposals::songFields(newSong.songID);
         saved = newSong.saveUpdate();
         if (saved)
+        {
+            Proposals::recordSave(newSong.songID, before, false);
             emit updateSongFromDatabase(newSong.songID,song_to_edit_id);
+        }
     }
     setArrowCursor();
 

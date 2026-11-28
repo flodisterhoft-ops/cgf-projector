@@ -63,6 +63,7 @@ signals:
     void bridgeStarted(quint16 port);
     void releaseReceived(const QJsonObject &envelope, quintptr client);
     void appUpdateReady(const QJsonObject &update);
+    void proposalMessage(const QJsonObject &message, quintptr client);
 
 private slots:
     void setFramesWanted(bool wanted);

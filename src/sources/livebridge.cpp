@@ -42,6 +42,7 @@ LiveBridge::LiveBridge(QObject *parent)
     connect(server, &BridgeServer::started, this, &LiveBridge::bridgeStarted);
     connect(server, &BridgeServer::releaseReceived, this, &LiveBridge::releaseReceived);
     connect(server, &BridgeServer::appUpdateReady, this, &LiveBridge::appUpdateReady);
+    connect(server, &BridgeServer::proposalMessage, this, &LiveBridge::proposalMessage);
     thread.setObjectName(QStringLiteral("Network bridge"));
     thread.start(QThread::LowPriority);
     sinceVideoSent.start();

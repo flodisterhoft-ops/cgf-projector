@@ -266,6 +266,26 @@ void Companion::onBridgeMessage(const QString &text)
         appFolder = m.value(QStringLiteral("app")).toObject().value(QStringLiteral("folder")).toString();
         announceUpdate();
     }
+    else if(type == QLatin1String("proposal"))
+    {
+        // An operator's song for the library (docs/proposals-up.md). Without
+        // the server it stays queued in the app, which sends it again later.
+        if(serverOpen)
+        {
+            log(QStringLiteral("sending a %1 song for the library: \"%2\"")
+                .arg(m.value(QStringLiteral("kind")).toString(),
+                     m.value(QStringLiteral("proposed")).toObject().value(QStringLiteral("title")).toString()));
+            server.sendTextMessage(text);
+        }
+        return;
+    }
+    else if(type == QLatin1String("proposalStateResult"))
+    {
+        if(serverOpen)
+            server.sendTextMessage(compact({{"type", "proposalStateAck"}, {"uuid", m.value(QStringLiteral("uuid"))},
+                                            {"state", m.value(QStringLiteral("state"))}}));
+        return;
+    }
     else if(type == QLatin1String("library"))
         version = m.value(QStringLiteral("version")).toInt(-1);
     else if(type == QLatin1String("releaseResult"))
@@ -312,6 +332,8 @@ void Companion::onBridgeMessage(const QString &text)
         return;
     const bool changed = version != libraryVersion;
     libraryVersion = version;
+    if(type == QLatin1String("hello"))
+        offerProposals(); // the app can send its queued proposals
     if(changed && type == QLatin1String("hello"))
     {
         log(QStringLiteral("the projector's library is at v%1").arg(version));
@@ -368,6 +390,15 @@ void Companion::onServerConnected()
     retryStep = 0;
     sinceServerMessage.restart();
     sendHello();
+    offerProposals();
+}
+
+// Tells the app it can send its queued proposals now: the server is there
+// and the app has said hello.
+void Companion::offerProposals()
+{
+    if(serverOpen && bridgeOpen && libraryVersion >= 0)
+        bridge.sendTextMessage(compact({{"type", "proposalsReady"}}));
 }
 
 void Companion::onServerDisconnected()
@@ -399,6 +430,15 @@ void Companion::onServerMessage(const QString &text)
     }
     else if(type == QLatin1String("app"))
         handleAppRelease(text);
+    else if(type == QLatin1String("proposalStored") || type == QLatin1String("proposalState"))
+    {
+        if(type == QLatin1String("proposalState"))
+            log(QStringLiteral("Florian's choice for song %1: %2")
+                .arg(m.value(QStringLiteral("song_id")).toInteger())
+                .arg(m.value(QStringLiteral("state")).toString()));
+        if(bridgeOpen)
+            bridge.sendTextMessage(text); // the app answers proposalState with proposalStateResult
+    }
     else if(type == QLatin1String("resync"))
         log(QStringLiteral("the push server cannot bring this laptop from v%1 to v%2; "
                            "the sync agent's next snapshot install will")

@@ -46,6 +46,7 @@
 class QActionGroup;
 class LiveBridge;
 class LibraryPush;
+class Proposals;
 class QLabel;
 class QPushButton;
 
@@ -175,6 +176,8 @@ private:
     void fixBibleSettings(const QMap<QString, QString> &replaces);
     bool bibleOnScreen() const;
     quintptr heldReleaseClient = 0; // the companion that sent a held Bible release
+    Proposals *proposals = nullptr;
+    quintptr proposalClient = 0; // the companion that takes proposals up
 
     // App updates installed by the companion (softprojectorupdate.cpp)
     QWidget *updateBar = nullptr;

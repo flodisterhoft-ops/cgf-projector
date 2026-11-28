@@ -19,6 +19,7 @@
 
 #include "../headers/librarypush.hpp"
 #include "../headers/cgfsignature.hpp"
+#include "../headers/proposals.hpp"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -383,6 +384,10 @@ QString LibraryPush::apply(int to, const Pending &release, Changes &changes)
         if(!error.isEmpty())
             break;
     }
+    // Operators' changes the master does not have yet stay on this laptop
+    // (docs/proposals-up.md).
+    if(error.isEmpty())
+        error = Proposals::applyOverrides(db, songs, deleted);
     if(error.isEmpty())
         error = applyBibles(release, changes);
     if(error.isEmpty())

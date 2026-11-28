@@ -282,13 +282,13 @@ describe("the message text", () => {
 
 	it("describes a new song and a retitle", () => {
 		const fresh = describeProposal(
-			{ uuid: uuid(), kind: "new", song_id: 500003, base: null, proposed: { title: "Wie groß bist du", songbook: "Lieder", song_text: "a\nb" }, created_at: "", user: "", library_version: 4 },
+			{ uuid: uuid(), kind: "new", song_id: 500003, base: null, proposed: { title: "Wie groß bist du", songbook: "Lieder", song_text: "a\nb" }, created_at: "", user: "", library_version: 4, replaces: null },
 			"Church laptop",
 			false,
 		);
 		expect(fresh).toBe('Church laptop: new song "Wie groß bist du" (Lieder), 2 lines.');
 		const retitle = describeProposal(
-			{ uuid: uuid(), kind: "edit", song_id: 9, base: { title: "Old", song_text: "x" }, proposed: { title: "New", song_text: "x" }, created_at: "", user: "", library_version: 4 },
+			{ uuid: uuid(), kind: "edit", song_id: 9, base: { title: "Old", song_text: "x" }, proposed: { title: "New", song_text: "x" }, created_at: "", user: "", library_version: 4, replaces: null },
 			"Booth",
 			true,
 		);
