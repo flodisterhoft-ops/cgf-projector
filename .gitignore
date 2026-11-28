@@ -97,6 +97,11 @@ tests/screens/out/
 tests/pictures/out/
 # PowerPoint-import checks (tests/presentations/run_tests.py)
 tests/presentations/out/
+# Presentation-step checks (tests/steps/run_tests.py) and the step tool
+tests/steps/out/
+tools/presentations/stepstool/out/
+tools/presentations/stepstool/Makefile*
+tools/presentations/stepstool/.qmake.stash
 push-server/node_modules/
 push-server/.wrangler/
 push-server/worker-configuration.d.ts

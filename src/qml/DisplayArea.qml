@@ -131,6 +131,90 @@ Rectangle {
 //        }
     }
 
+    // ---- Presentation steps (projectordisplayscreen.cpp, renderSlideStep) ----
+    // One still replaces another with a simple effect on the part that
+    // changed. fx: kind (wipe, split, box, fly, float, zoom), dir, exit,
+    // duration, the changed part x y w h and the still's corner sx sy, all in
+    // screen pixels; push when both stills move (a slide transition).
+    property real fxT: 1
+    property var fx: ({ kind: "" })
+    property var fxIncoming: null
+    property var fxOutgoing: null
+
+    Item
+    {
+        id: fxLayer
+        objectName: "fxLayer"
+        anchors.fill: parent
+        visible: false
+
+        // Wipe, split and box: the new still, seen through a growing window.
+        Item { id: fxClipA; objectName: "fxClipA"; clip: true; Image { id: fxStillA; objectName: "fxStillA"; cache: false } }
+        Item { id: fxClipB; objectName: "fxClipB"; clip: true; Image { id: fxStillB; objectName: "fxStillB"; cache: false } }
+        // Fly, float and zoom: the changed part by itself, moving.
+        Image { id: fxSpriteOut; objectName: "fxSpriteOut"; cache: false }
+        Image { id: fxSprite; objectName: "fxSprite"; cache: false }
+    }
+
+    NumberAnimation
+    {
+        id: fxAnim
+        target: dispArea
+        property: "fxT"
+        from: 0
+        to: 1
+        onFinished: dispArea.fxFinish()
+    }
+
+    onFxTChanged: fxUpdate()
+
+    // Videos, sounds and animated pictures of presentation slides, over the still.
+    property var slideGifs: []
+
+    Item
+    {
+        id: slideMediaLayer
+        anchors.fill: parent
+
+        Repeater
+        {
+            model: dispArea.slideGifs
+            AnimatedImage
+            {
+                required property var modelData
+                source: modelData.source
+                x: modelData.x
+                y: modelData.y
+                width: modelData.w
+                height: modelData.h
+                playing: true
+            }
+        }
+
+        VideoOutput
+        {
+            id: slideVideo
+            objectName: "slideVideo"
+            fillMode: VideoOutput.Stretch
+            visible: slidePlayer.playbackState !== MediaPlayer.StoppedState && slidePlayer.hasVideo
+        }
+    }
+
+    MediaPlayer
+    {
+        id: slidePlayer
+        objectName: "slidePlayer"
+        videoOutput: slideVideo
+        audioOutput: AudioOutput { id: slideVideoSound; device: mediaDevices.defaultAudioOutput }
+    }
+
+    MediaPlayer
+    {
+        id: slideSound
+        objectName: "slideSound"
+        audioOutput: AudioOutput { id: slideSoundOut; device: mediaDevices.defaultAudioOutput }
+    }
+
     Image
     {
         id: textImage1
@@ -457,8 +541,167 @@ Rectangle {
         NumberAnimation{ target: dispArea; properties: "rotation1"; from:270; to:360; duration: 1000}
     }
 
+    function fxWindow(clip, still, cx, cy, cw, ch)
+    {
+        clip.x = cx
+        clip.y = cy
+        clip.width = cw
+        clip.height = ch
+        still.x = fx.sx - cx
+        still.y = fx.sy - cy
+    }
+
+    function fxUpdate()
+    {
+        var f = fx, t = fxT
+        if(f.kind === "")
+            return
+        var x = f.x, y = f.y, w = f.w, h = f.h
+        if(f.kind === "wipe")
+        {
+            if(f.dir === "left") fxWindow(fxClipA, fxStillA, x, y, w * t, h)
+            else if(f.dir === "right") fxWindow(fxClipA, fxStillA, x + w * (1 - t), y, w * t, h)
+            else if(f.dir === "top") fxWindow(fxClipA, fxStillA, x, y, w, h * t)
+            else fxWindow(fxClipA, fxStillA, x, y + h * (1 - t), w, h * t)
+        }
+        else if(f.kind === "box")
+            fxWindow(fxClipA, fxStillA, x + w * (1 - t) / 2, y + h * (1 - t) / 2, w * t, h * t)
+        else if(f.kind === "split")
+        {
+            if(f.dir === "vertical")
+            {
+                fxWindow(fxClipA, fxStillA, x + w / 2 * (1 - t), y, w / 2 * t, h)
+                fxWindow(fxClipB, fxStillB, x + w / 2, y, w / 2 * t, h)
+            }
+            else
+            {
+                fxWindow(fxClipA, fxStillA, x, y + h / 2 * (1 - t), w, h / 2 * t)
+                fxWindow(fxClipB, fxStillB, x, y + h / 2, w, h / 2 * t)
+            }
+        }
+        else
+        {
+            // away: 1 = as far from its place as it gets, 0 = in place
+            var away = f.exit ? t : 1 - t
+            var dx = 0, dy = 0
+            if(f.kind === "fly")
+            {
+                if(f.dir === "left") dx = f.push ? -dispArea.width : -(x + w)
+                else if(f.dir === "right") dx = f.push ? dispArea.width : dispArea.width - x
+                else if(f.dir === "top") dy = f.push ? -dispArea.height : -(y + h)
+                else dy = f.push ? dispArea.height : dispArea.height - y
+            }
+            else if(f.kind === "float")
+                dy = (f.dir === "down" ? -1 : 1) * dispArea.height * 0.08
+            fxSprite.x = x + dx * away
+            fxSprite.y = y + dy * away
+            fxSprite.scale = f.kind === "zoom" ? 1 - 0.7 * away : 1
+            fxSprite.opacity = f.kind === "fly" ? 1 : 1 - away
+            if(f.push)
+            {
+                fxSpriteOut.x = x - dx * (1 - away)
+                fxSpriteOut.y = y - dy * (1 - away)
+            }
+        }
+    }
+
+    function transitionBackStep(to2, spec)
+    {
+        fxFinish()
+        fx = spec
+        fxIncoming = to2 ? backImage2 : backImage1
+        fxOutgoing = to2 ? backImage1 : backImage2
+        fxIncoming.x = spec.sx
+        fxIncoming.y = spec.sy
+        var moving = spec.kind === "fly" || spec.kind === "float" || spec.kind === "zoom"
+        fxSprite.visible = moving
+        fxSpriteOut.visible = moving && spec.push
+        fxClipA.visible = !moving
+        fxClipB.visible = spec.kind === "split"
+        // Leaving: the still without it is underneath at once. Arriving: the
+        // old still stays until the effect is over. Both moving: neither.
+        fxIncoming.opacity = moving && spec.exit && !spec.push ? 1 : 0
+        fxOutgoing.opacity = spec.push || (moving && spec.exit) ? 0 : 1
+        fxLayer.visible = true
+        fxT = 0
+        fxUpdate()
+        fxAnim.duration = spec.duration
+        fxAnim.easing.type = moving ? (spec.exit ? Easing.InCubic : Easing.OutCubic) : Easing.InOutSine
+        fxAnim.restart()
+    }
+
+    // Ends the effect where it would have ended: the new still alone.
+    function fxFinish()
+    {
+        if(!fxLayer.visible)
+            return
+        fxAnim.stop()
+        fxLayer.visible = false
+        fx = { kind: "" }
+        if(fxIncoming && fxOutgoing)
+        {
+            fxIncoming.opacity = 1
+            fxOutgoing.opacity = 0
+        }
+    }
+
+    // list: kind (video, audio, gif), source, x y w h in screen pixels, volume, loop, muted
+    function playSlideMedia(list)
+    {
+        var gifs = [], video = null, sound = null
+        for(var i = 0; i < list.length; ++i)
+        {
+            var m = list[i]
+            if(m.kind === "gif") gifs.push(m)
+            else if(m.kind === "video" && !video) video = m
+            else if(m.kind === "audio" && !sound) sound = m
+        }
+        // Pictures that stay keep moving instead of starting again.
+        if(JSON.stringify(gifs) !== JSON.stringify(slideGifs))
+            slideGifs = gifs
+        slidePlayer.stop()
+        slideSound.stop()
+        if(!video)
+            slidePlayer.source = ""
+        if(!sound)
+            slideSound.source = ""
+        if(video)
+        {
+            slideVideo.x = video.x
+            slideVideo.y = video.y
+            slideVideo.width = video.w
+            slideVideo.height = video.h
+            slideVideoSound.volume = video.volume
+            slideVideoSound.muted = video.muted
+            slidePlayer.loops = video.loop ? MediaPlayer.Infinite : 1
+            slidePlayer.source = video.source
+            slidePlayer.play()
+        }
+        if(sound)
+        {
+            slideSoundOut.volume = sound.volume
+            slideSoundOut.muted = sound.muted
+            slideSound.loops = sound.loop ? MediaPlayer.Infinite : 1
+            slideSound.source = sound.source
+            slideSound.play()
+        }
+    }
+
+    // Stops them and lets go of the files, so a deleted slide show's video
+    // can be deleted with it.
+    function stopSlideMedia()
+    {
+        slidePlayer.stop()
+        slideSound.stop()
+        slidePlayer.source = ""
+        slideSound.source = ""
+        if(slideGifs.length > 0)
+            slideGifs = []
+    }
+
     function stopTransitions()
     {
+        fxFinish()
         seqFade1to2.stop()
         seqFade2to1.stop()
         parFade1to2.stop()

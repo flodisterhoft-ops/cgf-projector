@@ -30,6 +30,7 @@
 #include <QSettings>
 #include <QSqlDatabase>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QTimer>
 
 namespace
@@ -206,37 +207,20 @@ QList<SlideShowItem> PresentationImport::run(const QString &file, const SlideSho
 
 namespace
 {
-QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
-                             QWidget *parent, QString &error, bool &needsOffice)
+// Runs the import script once and waits for it. 0 done, 2 neither PowerPoint
+// nor LibreOffice is there, -1 cancelled, -2 PowerShell did not start,
+// anything else failed (detail then has the script's message).
+int runScript(const QString &script, const QString &workDir, const QStringList &extra,
+              QProgressDialog &progress, QString &detail)
 {
-    QList<SlideShowItem> slides;
-    error.clear();
-    needsOffice = false;
-
-    QTemporaryDir work;
-    const QString script = work.filePath("import-presentation.ps1");
-    if(!work.isValid() || !QFile::copy(":/scripts/scripts/import-presentation.ps1", script))
-    {
-        error = QObject::tr("Could not create a temporary folder for the import.");
-        return slides;
-    }
-    // Copies of resources are read-only, which would keep the folder from
-    // being deleted afterwards.
-    QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner);
-
-    // Draw slides at the size Pictures stores them (Settings > Pictures), so
-    // they are not scaled down afterwards, which blurs text.
-    const int box = sets.resize ? sets.boundWidth : 1920;
-
     QProcess ps;
     // Full path, so a powershell.exe elsewhere on PATH is never run instead.
     ps.setProgram(QDir(qEnvironmentVariable("SystemRoot"))
                   .filePath("System32/WindowsPowerShell/v1.0/powershell.exe"));
     QStringList arguments = {"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                              "-File", QDir::toNativeSeparators(script),
-                             "-In", QDir::toNativeSeparators(file),
-                             "-Out", QDir::toNativeSeparators(work.path()),
-                             "-Size", QString::number(box)};
+                             "-Out", QDir::toNativeSeparators(workDir)};
+    arguments << extra;
     // For a computer without PowerPoint. LibreOffice keeps its settings in
     // the data folder, apart from a LibreOffice the person uses themselves.
     const QString office = PresentationImport::findLibreOffice();
@@ -249,14 +233,6 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
     if(engine == "libreoffice" || engine == "powerpoint")
         arguments << "-Engine" << engine;
     ps.setArguments(arguments);
-
-    QProgressDialog progress(QObject::tr("Importing %1...").arg(QFileInfo(file).fileName()),
-                             QObject::tr("Cancel"), 0, 0, parent);
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setMinimumDuration(0);
-    progress.setAutoReset(false);
-    progress.setAutoClose(false);
-    progress.setValue(0);
 
     // The script prints "count N" and then "slide I" per finished slide.
     QByteArray pending;
@@ -279,10 +255,11 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
     QTimer stopTimer;
     stopTimer.setSingleShot(true);
     QObject::connect(&stopTimer, &QTimer::timeout, &ps, &QProcess::kill);
-    QObject::connect(&progress, &QProgressDialog::canceled, &ps, [&] {
-        QFile(QDir(work.path()).filePath("cancel")).open(QIODevice::WriteOnly);
+    auto askToStop = [&] {
+        QFile(QDir(workDir).filePath("cancel")).open(QIODevice::WriteOnly);
         stopTimer.start(15000);
-    });
+    };
+    QObject::connect(&progress, &QProgressDialog::canceled, &ps, askToStop);
 
     // Wait in an event loop, not with waitForFinished(): the projector keeps
     // drawing and a live video keeps playing during the import.
@@ -291,40 +268,161 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
     ps.start();
     if(!ps.waitForStarted(10000))
     {
-        error = QObject::tr("Could not start PowerShell: %1").arg(ps.errorString());
-        AppLog::write("Import of " + file + " failed: " + error);
-        return slides;
+        detail = ps.errorString();
+        return -2;
     }
+    if(progress.wasCanceled())
+        askToStop();
     loop.exec();
 
     if(progress.wasCanceled())
+        return -1;
+    if(ps.exitStatus() != QProcess::NormalExit)
     {
-        AppLog::write("Import of " + file + " cancelled");
+        detail = QStringLiteral("the script was stopped");
+        return 1;
+    }
+    // The script's own message (often a bare COM error code) goes to the log.
+    detail = QString::fromUtf8(ps.readAllStandardError()).remove(QChar(0xFEFF)).simplified();
+    return ps.exitCode();
+}
+
+QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
+                             QWidget *parent, QString &error, bool &needsOffice)
+{
+    QList<SlideShowItem> slides;
+    error.clear();
+    needsOffice = false;
+
+    QTemporaryDir work;
+    const QString script = work.filePath("import-presentation.ps1");
+    if(!work.isValid() || !QFile::copy(":/scripts/scripts/import-presentation.ps1", script))
+    {
+        error = QObject::tr("Could not create a temporary folder for the import.");
         return slides;
     }
-    if(ps.exitStatus() != QProcess::NormalExit || ps.exitCode() != 0)
-    {
-        // The script's own message (often a bare COM error code) goes to the log.
-        const QString detail = QString::fromUtf8(ps.readAllStandardError()).remove(QChar(0xFEFF)).simplified();
-        if(ps.exitStatus() == QProcess::NormalExit && ps.exitCode() == 2)
+    // Copies of resources are read-only, which would keep the folder from
+    // being deleted afterwards.
+    QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner);
+
+    // Draw slides at the size Pictures stores them (Settings > Pictures), so
+    // they are not scaled down afterwards, which blurs text.
+    const int box = sets.resize ? sets.boundWidth : 1920;
+    const QString shortName = QFileInfo(file).fileName();
+
+    QProgressDialog progress(QObject::tr("Importing %1...").arg(shortName),
+                             QObject::tr("Cancel"), 0, 0, parent);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0);
+    progress.setAutoReset(false);
+    progress.setAutoClose(false);
+    progress.setValue(0);
+
+    // What a run of the script came to, for all three places it is run.
+    QString detail;
+    auto failed = [&](int code) {
+        if(code == 0)
+            return false;
+        if(code == -1)
+            AppLog::write("Import of " + file + " cancelled");
+        else if(code == -2)
         {
-            needsOffice = true;
-            error = QObject::tr("Importing PowerPoint files needs PowerPoint or LibreOffice on this computer. "
-                                "PDF files import without them.");
+            error = QObject::tr("Could not start PowerShell: %1").arg(detail);
+            AppLog::write("Import of " + file + " failed: " + error);
         }
         else
-            error = QObject::tr("Could not import %1. The file may be damaged or protected by a password.")
-                    .arg(QFileInfo(file).fileName());
-        AppLog::write("Import of " + file + " failed: " + (detail.isEmpty() ? QString("no message") : detail));
-        return slides;
+        {
+            if(code == 2)
+            {
+                needsOffice = true;
+                error = QObject::tr("Importing PowerPoint files needs PowerPoint or LibreOffice on this computer. "
+                                    "PDF files import without them.");
+            }
+            else
+                error = QObject::tr("Could not import %1. The file may be damaged or protected by a password.")
+                        .arg(shortName);
+            AppLog::write("Import of " + file + " failed: " + (detail.isEmpty() ? QString("no message") : detail));
+        }
+        return true;
+    };
+
+    // A slide with animations becomes one still per click (presentationsteps.hpp).
+    // For that the file is rewritten with every step as a slide of its own,
+    // and that copy is what PowerPoint or LibreOffice draws. Any trouble on
+    // the way and the file is drawn as it is, one still per slide.
+    // CGF_IMPORT_STEPS=0 turns the steps off.
+    QString input = file;
+    QList<SlideStep> steps;
+    const QString suffix = QFileInfo(file).suffix().toLower();
+    if(suffix != "pdf" && qEnvironmentVariable("CGF_IMPORT_STEPS") != "0")
+    {
+        QString modern = file;
+        if(suffix != "pptx" && suffix != "pptm" && suffix != "ppsx")
+        {
+            // .ppt, .pps and .odp keep their animations in another form: the
+            // office program saves the file as a .pptx first.
+            modern = work.filePath("converted.pptx");
+            const int code = runScript(script, work.path(), {"-In", QDir::toNativeSeparators(file),
+                                                              "-ToPptx", QDir::toNativeSeparators(modern)}, progress, detail);
+            if(code == -1 || code == -2 || code == 2)
+            {
+                failed(code);
+                return slides;
+            }
+            if(code != 0 || !QFileInfo(modern).isFile())
+            {
+                AppLog::write("Import of " + file + ": not saved as .pptx (" + detail + "); drawn without steps");
+                modern.clear();
+            }
+            QDir(work.path()).remove("cancel");
+            QDir(work.filePath("office")).removeRecursively();
+        }
+        if(!modern.isEmpty())
+        {
+            // In its own thread: a large file takes a few seconds to rewrite.
+            const QString expanded = work.filePath("steps.pptx");
+            const QString mediaDir = PresentationSteps::mediaDir();
+            QString why;
+            bool ok = false;
+            QThread *worker = QThread::create([&] { ok = PresentationSteps::expand(modern, expanded, mediaDir, steps, why); });
+            QEventLoop wait;
+            QObject::connect(worker, &QThread::finished, &wait, &QEventLoop::quit);
+            worker->start();
+            wait.exec();
+            worker->wait();
+            delete worker;
+            if(ok)
+                input = expanded;
+            else
+            {
+                steps.clear();
+                AppLog::write("Import of " + file + ": steps not read (" + why + "); drawn without them");
+            }
+        }
     }
 
+    if(failed(runScript(script, work.path(), {"-In", QDir::toNativeSeparators(input), "-Size", QString::number(box)},
+                        progress, detail)))
+        return slides;
+
     const QDir out(work.path());
-    for(const QString &name : out.entryList({"slide*.png"}, QDir::Files, QDir::Name))
+    const QStringList pictures = out.entryList({"slide*.png"}, QDir::Files, QDir::Name);
+    if(!steps.isEmpty() && steps.count() != pictures.count())
+    {
+        // Should not happen: the stills would get the wrong steps.
+        AppLog::write(QString("Import of %1: %2 steps but %3 pictures; shown without steps")
+                      .arg(file).arg(steps.count()).arg(pictures.count()));
+        steps.clear();
+    }
+    int animated = 0;
+    for(const QString &name : pictures)
     {
         QPixmap img;
         if(!img.load(out.filePath(name)))
+        {
+            steps.clear();      // one missing picture and the rest would not line up
             continue;
+        }
         // PDF pages come out larger on displays scaled above 100 %.
         if(img.width() > box || img.height() > box)
             img = img.scaled(box, box, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -336,9 +434,20 @@ QList<SlideShowItem> convert(const QString &file, const SlideShowSettings &sets,
         slide.path = file;
         slides.append(slide);
     }
+    if(steps.count() == slides.count())
+    {
+        for(int i = 0; i < slides.count(); ++i)
+        {
+            const SlideStep &step = steps.at(i);
+            slides[i].path = step.toText();
+            slides[i].name = step.index == 0 ? QObject::tr("Slide %1").arg(step.slide)
+                                             : QObject::tr("Slide %1, step %2").arg(step.slide).arg(step.index);
+            animated += step.index > 0;
+        }
+    }
     if(slides.isEmpty())
-        error = QObject::tr("%1 has no slides to show.").arg(QFileInfo(file).fileName());
-    AppLog::write(QString("Imported %1: %2 slides").arg(file).arg(slides.count()));
+        error = QObject::tr("%1 has no slides to show.").arg(shortName);
+    AppLog::write(QString("Imported %1: %2 stills, %3 of them animation steps").arg(file).arg(slides.count()).arg(animated));
     return slides;
 }
 } // namespace
