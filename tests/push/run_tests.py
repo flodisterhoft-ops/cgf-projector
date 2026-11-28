@@ -245,6 +245,9 @@ def e2e(env, versions, expect):
         subprocess.run(py + ["add-device", "Push test laptop", "--out", str(BIN / "cgf-cloud.json")],
                        env=env, check=True, stdout=subprocess.DEVNULL)
         fresh_app_db(versions[0], expect)
+        # As on an installed laptop: the server sends a Bible release only to a
+        # laptop whose app is new enough (cgf-versions.txt, docs/song-push.md).
+        (BIN / "cgf-versions.txt").write_text("current=app-0.2.7" + chr(10), encoding="utf-8")
         harness = subprocess.Popen([str(BIN / "push_tests.exe"), "--e2e", "6"], cwd=OUT, env=env,
                                    stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         lines = []

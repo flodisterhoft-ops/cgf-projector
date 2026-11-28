@@ -175,6 +175,65 @@ describe("releases reach laptops", () => {
 		expect(s.devices.find((d) => d.name === "Back room")?.last_version).toBeNull();
 	});
 
+	it("holds a release that needs a newer app until the laptop has it", async () => {
+		const c = "needs";
+		const laptop = await connect(c, await addDevice(c, "Booth"));
+		laptop.send({ type: "hello", app: "app-0.2.6" }); // the app is closed
+		await laptop.next(); // welcome
+		await publish(c, [part(c, 3, 4)]);
+		await publish(c, [part(c, 4, 5, 1, 2, { needs: ["bibles"] }), part(c, 4, 5, 2, 2, { needs: ["bibles"] })]);
+		// Live: the song release arrives, the Bible release does not.
+		expect((await laptop.next()).map(header)).toEqual(["3>4:1/1"]);
+		await pause();
+		expect(laptop.inbox).toEqual([]);
+		await publish(c, [part(c, 5, 6)]);
+		laptop.inbox.length = 0; // a release after the held one is a gap for this laptop anyway
+
+		// On hello with the old app: only up to the held release, and no resync.
+		laptop.send({ type: "hello", version: 3, app: "app-0.2.6" });
+		const old = await laptop.next(2);
+		expect(old[0]).toMatchObject({ type: "welcome", latest: 6 });
+		expect(header(old[1])).toBe("3>4:1/1");
+		await pause();
+		expect(laptop.inbox).toEqual([]);
+
+		// After the app update: everything.
+		laptop.send({ type: "hello", version: 4, app: "app-0.2.7" });
+		const all = await laptop.next(4);
+		expect(all.slice(1).map(header)).toEqual(["4>5:1/2", "4>5:2/2", "5>6:1/1"]);
+
+		// A laptop that never said which app it has gets no Bible release either.
+		const unknown = await connect(c, await addDevice(c, "Back room"));
+		unknown.send({ type: "hello", version: 4 });
+		expect(await unknown.next()).toMatchObject([{ type: "welcome" }]);
+		await pause();
+		expect(unknown.inbox).toEqual([]);
+	});
+
+	it("sends a release that needs a newer app live only to laptops that have it", async () => {
+		const c = "needs-live";
+		const fresh = await connect(c, await addDevice(c, "Booth"));
+		const old = await connect(c, await addDevice(c, "Back room"));
+		fresh.send({ type: "hello", app: "app-0.3.0" });
+		old.send({ type: "hello", app: "app-0.2.6" });
+		await fresh.next();
+		await old.next();
+		await publish(c, [part(c, 0, 1, 1, 1, { needs: ["bibles"] })]);
+		expect((await fresh.next()).map(header)).toEqual(["0>1:1/1"]);
+		await pause();
+		expect(old.inbox).toEqual([]);
+		// A feature this server does not know reaches nobody.
+		await publish(c, [part(c, 1, 2, 1, 1, { needs: ["teleport"] })]);
+		await pause();
+		expect(fresh.inbox).toEqual([]);
+	});
+
+	it("refuses a malformed needs list", async () => {
+		const c = "needs-bad";
+		const r = await publish(c, [part(c, 0, 1, 1, 1, { needs: "bibles" })]);
+		expect(r.status).toBe(400);
+	});
+
 	it("answers keep-alives", async () => {
 		const laptop = await connect("pings", await addDevice("pings", "Booth"));
 		laptop.send("ping");

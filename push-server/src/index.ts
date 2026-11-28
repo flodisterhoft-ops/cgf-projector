@@ -9,6 +9,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import {
+	appSupports,
 	type AppReleaseRow,
 	FILE_CHUNK,
 	inflateQt,
@@ -264,6 +265,9 @@ export class ChurchPush extends DurableObject<PushEnv> {
 			// Added with app updates (2026-11-23): the app version each laptop runs.
 			const cols = this.sql.exec<{ name: string }>("PRAGMA table_info(devices)").toArray().map((c) => c.name);
 			if (!cols.includes("app_folder")) this.sql.exec("ALTER TABLE devices ADD COLUMN app_folder TEXT");
+			// Added with Bible releases (2026-11-27): what a release needs, comma-separated.
+			const rcols = this.sql.exec<{ name: string }>("PRAGMA table_info(releases)").toArray().map((c) => c.name);
+			if (!rcols.includes("needs")) this.sql.exec("ALTER TABLE releases ADD COLUMN needs TEXT NOT NULL DEFAULT ''");
 		});
 		// Keep-alives are answered without waking the object.
 		ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
@@ -336,22 +340,29 @@ export class ChurchPush extends DurableObject<PushEnv> {
 		const sorted = [...rows].sort((x, y) => x.to - y.to || x.part - y.part);
 		for (const r of sorted)
 			this.sql.exec(
-				`INSERT OR REPLACE INTO releases (church_id, to_version, part, parts, from_version, envelope, received_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-				church, r.to, r.part, r.parts, r.from, r.envelope, received,
+				`INSERT OR REPLACE INTO releases (church_id, to_version, part, parts, from_version, envelope, received_at, needs)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				church, r.to, r.part, r.parts, r.from, r.envelope, received, r.needs.join(","),
 			);
 		const latest = this.latest(church);
 		this.sql.exec("DELETE FROM releases WHERE church_id = ? AND to_version <= ?", church, latest - KEEP_RELEASES);
 
 		// A laptop at another version notices the gap and asks for a replay.
+		// One whose app cannot take a release gets nothing from it on; its
+		// next hello after the app update brings it.
 		const sockets = this.ctx.getWebSockets();
-		for (const ws of sockets)
-			for (const r of sorted)
+		for (const ws of sockets) {
+			const a = ws.deserializeAttachment() as Attachment | null;
+			const folder = a ? this.appFolder(a.church, a.device) : null;
+			for (const r of sorted) {
+				if (!appSupports(folder, r.needs)) break;
 				try {
 					ws.send(r.envelope);
 				} catch {
 					// a closing connection; it catches up when it reconnects
 				}
+			}
+		}
 		return { stored: rows.length, latest, connected: sockets.length };
 	}
 
@@ -543,6 +554,13 @@ export class ChurchPush extends DurableObject<PushEnv> {
 		);
 	}
 
+	private appFolder(church: string, device: string): string | null {
+		const row = this.sql
+			.exec<{ app_folder: string | null }>("SELECT app_folder FROM devices WHERE church_id = ? AND name = ?", church, device)
+			.toArray()[0];
+		return row?.app_folder ?? null;
+	}
+
 	// Send a laptop every release from its version onward, in order. If the
 	// chain is broken (it was offline longer than the releases kept here), it
 	// is told to take the full snapshot instead.
@@ -552,22 +570,31 @@ export class ChurchPush extends DurableObject<PushEnv> {
 		if (version === null || version >= latest) return;
 
 		const rows = this.sql
-			.exec<{ to_version: number; from_version: number; part: number; parts: number; envelope: string }>(
-				`SELECT to_version, from_version, part, parts, envelope FROM releases
+			.exec<{ to_version: number; from_version: number; part: number; parts: number; envelope: string; needs: string }>(
+				`SELECT to_version, from_version, part, parts, envelope, needs FROM releases
 				 WHERE church_id = ? AND to_version > ? ORDER BY to_version, part`,
 				a.church, version,
 			)
 			.toArray();
+		const folder = this.appFolder(a.church, a.device);
 		let current = version;
 		let i = 0;
+		let waiting = false;
 		while (i < rows.length) {
 			const to = rows[i].to_version;
 			const group = [];
 			while (i < rows.length && rows[i].to_version === to) group.push(rows[i++]);
 			if (group[0].from_version !== current || group.length !== group[0].parts) break;
+			// The laptop's app is too old for this release: hold it and all
+			// after it until the app update is installed (no resync: the
+			// releases are here, the laptop is not behind).
+			if (!appSupports(folder, group[0].needs ? group[0].needs.split(",") : [])) {
+				waiting = true;
+				break;
+			}
 			for (const r of group) ws.send(r.envelope);
 			current = to;
 		}
-		if (current < latest) ws.send(JSON.stringify({ type: "resync", have: current, latest }));
+		if (current < latest && !waiting) ws.send(JSON.stringify({ type: "resync", have: current, latest }));
 	}
 }
