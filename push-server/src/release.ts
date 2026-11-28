@@ -16,6 +16,31 @@ export interface ReleaseRow {
 	part: number;
 	parts: number;
 	envelope: string;
+	needs: string[];
+}
+
+// What a release can need beyond songs, and the first app version that
+// understands it. An older app would half apply such a release (0.2.6 skips
+// Bibles and still counts the version), so a laptop gets it only once its
+// installed app is new enough. docs/song-push.md.
+export const FEATURE_SINCE: Record<string, [number, number, number]> = {
+	bibles: [0, 2, 7],
+};
+const FEATURE = /^[a-z0-9-]{1,30}$/;
+
+// Whether the app folder a laptop reports ("app-0.2.7") understands every
+// feature in needs. Unknown features and unknown folders never do.
+export function appSupports(folder: string | null | undefined, needs: string[]): boolean {
+	if (needs.length === 0) return true;
+	const m = /^app-(\d+)\.(\d+)\.(\d+)$/.exec(folder ?? "");
+	if (!m) return false;
+	const have = [Number(m[1]), Number(m[2]), Number(m[3])];
+	return needs.every((n) => {
+		const since = FEATURE_SINCE[n];
+		if (!since) return false;
+		for (let i = 0; i < 3; i++) if (have[i] !== since[i]) return have[i] > since[i];
+		return true;
+	});
 }
 
 export function isInt(v: unknown): v is number {
@@ -114,7 +139,13 @@ export function parseEnvelope(e: unknown, church: string): ReleaseRow | string {
 	if (!isInt(from) || !isInt(to) || from < 0 || to <= from) return "bad from/to versions";
 	if (!isInt(parts) || !isInt(part) || parts < 1 || parts > MAX_PARTS || part < 1 || part > parts)
 		return "bad part numbers";
+	let needs: string[] = [];
+	if (p.needs !== undefined) {
+		if (!Array.isArray(p.needs) || p.needs.length > 10 || !p.needs.every((n) => typeof n === "string" && FEATURE.test(n)))
+			return "bad needs list";
+		needs = p.needs as string[];
+	}
 	const envelope = JSON.stringify({ type: "release", payload, sig, key });
 	if (envelope.length > MAX_ENVELOPE_CHARS) return "a part is too large";
-	return { to, from, part, parts, envelope };
+	return { to, from, part, parts, envelope, needs };
 }
