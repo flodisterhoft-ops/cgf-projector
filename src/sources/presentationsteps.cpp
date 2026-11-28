@@ -461,6 +461,15 @@ QString opposite(const QString &dir)
     return QStringLiteral("right");
 }
 
+QString toward(const QString &dir)
+{
+    // The side a transition's dir points to: where an uncovered slide leaves.
+    if(dir.startsWith(QLatin1Char('r'))) return QStringLiteral("right");
+    if(dir.startsWith(QLatin1Char('u'))) return QStringLiteral("top");
+    if(dir.startsWith(QLatin1Char('d'))) return QStringLiteral("bottom");
+    return QStringLiteral("left");
+}
+
 // The slide's transition as the effect of its first step. A slide without
 // one keeps the app's usual fade between pictures (no effect named), which
 // is what operators know; PowerPoint would cut.
@@ -470,7 +479,10 @@ void readTransition(const QDomElement &slide, SlideStep &step)
     step.durationMs = 500;
     QList<QDomElement> found = descendants(slide, QStringLiteral("transition"));
     // A newer transition comes first, an older one PowerPoint 2007 can show
-    // second. Take the first one we can do; any other effect is a fade.
+    // second. Take the first one we can do; any other effect is a fade. The
+    // length is the first one's, which is the one the author set: the older
+    // one stands in for an effect PowerPoint 2007 lacks and knows only slow,
+    // medium and fast.
     bool any = false;
     int length = -1;
     for(const QDomElement &t : found)
@@ -480,11 +492,15 @@ void readTransition(const QDomElement &slide, SlideStep &step)
             continue;
         any = true;
         const QString name = local(kind);
-        int duration = milliseconds(attr(t, QStringLiteral("dur")), -1);
-        if(duration < 0)
+        if(length < 0)
         {
-            const QString speed = t.attribute(QStringLiteral("spd"), QStringLiteral("fast"));
-            duration = speed == QLatin1String("slow") ? 1000 : speed == QLatin1String("med") ? 750 : 500;
+            int duration = milliseconds(attr(t, QStringLiteral("dur")), -1);
+            if(duration < 0)
+            {
+                const QString speed = t.attribute(QStringLiteral("spd"), QStringLiteral("fast"));
+                duration = speed == QLatin1String("slow") ? 1000 : speed == QLatin1String("med") ? 750 : 500;
+            }
+            length = qBound(150, duration, 2000);
         }
         const QString dir = kind.attribute(QStringLiteral("dir"), QStringLiteral("l"));
         QString effect, direction;
@@ -493,7 +509,7 @@ void readTransition(const QDomElement &slide, SlideStep &step)
         else if(name == QLatin1String("push") || name == QLatin1String("pan")) { effect = QStringLiteral("push"); direction = opposite(dir); }
         else if(name == QLatin1String("wipe")) { effect = QStringLiteral("wipe"); direction = opposite(dir); }
         else if(name == QLatin1String("cover")) { effect = QStringLiteral("cover"); direction = opposite(dir); }
-        else if(name == QLatin1String("pull")) { effect = QStringLiteral("uncover"); direction = opposite(dir); }
+        else if(name == QLatin1String("pull")) { effect = QStringLiteral("uncover"); direction = toward(dir); }
         else if(name == QLatin1String("split"))
         {
             effect = QStringLiteral("split");
@@ -504,11 +520,9 @@ void readTransition(const QDomElement &slide, SlideStep &step)
         {
             step.effect = effect;
             step.direction = direction;
-            step.durationMs = effect == QLatin1String("cut") ? 0 : qBound(150, duration, 2000);
+            step.durationMs = effect == QLatin1String("cut") ? 0 : length;
             return;
         }
-        if(length < 0)
-            length = qBound(150, duration, 2000);
     }
     // Only effects we do not have: a fade as long as the first of them.
     if(any)

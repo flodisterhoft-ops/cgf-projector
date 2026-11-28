@@ -52,7 +52,8 @@ struct SlideStep
     //   cut, fade, wipe, split, box, fly, float, zoom; push, cover, uncover (transitions only)
     // Empty: the slide has no transition, and the app's usual fade is used.
     QString effect;
-    // wipe, fly, push, cover, uncover: the side it starts from (left, right, top, bottom);
+    // wipe, fly, push, cover: the side it starts from (left, right, top, bottom);
+    // a fly that leaves, and uncover (the slide before leaves): the side it goes to;
     // float: up or down; split: horizontal or vertical
     QString direction;
     bool exit = false;      // the object leaves instead of appearing

@@ -17,13 +17,21 @@
 #   slide 5  hidden                                                -
 #   slide 6  a video nothing starts (only with -Video); cut        2 steps
 #   slide 7  closing words, split transition                       1 step
+#
+# -Transitions makes a second deck, five slides with one still each:
+#   slide 1  white, no transition
+#   slide 2  dark; uncover to the right in 0.8 s: slide 1 leaves to the right
+#   slide 3  white; uncover down in 1 s: slide 2 leaves to the bottom
+#   slide 4  vortex in 1.4 s, an effect the app does not have: a fade as long
+#   slide 5  a fade of 0.3 s
 param(
     [Parameter(Mandatory = $true)][string]$Out,
     [Parameter(Mandatory = $true)][string]$Picture,
     [Parameter(Mandatory = $true)][string]$Sound,
     [Parameter(Mandatory = $true)][string]$Gif,
     [string]$Video = '',
-    [string]$Old = ''       # also save in the older .ppt format
+    [string]$Old = '',      # also save in the older .ppt format
+    [string]$Transitions = ''
 )
 $ErrorActionPreference = 'Stop'
 
@@ -95,6 +103,30 @@ try {
     $pres.SaveAs($Out)
     if ($Old) { $pres.SaveCopyAs($Old, 1) }             # ppSaveAsPresentation (.ppt)
     "saved $Out, $($pres.Slides.Count) slides"
+
+    if ($Transitions) {
+        $more = $app.Presentations.Add(0)
+        try {
+            $effects = 0, 2051, 2052, 3863, 3849        # none, uncover right, uncover down, vortex left, fade smoothly
+            $lengths = 0, 0.8, 1.0, 1.4, 0.3
+            foreach ($i in 0..4) {
+                $s = $more.Slides.Add($i + 1, 12)       # blank
+                $s.FollowMasterBackground = 0
+                $s.Background.Fill.Solid()
+                $s.Background.Fill.ForeColor.RGB = if ($i -eq 1) { 0x202020 } else { 0xFFFFFF }
+                $box = $s.Shapes.AddShape(1, 380, 220, 200, 100)
+                $box.Fill.ForeColor.RGB = 0x808080; $box.Line.Visible = 0
+                if ($effects[$i]) {
+                    $s.SlideShowTransition.EntryEffect = $effects[$i]
+                    $s.SlideShowTransition.Duration = $lengths[$i]
+                }
+            }
+            $more.SaveAs($Transitions)
+            "saved $Transitions, $($more.Slides.Count) slides"
+        } finally {
+            $more.Close()
+        }
+    }
 } finally {
     $pres.Close()
     if ($app.Presentations.Count -eq 0) { $app.Quit() }

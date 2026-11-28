@@ -97,13 +97,28 @@ struct Screen
 };
 
 // Not a check: imports a presentation, steps through it live and saves what
-// the projector shows as numbered pictures, with the time of each, for a look
-// at the effects on a real file (run_tests.py --record).
-static int record(SoftProjector &w, const SlideShowSettings &sets, const QString &deck, const QString &outDir, int maxStills)
+// the projector shows as numbered pictures, for a look at the effects on a
+// real file (run_tests.py --record). times.txt has a line for each picture:
+// its name, the time in ms, the still on the projector and that still's
+// slide and step.
+static int record(SoftProjector &w, const SlideShowSettings &sets, const QString &deck, const QString &outDir,
+                  int maxStills, const QString &range)
 {
     QString error;
     QList<SlideShowItem> list = PresentationImport::run(deck, sets, &w, error);
     if(list.isEmpty()) { qCritical().noquote() << "import failed:" << error; return 2; }
+    if(!range.isEmpty())
+    {
+        // "20-23" or "21": only those slides, numbered as the list shows them.
+        const int from = range.section('-', 0, 0).toInt();
+        const int to = range.contains('-') ? range.section('-', 1, 1).toInt() : from;
+        QList<SlideShowItem> wanted;
+        for(const SlideShowItem &i : std::as_const(list))
+            if(i.step().slide >= from && i.step().slide <= to)
+                wanted << i;
+        if(wanted.isEmpty()) { qCritical().noquote() << "import failed: no slides" << range; return 2; }
+        list = wanted;
+    }
     if(maxStills > 0)
         list = list.mid(0, maxStills);
     QDir().mkpath(outDir);
@@ -111,27 +126,59 @@ static int record(SoftProjector &w, const SlideShowSettings &sets, const QString
     times.open(QIODevice::WriteOnly | QIODevice::Text);
     QElapsedTimer clock; clock.start();
     int frames = 0;
+    QList<int> order;       // the stills in the order the projector showed them
     auto shoot = [&](int ms) {
         QElapsedTimer t; t.start();
         while(t.elapsed() < ms)
         {
-            pump(40);
+            QElapsedTimer frame; frame.start();
+            do
+            {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+                if(w.shownPictureStill >= 0 && (order.isEmpty() || order.last() != w.shownPictureStill))
+                    order << w.shownPictureStill;
+                QThread::msleep(2);
+            } while(frame.elapsed() < 40);
             const QString name = QString("frame%1.png").arg(++frames, 5, 10, QChar('0'));
             w.pds1->dispView->grabWindow().scaledToWidth(640, Qt::SmoothTransformation).save(outDir + "/" + name);
-            times.write(QString("%1 %2").arg(name).arg(clock.elapsed()).toUtf8() + '\n');
+            const SlideStep step = list.value(w.shownPictureStill).step();
+            times.write(QString("%1 %2 %3 %4.%5").arg(name).arg(clock.elapsed()).arg(w.shownPictureStill)
+                        .arg(step.slide).arg(step.index).toUtf8() + '\n');
         }
     };
+    // The still on the projector: its effect, a pause, and the steps that
+    // follow it by themselves.
+    auto watch = [&] {
+        int still;
+        do
+        {
+            still = w.shownPictureStill;
+            shoot(qMax(list.value(still).step().durationMs, 300) + 900);
+            while(w.shownPictureStill == still && w.slideStepTimer && w.slideStepTimer->isActive())
+                shoot(100);
+        } while(w.shownPictureStill != still);
+    };
+    // Next, the way the operator presses it: through a slide's steps, then
+    // on to the next slide. (The list has one row per slide, not per still.)
     w.setPictureList(list, 0, "Recording");
-    QListWidget *rows = w.ui->listShow;
-    shoot(1200);
-    for(int row = 1; row < list.count(); row = rows->currentRow() + 1)
+    watch();
+    while(w.pictureStill + 1 < list.count())
     {
-        if(rows->currentRow() < row)        // a step that follows by itself may be there already
-            rows->setCurrentRow(row);
-        shoot(qMax(list.at(rows->currentRow()).step().durationMs, 300) + 900);
+        const int before = w.pictureStill;
+        w.nextSlide();
+        if(w.pictureStill == before)
+            break;
+        watch();
     }
-    qInfo().noquote() << QString("recorded %1 pictures of %2 stills").arg(frames).arg(list.count());
-    return 0;
+    bool inOrder = order.count() == list.count();
+    for(int i = 0; inOrder && i < order.count(); ++i)
+        inOrder = order.at(i) == i;
+    QStringList seen;
+    for(int still : std::as_const(order))
+        seen << QString::number(still);
+    qInfo().noquote() << QString("recorded %1 pictures of %2 stills, %3").arg(frames).arg(list.count())
+                         .arg(inOrder ? QString("each shown once and in order") : "NOT each once and in order: " + seen.join(' '));
+    return inOrder ? 0 : 1;
 }
 
 int main(int argc, char *argv[])
@@ -170,7 +217,7 @@ int main(int argc, char *argv[])
     QString error;
     if(!qEnvironmentVariableIsEmpty("CGF_RECORD_DECK"))
         return record(w, sets, qEnvironmentVariable("CGF_RECORD_DECK"), qEnvironmentVariable("CGF_RECORD_OUT"),
-                      qEnvironmentVariableIntValue("CGF_RECORD_STILLS"));
+                      qEnvironmentVariableIntValue("CGF_RECORD_STILLS"), qEnvironmentVariable("CGF_RECORD_SLIDES"));
 
     // ---------------------------------------------------------------- import
     qputenv("CGF_IMPORT_ENGINE", "powerpoint");
@@ -427,6 +474,60 @@ int main(int argc, char *argv[])
     pump(100);
     CHECK(w.shownPictureStill == 8 && !screen.busy(), "Show brings the same still back with a fade");
     pump(1200);
+
+    // ---------------------------------------------------------------- more transitions
+    {
+        QList<SlideShowItem> more = PresentationImport::run(dir + "/transitions-deck.pptx", sets, &w, error);
+        QList<SlideStep> t;
+        for(const SlideShowItem &i : std::as_const(more))
+            t << i.step();
+        while(t.count() < 5)
+            t << SlideStep();
+        CHECK(more.count() == 5 && error.isEmpty() && t[0].effect.isEmpty(),
+              QString("the second deck: five slides, one still each (%1) %2").arg(more.count()).arg(error));
+        CHECK(t[1].effect == "uncover" && t[1].direction == "right" && t[1].durationMs == 800,
+              "uncover to the right: the slide before leaves to the right, in the 0.8 s set: " + describe(t[1]));
+        CHECK(t[2].effect == "uncover" && t[2].direction == "bottom" && t[2].durationMs == 1000,
+              "uncover down: it leaves to the bottom: " + describe(t[2]));
+        CHECK(t[3].effect == "fade" && t[3].durationMs == 1400,
+              "an effect the app does not have (vortex, 1.4 s) is a fade just as long: " + describe(t[3]));
+        CHECK(t[4].effect == "fade" && t[4].durationMs == 300, "a fade keeps the length set for it (0.3 s): " + describe(t[4]));
+
+        // Live: slide 1 is white, slide 2 dark, slide 3 white.
+        auto dark = [](const QImage &i, double x, double y) { return qGray(i.pixel(int(x), int(y))) < 100; };
+        w.setPictureList(more, 0, "Transitions");
+        pump(900);
+        next();
+        fx = screen.fx();
+        CHECK(at(1, 1) && fx.value("kind") == "fly" && fx.value("exit").toBool() && fx.value("dir") == "right"
+              && fx.value("duration").toInt() == 800, "Next: slide 2 is uncovered, 0.8 s " + where());
+        pump(560);
+        double edge = screen.item("fxSprite")->x();
+        QImage half = w.pds1->dispView->grabWindow();
+        half.save(dir + "/frame-uncover.png");
+        CHECK(edge > 40 && edge < half.width() - 40 && dark(half, edge / 2, half.height() * 0.9)
+              && !dark(half, (edge + half.width()) / 2, half.height() * 0.9),
+              QString("slide 1 is on its way out to the right, slide 2 shows at the left (edge at %1)").arg(edge));
+        CHECK(waitUntil([&] { return screen.settled(); }, 3000), "and ends with slide 2 alone");
+        next();
+        fx = screen.fx();
+        CHECK(at(2, 2) && fx.value("kind") == "fly" && fx.value("exit").toBool() && fx.value("dir") == "bottom",
+              "slide 3 is uncovered downwards " + where());
+        pump(700);
+        edge = screen.item("fxSprite")->y();
+        half = w.pds1->dispView->grabWindow();
+        CHECK(edge > 40 && edge < half.height() - 40 && !dark(half, half.width() * 0.9, edge / 2)
+              && dark(half, half.width() * 0.9, (edge + half.height()) / 2),
+              QString("slide 2 is on its way out at the bottom, slide 3 shows at the top (edge at %1)").arg(edge));
+        waitUntil([&] { return screen.settled(); }, 3000);
+        next();
+        fx = screen.fx();
+        CHECK(at(3, 3) && fx.value("kind") == "fade" && fx.value("duration").toInt() == 1400, "slide 4 fades in for 1.4 s " + where());
+        waitUntil([&] { return screen.settled(); }, 3000);
+        next();
+        CHECK(at(4, 4) && screen.kind() == "fade" && screen.fx().value("duration").toInt() == 300, "slide 5 for 0.3 s " + where());
+        waitUntil([&] { return screen.settled(); }, 2000);
+    }
 
     // ---------------------------------------------------------------- other ways in
     slides = PresentationImport::run(old, sets, &w, error);

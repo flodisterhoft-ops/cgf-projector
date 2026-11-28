@@ -751,7 +751,7 @@ animation, imports it through PowerPoint and LibreOffice and steps through it
 on the real main window offscreen, watching the projector's effect layer, the
 steps that follow by themselves and the media players: 60 checks pass (it
 leaves `frame-*.png` beside the test exe, the projector in the middle of a
-push, a wipe and a fly-in). With `--record <presentation> --frames <folder>`
+push, a wipe, a fly-in and an uncover). With `--record <presentation> --frames <folder>`
 it runs no checks and records the projector stepping through a real file, as
 pictures and a GIF: how the grey flash was found. `tools/presentations/corpus.py` on Florian's
 files: the splitter read all 780; PowerPoint and LibreOffice each drew every
@@ -854,3 +854,40 @@ animations happening as he goes forward. Now:
 `tests/steps` 74 (the lists, Next and Previous through steps, the keys),
 `tests/presentations` 21, `tests/pictures` 42, `tests/screens` 34 and
 `tests/bridge` 73 pass.
+
+The showcase deck (2026-11-28): Florian had Codex build a PowerPoint file
+with a slide for every case the import handles or leaves out (45 slides, 44
+shown, 134 stills; it stays on his PC, presentations are kept out of the
+repo). PowerPoint and LibreOffice each drew all 134 stills, and the split
+matched what the deck's legend expects except in three stills. Those faults
+and the recorder's are fixed:
+
+- Uncover moved the old slide the wrong way. A transition's `dir` is where
+  the slides move to. Push, wipe and cover need the side the new picture
+  starts from, which is the opposite one. With uncover (`<p:pull>`) the old
+  slide is what moves, and the projector sends it to the side it is given, so
+  `readTransition` now passes `dir` on as it is.
+- A transition the app does not have became a fade of the wrong length.
+  PowerPoint writes such a transition twice: the real one with its length in
+  milliseconds (`p14:dur`), then a fade for PowerPoint 2007, which knows only
+  slow, medium and fast. The fade's length came from the second (1 s for a
+  Morph of 1.3 s). The length now always comes from the first.
+- The recorder (`run_tests.py --record`) still walked the live list's rows,
+  which have been slides since the lists changed, and started over after the
+  last row. It presses Next now, as an operator does, waits for the steps
+  that follow by themselves and reports whether every still was shown once
+  and in order. `times.txt` names the still on each picture, `--slides 20-23`
+  records a range of slides, and the GIF is written one picture at a time.
+
+`tests/steps` makes a second deck for the transitions (uncover to the right
+and down, a vortex of 1.4 s, a fade of 0.3 s) and watches the old slide leave
+on the projector: 86 checks pass. On the showcase deck the split now differs
+from the one before in those three stills and nowhere else, and the recorder
+went through all 134 stills, each once and in order. `tests/presentations`
+21, `tests/pictures` 42, `tests/screens` 34 and `tests/bridge` 73 pass as
+well.
+
+Seen while recording: with the 134 stills loaded the test program held
+1.3 GB. A slide show's pictures are kept decoded while it is open
+(`SlideShow::loadSlideShow`), about 8 MB for each 1920 x 1080 still, where
+the 1280 x 720 of before took 3.7 MB. Not changed here.
