@@ -22,14 +22,17 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QTimer>
 #include <map>
 #include <memory>
 
@@ -216,9 +219,19 @@ QJsonObject LibraryPush::handleRelease(const QJsonObject &envelope)
         return result(to, QStringLiteral("rejected"), QStringLiteral("not a release this version understands"));
     if(!church.isEmpty() && body.value(QStringLiteral("church")).toString() != church)
         return result(to, QStringLiteral("rejected"), QStringLiteral("release for another church"));
+    // A release names what it needs beyond songs; refuse what this version
+    // would only half apply.
+    const QStringList known = features();
+    for(const QJsonValue &need : body.value(QStringLiteral("needs")).toArray())
+        if(!known.contains(need.toString()))
+            return result(to, QStringLiteral("rejected"),
+                          QStringLiteral("needs a newer CGF Projector (%1)").arg(need.toString()));
 
     if(to <= currentVersion)
         return result(to, QStringLiteral("duplicate"));
+    // A Bible release waits for the screen; everything after it waits too.
+    if(isHolding() && to >= heldTo)
+        return result(to, QStringLiteral("held"));
     // Each release builds on the one before; a laptop that missed one asks
     // the server for it (or, after a long time offline, takes the snapshot).
     if(from != currentVersion)
@@ -240,28 +253,82 @@ QJsonObject LibraryPush::handleRelease(const QJsonObject &envelope)
     }
 
     const Pending release = pending.take(to);
-    QList<int> songs, deleted;
-    bool songbooks = false;
-    const QString error = apply(to, release, songs, deleted, songbooks);
+    bool bibles = false;
+    for(const QJsonObject &b : release.bodies)
+        bibles = bibles || b.contains(QStringLiteral("bibles")) || b.contains(QStringLiteral("bibles_library"));
+    if(bibles && bibleOnScreen)
+    {
+        held = release;
+        heldTo = to;
+        qInfo("Library release v%d -> v%d changes Bibles; it applies once the Bible passage leaves the projector",
+              from, to);
+        return result(to, QStringLiteral("held"));
+    }
+    return finish(to, release);
+}
+
+QStringList LibraryPush::features()
+{
+    return {QStringLiteral("bibles")};
+}
+
+void LibraryPush::setBibleOnScreen(bool onScreen)
+{
+    bibleOnScreen = onScreen;
+    // Not inside the click that took the passage off: let the new item go live first.
+    if(!onScreen && isHolding())
+        QTimer::singleShot(300, this, &LibraryPush::applyHeld);
+}
+
+void LibraryPush::applyHeld()
+{
+    if(bibleOnScreen || !isHolding())
+        return;
+    const Pending release = held;
+    const int to = heldTo;
+    held = Pending();
+    heldTo = 0;
+    const QJsonObject r = release.from == currentVersion
+            ? finish(to, release)
+            : result(to, QStringLiteral("gap"));
+    emit heldReleaseFinished(r);
+}
+
+QJsonObject LibraryPush::finish(int to, const Pending &release)
+{
+    Changes changes;
+    QElapsedTimer took;
+    took.start();
+    const QString error = apply(to, release, changes);
     if(!error.isEmpty())
     {
-        qWarning("Library release v%d -> v%d refused: %s", from, to, qPrintable(error));
+        qWarning("Library release v%d -> v%d refused: %s", release.from, to, qPrintable(error));
         return result(to, QStringLiteral("rejected"), error);
     }
+    const int from = release.from;
     currentVersion = to;
     // Older half-received releases can never apply now.
     for(auto it = pending.begin(); it != pending.end(); )
         it = it.key() <= currentVersion ? pending.erase(it) : std::next(it);
-    qInfo("Library release v%d -> v%d applied: %lld songs changed or added, %lld removed%s",
-          from, to, qlonglong(songs.size()), qlonglong(deleted.size()), songbooks ? ", songbooks changed" : "");
+    QString bibleNote;
+    if(!changes.bibles.isEmpty() || !changes.deletedBibles.isEmpty())
+        bibleNote = QStringLiteral(", Bibles replaced: %1, removed: %2")
+                .arg(changes.bibles.join(QLatin1Char(',')), changes.deletedBibles.join(QLatin1Char(',')));
+    qInfo("Library release v%d -> v%d applied in %lld ms: %lld songs changed or added, %lld removed%s%s",
+          from, to, qlonglong(took.elapsed()), qlonglong(changes.songs.size()), qlonglong(changes.deletedSongs.size()),
+          changes.songbooks ? ", songbooks changed" : "", qPrintable(bibleNote));
     emit versionChanged(currentVersion);
-    emit libraryChanged(songs, deleted, songbooks);
+    emit libraryChanged(changes.songs, changes.deletedSongs, changes.songbooks);
+    if(!changes.bibles.isEmpty() || !changes.deletedBibles.isEmpty())
+        emit biblesChanged(changes.bibles, changes.deletedBibles, changes.replaces);
     return result(to, QStringLiteral("applied"));
 }
 
-QString LibraryPush::apply(int to, const Pending &release, QList<int> &songs, QList<int> &deleted,
-                           bool &songbooks)
+QString LibraryPush::apply(int to, const Pending &release, Changes &changes)
 {
+    QList<int> &songs = changes.songs;
+    QList<int> &deleted = changes.deletedSongs;
+    bool &songbooks = changes.songbooks;
     QSqlDatabase db = QSqlDatabase::database();
     QSqlQuery q(db);
     // The bridge thread may be reading verses; wait for it instead of failing.
@@ -317,6 +384,8 @@ QString LibraryPush::apply(int to, const Pending &release, QList<int> &songs, QL
             break;
     }
     if(error.isEmpty())
+        error = applyBibles(release, changes);
+    if(error.isEmpty())
     {
         q.exec(QStringLiteral("CREATE TABLE IF NOT EXISTS CgfSync (key TEXT PRIMARY KEY, value TEXT)"));
         q.prepare(QStringLiteral("INSERT INTO CgfSync (key, value) VALUES ('content_version', ?) "
@@ -328,16 +397,171 @@ QString LibraryPush::apply(int to, const Pending &release, QList<int> &songs, QL
     if(!error.isEmpty())
     {
         db.rollback();
-        songs.clear();
-        deleted.clear();
-        songbooks = false;
+        changes = Changes();
         return error;
     }
     if(!db.commit())
     {
         const QString e = db.lastError().text();
         db.rollback();
+        changes = Changes();
         return e;
+    }
+    return QString();
+}
+
+// Bibles in a release (docs/song-push.md): "bibles" carries each replaced or
+// new Bible's BibleVersions row, its books and its verse count, in the part
+// where it starts; "bible_verses" carries its verses, spread over the parts;
+// "bibles_library" lists every Bible of the library, and any other Bible on
+// this laptop is removed; "bible_replaces" says which Bible takes over a
+// removed one in the screen settings. Runs inside apply()'s transaction.
+QString LibraryPush::applyBibles(const Pending &release, Changes &changes)
+{
+    QList<QJsonObject> metas;
+    QHash<qint64, QList<QJsonArray>> verses; // Bible id -> row batches in part order
+    QJsonArray library;
+    bool hasLibrary = false;
+    QJsonObject replaces;
+    for(const QJsonObject &body : release.bodies)
+    {
+        for(const QJsonValue &m : body.value(QStringLiteral("bibles")).toArray())
+            metas << m.toObject();
+        for(const QJsonValue &v : body.value(QStringLiteral("bible_verses")).toArray())
+        {
+            const QJsonObject batch = v.toObject();
+            verses[batch.value(QStringLiteral("id")).toInteger(-1)] << batch.value(QStringLiteral("rows")).toArray();
+        }
+        if(body.contains(QStringLiteral("bibles_library")))
+        {
+            hasLibrary = true;
+            library = body.value(QStringLiteral("bibles_library")).toArray();
+        }
+        if(body.contains(QStringLiteral("bible_replaces")))
+            replaces = body.value(QStringLiteral("bible_replaces")).toObject();
+    }
+    if(metas.isEmpty() && !hasLibrary)
+        return QString();
+
+    QSqlDatabase db = QSqlDatabase::database();
+    QSqlQuery q(db);
+    QSet<qint64> keep, replaced;
+    for(const QJsonValue &id : std::as_const(library))
+        keep.insert(id.toInteger(-1));
+    if(hasLibrary && keep.isEmpty())
+        return QStringLiteral("the library list of Bibles is empty");
+    for(const QJsonObject &m : std::as_const(metas))
+    {
+        const qint64 id = m.value(QStringLiteral("id")).toInteger(-1);
+        if(id <= 0 || replaced.contains(id))
+            return QStringLiteral("bad or repeated Bible id %1").arg(id);
+        if(hasLibrary && !keep.contains(id))
+            return QStringLiteral("Bible %1 is not in the library list").arg(id);
+        replaced.insert(id);
+    }
+    for(auto it = verses.cbegin(); it != verses.cend(); ++it)
+        if(!replaced.contains(it.key()))
+            return QStringLiteral("verses for Bible %1 come without its details").arg(it.key());
+
+    auto removeBible = [&q](qint64 id) -> QString {
+        const QStringList sql = {QStringLiteral("DELETE FROM BibleVerse WHERE CAST(bible_id AS INTEGER) = ?"),
+                                 QStringLiteral("DELETE FROM BibleBooks WHERE CAST(bible_id AS INTEGER) = ?"),
+                                 QStringLiteral("DELETE FROM BibleVersions WHERE id = ?")};
+        for(const QString &text : sql)
+        {
+            q.prepare(text);
+            q.addBindValue(id);
+            if(!q.exec())
+                return q.lastError().text();
+        }
+        return QString();
+    };
+
+    // Bibles this laptop has that the library does not (a hand import).
+    if(hasLibrary)
+    {
+        QList<qint64> local;
+        if(!q.exec(QStringLiteral("SELECT id FROM BibleVersions")))
+            return q.lastError().text();
+        while(q.next())
+            local << q.value(0).toLongLong();
+        for(qint64 id : std::as_const(local))
+            if(!keep.contains(id))
+            {
+                const QString e = removeBible(id);
+                if(!e.isEmpty())
+                    return e;
+                changes.deletedBibles << QString::number(id);
+            }
+    }
+
+    QSqlQuery verseInsert(db);
+    verseInsert.prepare(QStringLiteral("INSERT INTO BibleVerse (verse_id, bible_id, book, chapter, verse, verse_text) "
+                                       "VALUES (?, ?, ?, ?, ?, ?)"));
+    QSqlQuery bookInsert(db);
+    bookInsert.prepare(QStringLiteral("INSERT INTO BibleBooks (bible_id, id, book_name, chapter_count) VALUES (?, ?, ?, ?)"));
+    for(const QJsonObject &m : std::as_const(metas))
+    {
+        const qint64 id = m.value(QStringLiteral("id")).toInteger();
+        const QString idText = QString::number(id);
+        const QString e = removeBible(id);
+        if(!e.isEmpty())
+            return e;
+        q.prepare(QStringLiteral("INSERT INTO BibleVersions (id, bible_name, abbreviation, information, right_to_left) "
+                                 "VALUES (?, ?, ?, ?, ?)"));
+        q.addBindValue(id);
+        q.addBindValue(m.value(QStringLiteral("bible_name")).toString());
+        q.addBindValue(m.value(QStringLiteral("abbreviation")).toString());
+        q.addBindValue(m.value(QStringLiteral("information")).toString());
+        q.addBindValue(m.value(QStringLiteral("right_to_left")).toInt());
+        if(!q.exec())
+            return QStringLiteral("Bible %1: %2").arg(id).arg(q.lastError().text());
+        for(const QJsonValue &b : m.value(QStringLiteral("books")).toArray())
+        {
+            const QJsonArray book = b.toArray(); // [id, name, chapter count]
+            bookInsert.addBindValue(id);
+            bookInsert.addBindValue(book.at(0).toInteger());
+            bookInsert.addBindValue(book.at(1).toString());
+            bookInsert.addBindValue(book.at(2).toInteger());
+            if(!bookInsert.exec())
+                return QStringLiteral("Bible %1 books: %2").arg(id).arg(bookInsert.lastError().text());
+        }
+        qint64 count = 0;
+        for(const QJsonArray &rows : verses.value(id))
+            for(const QJsonValue &r : rows)
+            {
+                const QJsonArray row = r.toArray(); // [verse_id, book, chapter, verse, text]
+                if(row.size() != 5)
+                    return QStringLiteral("Bible %1 has a malformed verse").arg(id);
+                verseInsert.addBindValue(row.at(0).toString());
+                verseInsert.addBindValue(idText);
+                verseInsert.addBindValue(row.at(1).toVariant().toString());
+                verseInsert.addBindValue(row.at(2).toInteger());
+                verseInsert.addBindValue(row.at(3).toInteger());
+                verseInsert.addBindValue(row.at(4).toString());
+                if(!verseInsert.exec())
+                    return QStringLiteral("Bible %1 verses: %2").arg(id).arg(verseInsert.lastError().text());
+                ++count;
+            }
+        const qint64 expected = m.value(QStringLiteral("verses")).toInteger(-1);
+        if(count != expected)
+            return QStringLiteral("Bible %1 arrived with %2 of %3 verses").arg(id).arg(count).arg(expected);
+        changes.bibles << idText;
+    }
+
+    // Kept beside the library so a later snapshot install can follow it too.
+    if(!q.exec(QStringLiteral("CREATE TABLE IF NOT EXISTS CgfBibleReplaces (old_id TEXT PRIMARY KEY, new_id TEXT NOT NULL)")))
+        return q.lastError().text();
+    for(auto it = replaces.constBegin(); it != replaces.constEnd(); ++it)
+    {
+        const QString target = it.value().toVariant().toString();
+        changes.replaces.insert(it.key(), target);
+        q.prepare(QStringLiteral("INSERT INTO CgfBibleReplaces (old_id, new_id) VALUES (?, ?) "
+                                 "ON CONFLICT(old_id) DO UPDATE SET new_id = excluded.new_id"));
+        q.addBindValue(it.key());
+        q.addBindValue(target);
+        if(!q.exec())
+            return q.lastError().text();
     }
     return QString();
 }

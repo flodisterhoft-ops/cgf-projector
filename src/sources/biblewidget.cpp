@@ -18,6 +18,7 @@
 ***************************************************************************/
 
 #include "../headers/biblewidget.hpp"
+#include <QScrollBar>
 #include "ui_biblewidget.h"
 #include "../headers/song.hpp"
 //#include <time.h>
@@ -92,6 +93,40 @@ void BibleWidget::loadBibles(QString initialId)
         ui->listBook->clear();
         ui->listBook->addItems(bible.getBooks());
         ui->listBook->setCurrentRow(0);
+    }
+}
+
+void BibleWidget::reloadBible()
+{
+    const QString book = getCurrentBook();
+    const int chapter = getCurrentChapter();
+    const int current = ui->chapter_preview_list->currentRow();
+    const int scroll = ui->chapter_preview_list->verticalScrollBar()->value();
+    QList<int> selected;
+    for(int i = 0; i < ui->chapter_preview_list->count(); ++i)
+        if(ui->chapter_preview_list->item(i)->isSelected())
+            selected << i;
+
+    bible.setBiblesId(mySettings.operatorBible);
+    bible.loadOperatorBible();
+    currentBook.clear(); // the cached chapter is the old text
+    ui->listBook->clear();
+    ui->listBook->addItems(bible.getBooks());
+    // A book filter typed by the operator applies again.
+    if(!ui->lineEditBook->text().isEmpty())
+        on_lineEditBook_textChanged(ui->lineEditBook->text());
+    const QList<QListWidgetItem *> found = ui->listBook->findItems(book, Qt::MatchExactly);
+    ui->listBook->setCurrentItem(found.isEmpty() ? ui->listBook->item(0) : found.first());
+    if(!found.isEmpty() && chapter > 0 && chapter <= ui->listChapterNum->count())
+    {
+        ui->listChapterNum->setCurrentRow(chapter - 1);
+        if(current >= 0 && current < ui->chapter_preview_list->count())
+            ui->chapter_preview_list->setCurrentRow(current);
+        ui->chapter_preview_list->clearSelection();
+        for(int row : std::as_const(selected))
+            if(row < ui->chapter_preview_list->count())
+                ui->chapter_preview_list->item(row)->setSelected(true);
+        ui->chapter_preview_list->verticalScrollBar()->setValue(scroll);
     }
 }
 

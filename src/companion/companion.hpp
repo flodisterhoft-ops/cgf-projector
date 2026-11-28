@@ -102,6 +102,13 @@ private:
     QQueue<QString> toApp;     // library releases waiting for the app, in order
     bool appBusy = false;
     QElapsedTimer appBusySince;
+    // What the open app understands in a release's "needs" (from its hello);
+    // a release needing more waits for a newer app.
+    QStringList appFeatures;
+    QString waitingFor;        // the missing feature, logged once
+    // The app holds a Bible release until the passage leaves the screen; it
+    // answers when it applied it. Nothing else is sent meanwhile.
+    bool appHolding = false;
 
     // The app release being installed
     struct Install

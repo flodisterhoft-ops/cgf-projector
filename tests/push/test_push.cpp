@@ -20,10 +20,12 @@
 #include "bridgeserver.hpp"
 #include "librarypush.hpp"
 #include "songwidget.hpp"
+#include "biblewidget.hpp"
 #undef private
 #undef protected
 #include "ui_softprojector.h"
 #include "ui_songwidget.h"
+#include "ui_biblewidget.h"
 
 static int checks = 0, failures = 0;
 #define CHECK(cond, msg) do { ++checks; if(!(cond)) { ++failures; qWarning().noquote() << "FAIL:" << (msg); } else qInfo().noquote() << "ok  :" << (msg); } while(0)
@@ -182,6 +184,82 @@ static int runLocal(SoftProjector &w, quint16 port, const QJsonObject &rel)
     r = c.release(rel["gap78"].toArray().first());
     CHECK(r["status"].toString() == "gap" && r["version"].toInt() == 5, "a release that skips versions is reported as a gap");
 
+    // ---- Bibles (docs/library-from-cloud.md) --------------------------------
+    const QString oldBible = e["oldBible"].toString(), newBible = e["newBible"].toString();
+    CHECK(hello["library"].toObject()["features"].toArray().contains(QJsonValue("bibles")),
+          "the bridge announces that this app takes Bible releases");
+    CHECK(w.mySettings.bibleSets.secondaryBible == newBible && w.mySettings.bibleSets2.primaryBible == oldBible,
+          "before: a hand-imported Bible is second on the screen, display 2 shows the old library Bible");
+
+    BibleWidget *bw = w.bibleWidget;
+    bw->ui->chapter_preview_list->setCurrentRow(0);
+    bw->ui->chapter_preview_list->item(0)->setSelected(true);
+    bw->sendToProjector(false);
+    waitUntil([&] { return w.bibleOnScreen(); }, 2000);
+    CHECK(w.bibleOnScreen(), "a Bible passage is on the projector");
+    const QStringList bibleShow = listTexts(w.ui->listShow);
+
+    const QJsonArray r56 = rel["r56"].toArray();
+    CHECK(r56.size() >= 3, QString("the Bible release came in %1 parts").arg(r56.size()));
+    for(int i = 0; i < r56.size(); ++i) r = c.release(r56[i]);
+    CHECK(r["status"].toString() == "held" && w.libraryPush->version() == 5,
+          QString("while the passage is on the projector the release waits (%1)").arg(r["status"].toString()));
+    CHECK(dbValue(QString("SELECT bible_name FROM BibleVersions WHERE id = %1").arg(newBible)).toString() == "Hand import"
+          && dbValue(QString("SELECT id FROM BibleVersions WHERE id = %1").arg(oldBible)).isValid(),
+          "and the Bibles are untouched meanwhile");
+    CHECK(listTexts(w.ui->listShow) == bibleShow, "the passage on the projector stays as it was");
+    r = c.release(r56.first());
+    CHECK(r["status"].toString() == "held", "a part sent again meanwhile is told to wait too");
+    r = c.release(rel["future67"]);
+    CHECK(r["status"].toString() == "rejected" && r["reason"].toString().contains("newer"),
+          "a release needing something this app does not know is refused");
+
+    QElapsedTimer took;
+    took.start();
+    Song s2 = sdb.getSongWithSongbook(edited1);
+    sw->sendToProjector(s2, 0);
+    const QJsonObject done = c.waitFor("releaseResult", nullptr, 15000);
+    qInfo().noquote() << QString("Bible release applied %1 ms after the passage left the projector").arg(took.elapsed());
+    CHECK(done["status"].toString() == "applied" && done["version"].toInt() == 6,
+          QString("once a song replaces the passage, the held release applies (%1, v%2)")
+          .arg(done["status"].toString()).arg(done["version"].toInt()));
+
+    QStringList ids;
+    QSqlQuery q("SELECT id FROM BibleVersions ORDER BY id");
+    while(q.next()) ids << q.value(0).toString();
+    QStringList library;
+    for(const QJsonValue &v : e["library"].toArray()) library << v.toString();
+    CHECK(ids == library, QString("the laptop has exactly the library's Bibles (%1)").arg(ids.join(',')));
+    CHECK(dbValue(QString("SELECT bible_name FROM BibleVersions WHERE id = %1").arg(newBible)).toString()
+          == e["newBibleName"].toString(), "the hand import is replaced by the library's Bible, with its version in the name");
+    CHECK(dbValue(QString("SELECT COUNT(*) FROM BibleVerse WHERE CAST(bible_id AS INTEGER) = %1").arg(newBible)).toInt()
+          == e["newBibleVerses"].toInt(), "every verse of the new Bible arrived");
+    CHECK(dbValue(QString("SELECT verse_text FROM BibleVerse WHERE CAST(bible_id AS INTEGER) = %1 AND verse_id = 'B019C023V001'")
+                  .arg(newBible)).toString() == "Push test psalm text", "its text is the library's");
+    CHECK(!dbValue(QString("SELECT 1 FROM BibleVerse WHERE CAST(bible_id AS INTEGER) = %1").arg(oldBible)).isValid()
+          && !dbValue(QString("SELECT 1 FROM BibleBooks WHERE bible_id = %1").arg(oldBible)).isValid(),
+          "the old library Bible is gone, verses and books too");
+    CHECK(dbValue(QString("SELECT new_id FROM CgfBibleReplaces WHERE old_id = '%1'").arg(oldBible)).toString() == newBible,
+          "the replacement is recorded for later snapshot installs");
+    CHECK(w.mySettings.bibleSets.secondaryBible == newBible, "the screen keeps its second Bible");
+    CHECK(w.mySettings.bibleSets2.primaryBible == newBible, "display 2 moves from the removed Bible to its replacement");
+    CHECK(dbValue("SELECT sets FROM Settings WHERE type = 'bible2'").toString().contains("primary = " + newBible),
+          "and the settings are saved");
+    CHECK(w.theme.bible2.versions.primaryBible == newBible, "the theme draws display 2 with the new Bible");
+    CHECK(w.libraryPush->version() == 6 && !w.libraryPush->isHolding(), "the library is at v6, nothing held");
+
+    Client c2;
+    c2.open(QString("ws://127.0.0.1:%1/ws").arg(port));
+    const QJsonObject hello2 = c2.waitFor("hello");
+    QStringList names, helloIds;
+    for(const QJsonValue &b : hello2["bibles"].toArray())
+    {
+        names << b.toObject()["name"].toString();
+        helloIds << b.toObject()["id"].toString();
+    }
+    CHECK(names.contains(e["newBibleName"].toString()) && !helloIds.contains(oldBible),
+          "the bridge lists the new Bible by name and no longer the old one");
+
     qInfo().noquote() << QString("%1 checks, %2 failed").arg(checks).arg(failures);
     return failures ? 1 : 0;
 }
@@ -189,12 +267,37 @@ static int runLocal(SoftProjector &w, quint16 port, const QJsonObject &rel)
 static int runE2E(SoftProjector &w, int expected, const QJsonObject &rel)
 {
     const QJsonObject e = rel["expect"].toObject();
+    if(expected >= 6)
+    {
+        // A passage is on the projector while the Bible release (v5 -> v6) arrives.
+        BibleWidget *bw = w.bibleWidget;
+        bw->ui->chapter_preview_list->setCurrentRow(0);
+        bw->ui->chapter_preview_list->item(0)->setSelected(true);
+        bw->sendToProjector(false);
+        waitUntil([&] { return w.bibleOnScreen(); }, 2000);
+    }
     qInfo("READY");
+    if(expected >= 6)
+    {
+        const bool held = waitUntil([&] { return w.libraryPush->version() == 5 && w.libraryPush->isHolding(); }, 120000);
+        CHECK(held, QString("the Bible release waits while the passage is on the projector (at v%1)")
+              .arg(w.libraryPush->version()));
+        waitUntil([] { return false; }, 1500);
+        CHECK(w.libraryPush->version() == 5, "and stays held");
+        SongDatabase sdb;
+        Song s = sdb.getSongWithSongbook(e["edited1"].toInt());
+        w.songWidget->sendToProjector(s, 0);
+    }
     const bool reached = waitUntil([&] { return w.libraryPush->version() == expected; }, 90000);
     CHECK(reached, QString("the pushed release reached the app (v%1)").arg(w.libraryPush->version()));
     CHECK(dbValue(QString("SELECT song_text FROM Songs WHERE id = %1").arg(e["edited0"].toInt())).toString() == e["newText0"].toString(),
           "the edited song arrived through server and companion");
     CHECK(modelRow(w.songWidget, e["added"].toInt()) >= 0, "the new song is in the song list");
+    if(expected >= 6)
+        CHECK(dbValue(QString("SELECT bible_name FROM BibleVersions WHERE id = %1").arg(e["newBible"].toString())).toString()
+              == e["newBibleName"].toString()
+              && !dbValue(QString("SELECT id FROM BibleVersions WHERE id = %1").arg(e["oldBible"].toString())).isValid(),
+              "the new Bible arrived through server and companion, the old one is gone");
     qInfo().noquote() << QString("%1 checks, %2 failed").arg(checks).arg(failures);
     return failures ? 1 : 0;
 }

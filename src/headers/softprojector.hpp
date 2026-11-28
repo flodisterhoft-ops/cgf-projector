@@ -170,6 +170,11 @@ private:
     void setupLibraryPush();
     void startCompanion(quint16 bridgePort);
     void applyLibraryChanges(const QList<int> &songs, const QList<int> &deletedSongs, bool songbooksChanged);
+    void applyBibleChanges(const QStringList &changed, const QStringList &removed,
+                           const QMap<QString, QString> &replaces);
+    void fixBibleSettings(const QMap<QString, QString> &replaces);
+    bool bibleOnScreen() const;
+    quintptr heldReleaseClient = 0; // the companion that sent a held Bible release
 
     // App updates installed by the companion (softprojectorupdate.cpp)
     QWidget *updateBar = nullptr;

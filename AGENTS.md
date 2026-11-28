@@ -129,6 +129,16 @@ stripping what they never used and wiring the app into a central CGF library.
   a song (BUILD.md, "PowerPoint and PDF import").
 - Planned add: **Share button** — song/setlist as link or PDF, possibly via
   Telegram (operators use Telegram).
+- **Library from the cloud only (user decision 2026-11-27):** Bibles and
+  songbooks come only from the central library through the cloud; nobody
+  imports, exports or copies them on a laptop (Valentin's hand import of a
+  Schlachter file could not be identified remotely). Since app 0.2.7 Bibles
+  ride in the library push and apply live: held while a Bible passage is the
+  projector's item, applied once it is not, no restart or message. Database
+  Manager shows Bibles and songbooks read-only; the song editor cannot make
+  songbooks. The library's Bibles: CGF Lyrics `library/tools/projector_bibles.json`
+  (Schlachter 2000 v3 is id 14, replacing 13). See docs/library-from-cloud.md
+  and docs/song-push.md.
 - Pass 2 (blocked on sync + fixed CGF themes existing): gut Database Manager
   into a sync-status panel, reduce settings machinery to 2-3 CGF themes,
   quick-add upload flow.
@@ -197,9 +207,11 @@ stripping what they never used and wiring the app into a central CGF library.
 - Safety: ECDSA P-256 signatures checked in the app (server and companion
   only relay); the projected song is never changed; quick-add ids >500000 and
   usage counts stay local; one transaction per release. The library version
-  is max(`version.txt`, table `CgfSync`). Snapshots stay the source of truth:
-  Bibles and other tables, and laptops offline for more than 200 releases,
-  catch up through the sync agent's snapshot install.
+  is max(`version.txt`, table `CgfSync`). Bibles ride in releases since app
+  0.2.7 (held while a passage is on the projector; `needs: ["bibles"]` keeps
+  older apps from half applying them). Snapshots stay the source of truth:
+  other tables, and laptops offline for more than 200 releases, catch up
+  through the sync agent's snapshot install.
 - Secrets: publisher key and token in `%USERPROFILE%\.cgf-publish\`; each
   laptop's device token in its `cgf-cloud.json` (git-ignored, never commit).
 - App updates (built 2026-11-23; Florian: he rarely gets to the church laptop

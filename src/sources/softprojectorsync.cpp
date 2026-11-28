@@ -25,6 +25,7 @@
 #include "../headers/softprojector.hpp"
 #include "../headers/librarypush.hpp"
 #include "../headers/livebridge.hpp"
+#include "../headers/biblewidget.hpp"
 #include "ui_softprojector.h"
 
 #include <QCoreApplication>
@@ -33,18 +34,39 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QSqlDatabase>
+#include <QSqlQuery>
 
 void SoftProjector::setupLibraryPush()
 {
     const QString dataDir = QFileInfo(QSqlDatabase::database().databaseName()).absolutePath();
     libraryPush = new LibraryPush(dataDir, this);
     connect(libraryPush, &LibraryPush::libraryChanged, this, &SoftProjector::applyLibraryChanges);
+    connect(libraryPush, &LibraryPush::biblesChanged, this, &SoftProjector::applyBibleChanges);
+
+    // Screen settings that name a Bible this laptop no longer has (a snapshot
+    // install, or a hand import the library removed).
+    QMap<QString, QString> replaces;
+    QSqlQuery q;
+    if(q.exec(QStringLiteral("SELECT old_id, new_id FROM CgfBibleReplaces")))
+        while(q.next())
+            replaces.insert(q.value(0).toString(), q.value(1).toString());
+    fixBibleSettings(replaces);
+    libraryPush->setBibleOnScreen(bibleOnScreen());
+
     if(!liveBridge)
         return;
     liveBridge->setLibraryVersion(libraryPush->version());
     connect(libraryPush, &LibraryPush::versionChanged, liveBridge, &LiveBridge::setLibraryVersion);
     connect(liveBridge, &LiveBridge::releaseReceived, this, [this](const QJsonObject &envelope, quintptr client) {
-        liveBridge->replyToClient(client, libraryPush->handleRelease(envelope));
+        const QJsonObject r = libraryPush->handleRelease(envelope);
+        if(r.value(QStringLiteral("status")).toString() == QLatin1String("held"))
+            heldReleaseClient = client;
+        liveBridge->replyToClient(client, r);
+    });
+    connect(libraryPush, &LibraryPush::heldReleaseFinished, this, [this](const QJsonObject &r) {
+        if(heldReleaseClient)
+            liveBridge->replyToClient(heldReleaseClient, r);
+        heldReleaseClient = 0;
     });
     connect(liveBridge, &LiveBridge::bridgeStarted, this, &SoftProjector::startCompanion);
 }
@@ -91,4 +113,63 @@ void SoftProjector::applyLibraryChanges(const QList<int> &songs, const QList<int
         if(QListWidgetItem *row = ui->listWidgetSchedule->item(i))
             row->setText(item.name);
     }
+}
+
+// A Bible passage is the projector's item, shown or hidden: Show would draw
+// it again from the database, so Bible releases wait until it is gone.
+bool SoftProjector::bibleOnScreen() const
+{
+    return pType == BIBLE && ui->listShow->count() > 0;
+}
+
+void SoftProjector::applyBibleChanges(const QStringList &changed, const QStringList &removed,
+                                      const QMap<QString, QString> &replaces)
+{
+    const QString operatorBefore = mySettings.bibleSets.operatorBible == QLatin1String("same")
+            ? mySettings.bibleSets.primaryBible : mySettings.bibleSets.operatorBible;
+    fixBibleSettings(replaces);
+    // The Bible tab lists the operator's Bible; reload it only if that one
+    // changed, keeping the book, chapter and selected verses.
+    if(changed.contains(operatorBefore) || removed.contains(operatorBefore))
+        bibleWidget->reloadBible();
+    if(liveBridge)
+        liveBridge->reloadBibles();
+}
+
+// Settings naming a Bible that is not in the database follow the library's
+// replacement (old id -> new id); otherwise the first Bible stays primary and
+// the other slots go empty, so the projector never shows a missing Bible.
+void SoftProjector::fixBibleSettings(const QMap<QString, QString> &replaces)
+{
+    QStringList ids;
+    QSqlQuery q;
+    if(q.exec(QStringLiteral("SELECT id FROM BibleVersions ORDER BY id")))
+        while(q.next())
+            ids << q.value(0).toString();
+    if(ids.isEmpty())
+        return;
+    bool changed = false;
+    auto fix = [&](QString &value, const QString &fallback, const char *slot) {
+        if(value.isEmpty() || value == QLatin1String("none") || value == QLatin1String("same") || ids.contains(value))
+            return;
+        QString target = value;
+        for(int i = 0; i < 5 && !ids.contains(target) && replaces.contains(target); ++i)
+            target = replaces.value(target);
+        if(!ids.contains(target))
+            target = fallback;
+        qInfo("Bible settings: %s Bible %s is gone, now %s", slot, qPrintable(value), qPrintable(target));
+        value = target;
+        changed = true;
+    };
+    for(BibleVersionSettings *b : {&mySettings.bibleSets, &mySettings.bibleSets2,
+                                   &mySettings.bibleSets3, &mySettings.bibleSets4})
+    {
+        fix(b->primaryBible, ids.first(), "primary");
+        fix(b->secondaryBible, QStringLiteral("none"), "secondary");
+        fix(b->trinaryBible, QStringLiteral("none"), "third");
+        fix(b->operatorBible, QStringLiteral("same"), "operator");
+    }
+    if(changed)
+        updateSetting(mySettings.general, theme, mySettings.slideSets, mySettings.bibleSets,
+                      mySettings.bibleSets2, mySettings.bibleSets3, mySettings.bibleSets4);
 }

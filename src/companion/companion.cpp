@@ -231,6 +231,8 @@ void Companion::onBridgeDisconnected()
     }
     bridgeOpen = false;
     appBusy = false;
+    appHolding = false;
+    appFeatures.clear();
     toApp.clear();
     appFolder.clear();
     if(libraryVersion >= 0)
@@ -254,7 +256,13 @@ void Companion::onBridgeMessage(const QString &text)
     int version = -2;
     if(type == QLatin1String("hello"))
     {
-        version = m.value(QStringLiteral("library")).toObject().value(QStringLiteral("version")).toInt(-1);
+        const QJsonObject library = m.value(QStringLiteral("library")).toObject();
+        version = library.value(QStringLiteral("version")).toInt(-1);
+        appFeatures.clear();
+        for(const QJsonValue &f : library.value(QStringLiteral("features")).toArray())
+            appFeatures << f.toString();
+        appHolding = false;
+        waitingFor.clear();
         appFolder = m.value(QStringLiteral("app")).toObject().value(QStringLiteral("folder")).toString();
         announceUpdate();
     }
@@ -264,6 +272,16 @@ void Companion::onBridgeMessage(const QString &text)
     {
         appBusy = false;
         const QString status = m.value(QStringLiteral("status")).toString();
+        if(status == QLatin1String("held"))
+        {
+            // Stays queued on the app's side; its answer follows later.
+            if(!appHolding)
+                log(QStringLiteral("v%1 changes Bibles; the projector applies it once the passage leaves the screen")
+                    .arg(m.value(QStringLiteral("to")).toInt()));
+            appHolding = true;
+            return;
+        }
+        appHolding = false;
         const int to = m.value(QStringLiteral("to")).toInt();
         const int now = m.value(QStringLiteral("version")).toInt(-1);
         if(now >= 0)
@@ -306,8 +324,21 @@ void Companion::onBridgeMessage(const QString &text)
 
 void Companion::sendNextToApp()
 {
-    if(appBusy || !bridgeOpen || toApp.isEmpty())
+    if(appBusy || appHolding || !bridgeOpen || toApp.isEmpty())
         return;
+    // A release needing something the open app does not understand waits
+    // for a newer app (an update installs at its next start).
+    const QJsonObject body = parse(parse(toApp.head()).value(QStringLiteral("payload")).toString());
+    for(const QJsonValue &need : body.value(QStringLiteral("needs")).toArray())
+        if(!appFeatures.contains(need.toString()))
+        {
+            if(waitingFor != need.toString())
+                log(QStringLiteral("v%1 needs a newer projector app (%2); it waits until one runs")
+                    .arg(body.value(QStringLiteral("to")).toInt()).arg(need.toString()));
+            waitingFor = need.toString();
+            return;
+        }
+    waitingFor.clear();
     const QString envelope = toApp.dequeue();
     log(QStringLiteral("passing %1 to the projector").arg(describe(envelope)));
     bridge.sendTextMessage(envelope);

@@ -57,6 +57,7 @@ public slots:
     // Library releases (docs/song-push.md)
     void setLibraryVersion(int version);
     void replyToClient(quintptr client, const QJsonObject &message);
+    void reloadBibles();
 
 signals:
     void bridgeStarted(quint16 port);

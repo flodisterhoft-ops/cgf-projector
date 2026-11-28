@@ -124,6 +124,92 @@ class DeltaTests(unittest.TestCase):
             verify(pr.public_key_b64(self.key), tampered, parts[0]["sig"])
 
 
+BIBLE_SCHEMA = """
+CREATE TABLE 'Songbooks' ('id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 'name' TEXT, 'info' TEXT);
+CREATE TABLE 'Songs' ('id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 'songbook_id' INTEGER, 'title' TEXT,
+  'song_text' TEXT, 'count' INTEGER DEFAULT 0, 'date' TEXT);
+CREATE TABLE 'BibleBooks' ('bible_id' INTEGER, 'id' INTEGER, 'book_name' TEXT, 'chapter_count' INTEGER DEFAULT 0);
+CREATE TABLE 'BibleVerse' ('verse_id' TEXT, 'bible_id' TEXT, 'book' TEXT, 'chapter' INTEGER, 'verse' INTEGER,
+  'verse_text' TEXT);
+CREATE TABLE 'BibleVersions' ('id' INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 'bible_name' TEXT,
+  'abbreviation' TEXT, 'information' TEXT, 'right_to_left' INTEGER DEFAULT 0);
+"""
+
+
+def make_bible_db(path, bibles, replaces=None):
+    """bibles: {id: (name, [verse texts])}, all in book 1, chapter 1."""
+    con = sqlite3.connect(path)
+    con.executescript(BIBLE_SCHEMA)
+    con.execute("INSERT INTO Songbooks (id, name, info) VALUES (1, 'Test Book', '')")
+    con.execute("INSERT INTO Songs (id, songbook_id, title, song_text) VALUES (1, 1, 'Test song', 'la')")
+    for bid, (name, verses) in bibles.items():
+        con.execute("INSERT INTO BibleVersions (id, bible_name, abbreviation, information) VALUES (?,?,'T','')",
+                    (bid, name))
+        con.execute("INSERT INTO BibleBooks VALUES (?, 1, 'Test book', 1)", (bid,))
+        con.executemany("INSERT INTO BibleVerse VALUES (?,?,?,?,?,?)",
+                        [(f"B001C001V{n:03d}", str(bid), "1", 1, n, t) for n, t in enumerate(verses, start=1)])
+    if replaces is not None:
+        con.execute("CREATE TABLE CgfBibleReplaces (old_id TEXT PRIMARY KEY, new_id TEXT NOT NULL)")
+        con.executemany("INSERT INTO CgfBibleReplaces VALUES (?,?)", replaces.items())
+    con.commit()
+    con.close()
+
+
+class BibleTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        d = Path(self.tmp.name)
+        self.old, self.new = d / "spData-cgf-v1.sqlite", d / "spData-cgf-v2.sqlite"
+        make_bible_db(self.old, {2: ("Test English", ["one", "two"]), 13: ("Test German old", ["eins", "zwie"])})
+        make_bible_db(self.new, {2: ("Test English", ["one", "two"]),
+                                 14: ("Test German (v3)", ["eins", "zwei", "drei"])}, {"13": "14"})
+        self.key = ec.generate_private_key(ec.SECP256R1())
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_no_bible_change_means_no_bible_fields(self):
+        d = pr.compute_delta(self.old, self.old)
+        self.assertEqual(d["bibles"], [])
+        self.assertIsNone(d["bibles_library"])
+        body = json.loads(pr.build_parts(d, "c", 1, 2, "f", "s", self.key)[0]["payload"])
+        self.assertNotIn("needs", body)
+        self.assertNotIn("bibles", body)
+
+    def test_delta_lists_replaced_removed_and_the_library(self):
+        d = pr.compute_delta(self.old, self.new)
+        self.assertEqual([b["meta"]["id"] for b in d["bibles"]], [14])
+        self.assertEqual(d["summary"]["bibles_removed"], [13])
+        self.assertEqual(d["bibles_library"], [2, 14])
+        self.assertEqual(d["bible_replaces"], {"13": "14"})
+        self.assertFalse(d["other_changes"])
+        self.assertEqual(d["songs"], [])
+
+    def test_verses_spread_over_signed_parts(self):
+        d = pr.compute_delta(self.old, self.new)
+        saved = pr.PART_BUDGET
+        pr.PART_BUDGET = 40  # about one verse per part
+        try:
+            parts = pr.build_parts(d, "c", 1, 2, "f", "s", self.key)
+        finally:
+            pr.PART_BUDGET = saved
+        self.assertGreater(len(parts), 1)
+        public = pr.public_key_b64(self.key)
+        bodies = []
+        for p in parts:
+            verify(public, p["payload"], p["sig"])
+            bodies.append(json.loads(p["payload"]))
+        self.assertTrue(all(b["needs"] == ["bibles"] for b in bodies))
+        first = bodies[0]
+        self.assertEqual(first["bibles_library"], [2, 14])
+        self.assertEqual(first["bible_replaces"], {"13": "14"})
+        self.assertEqual([(b["id"], b["verses"], b["bible_name"]) for b in first["bibles"]],
+                         [(14, 3, "Test German (v3)")])
+        self.assertTrue(all("bibles" not in b for b in bodies[1:]))
+        rows = [r for b in bodies for batch in b.get("bible_verses", []) for r in batch["rows"]]
+        self.assertEqual([r[4] for r in rows], ["eins", "zwei", "drei"])
+
+
 class AppReleaseTests(unittest.TestCase):
     def test_app_files_leave_out_the_laptops_data(self):
         with tempfile.TemporaryDirectory() as d:

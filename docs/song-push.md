@@ -1,4 +1,4 @@
-# Library push: new and edited songs reach the laptops at once
+# Library push: new and edited songs and Bibles reach the laptops at once
 
 Built 2026-11-23 (branch `song-push`, on top of the network bridge). When a
 library release is published, the changed songs and songbooks reach every
@@ -59,9 +59,24 @@ publish_snapshot.py ─► push_release.py ─► push server ─► cgf-compani
   version the laptop has; the server sends every release since. It keeps the
   last 200. A laptop further behind is told to wait for the snapshot, which
   the sync agent installs at the next restart.
-- **Bibles and other tables come with the snapshot.** A release carries only
-  songs and songbooks. When anything else changed, the release says so
-  (`other_changes`) and the next snapshot install brings it.
+- **Bibles travel too (since 2026-11-27, app 0.2.7).** A release carries
+  each replaced or new Bible whole, the library's list of Bibles and which
+  Bible takes over a removed one. The laptop then has exactly the library's
+  Bibles: a Bible imported by hand is removed, and screen settings that named
+  a removed Bible move to its replacement (docs/library-from-cloud.md).
+- **A Bible passage on the projector holds a Bible release.** While a passage
+  is the projector's item (shown or hidden, since Show draws it again from the
+  database), a release that changes Bibles waits; it applies 0.3 s after
+  something else goes live, with no message to the operator. The Bible tab
+  reloads only if the operator's own Bible changed, keeping book, chapter and
+  selection. Everything after a held release waits for it.
+- **A release says what it needs.** `needs: ["bibles"]` marks a release an
+  older app would half apply (0.2.6 would skip the Bibles and still count the
+  version). The app refuses what it does not know; the companion holds back a
+  release until the open app announces the feature (`hello.library.features`).
+- **Other tables come with the snapshot.** When anything else changed (themes,
+  announcements), the release says so (`other_changes`) and the next snapshot
+  install brings it.
 - The bridge accepts releases only from programs on the same computer.
 
 ## App updates
@@ -216,10 +231,24 @@ The payload is a JSON string; the signature covers its UTF-8 bytes exactly.
  "songbooks": [{"id": 1, "name": "...", "info": ""}], "songbooks_deleted": [],
  "songs": [{"id": 7, "title": "...", "song_text": "...", "background": {"$b64": "..."}, ...}],
  "songs_deleted": [12]}
+
+// a release that changes Bibles also has, in every part:
+ "needs": ["bibles"],
+// in part 1:
+ "bibles": [{"id": 14, "bible_name": "German: Schlachter 2000 (v3)", "abbreviation": "SCH2000",
+             "information": "...", "right_to_left": 0,
+             "books": [[1, "1. Mose", 50], ...], "verses": 31171}],
+ "bibles_library": [2, 3, 5, 14],      // every Bible of the library; others are removed
+ "bible_replaces": {"13": "14"},       // screen settings naming 13 move to 14
+// in any part:
+ "bible_verses": [{"id": 14, "rows": [["B001C001V001", "1", 1, 1, "Im Anfang ..."], ...]}]
 ```
 
 Songs rows carry the `Songs` columns by name; BLOBs travel as `{"$b64": ...}`.
-Songbooks and deletions ride in part 1. A part stays under about 900 KB.
+Songbooks, deletions and the Bibles' details ride in part 1; songs and Bible
+verses fill the parts in order. A part stays under about 900 KB (Schlachter
+2000 takes 6). The server reads only the header fields, so Bible releases
+needed no server change.
 
 ### Push server
 
@@ -267,8 +296,13 @@ the server; the app answers that program only:
 ```jsonc
 {"type": "releaseResult", "to": 4, "status": "applied", "version": 4}
 // status: applied | duplicate | waiting (more parts to come) | gap (ask the
-// server again from "version") | rejected (+ "reason")
+// server again from "version") | rejected (+ "reason") | held (a Bible
+// release waits for the passage to leave the projector; the app sends this
+// program the final result later and accepts nothing newer meanwhile)
 ```
+
+`hello.library.features` lists what the app understands in `needs`
+(`["bibles"]` since 0.2.7).
 
 `hello` also carries `"app": {"folder", "version"}`, the folder the app runs
 from. When the companion has installed a newer one it sends

@@ -495,3 +495,32 @@ Published (Florian's go-ahead) as app 0.2.6, release 7, from 13ce2d3 with the
 launcher: 106 files, 1 uploaded (the app). The church laptop reported
 app-0.2.6 installed 5 s later. It still has one picture for both projectors
 until the DisplayLink adapter is in.
+
+## Bibles in the library push (2026-11-27)
+
+Valentin imported a Schlachter 2000 file by hand on the church laptop (Bible
+14, second on the screen), so it had two Schlachters and nobody could tell
+remotely which file it was. Florian decided that Bibles and songbooks come
+only from the cloud, and that updates apply at once without a restart,
+warning or flash, waiting while something is presented
+(docs/library-from-cloud.md).
+
+- Releases carry Bibles (docs/song-push.md): a changed Bible whole, the
+  library's Bible list and `bible_replaces`. The laptop ends with exactly the
+  library's Bibles; settings that named a removed Bible move to its
+  replacement. `needs: ["bibles"]` stops 0.2.6 and older from half applying
+  one; the companion waits for an app that announces the feature.
+- While a Bible passage is the projector's item the release is held; 0.3 s
+  after something else goes live it applies (151 ms for Schlachter 2000 on
+  Florian's PC) and the companion gets the result.
+- Database Manager: Bible and songbook Import, Edit, Export and Delete are
+  hidden. The song editor no longer offers "new songbook".
+- Library side (CGF Lyrics): `library/tools/projector_bibles.json` and
+  `projector_bibles.py`; `export_spdata.py` builds its Bibles from them
+  (a full scratch export passed, 22,635 songs). Schlachter 2000 v3 is id 14
+  and replaces 13. `projector_bibles.py republish` makes a Bible-only release
+  from the latest snapshot.
+
+Checks: publisher 14, `tests/push` 52 plus end to end 9 (a held Bible release
+through wrangler dev and the companion, 6 parts of about 0.9 MB), bridge 73,
+`tests/update` 23. All pass.

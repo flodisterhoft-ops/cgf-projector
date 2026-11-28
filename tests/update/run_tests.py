@@ -188,7 +188,7 @@ def run(env, tool_env, app_env, token, db):
     push_checks = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(push_checks)
     publish = OUT / "publish"
-    v3, v4, _v5, expect = push_checks.make_versions(db, publish)
+    v3, v4, _v5, _v6, expect = push_checks.make_versions(db, publish)
     r = subprocess.run([sys.executable, str(REPO / "tools" / "make_install.py"), "--version", "t1", "--seq", "1",
                         "--snapshot", str(v3), "--device-file", str(OUT / "cloud.json"), "--notes", "First test version",
                         "--out", str(OUT / "pkg"), "--keep-folder"], env=env, capture_output=True, text=True)

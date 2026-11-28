@@ -2,8 +2,8 @@
 
 publish_snapshot.py (CGF Lyrics) writes versioned snapshots and manifest.json
 to the publish folder. This tool compares each new snapshot with the one
-before it, signs the changed songs and songbooks, and sends them to the push
-server, which passes them to every connected laptop at once. Laptops that are
+before it, signs the changed songs, songbooks and Bibles, and sends them to
+the push server, which passes them to every connected laptop at once. Laptops that are
 offline get them when they reconnect.
 
 Commands:
@@ -49,6 +49,9 @@ MAX_ROW = 3 * 1024 * 1024      # a larger song (a huge background) waits for the
 # Usage counters: each laptop keeps its own; they are not song content.
 SONG_LOCAL_COLUMNS = {"count", "date"}
 SNAPSHOT = re.compile(r"spData-cgf-v(\d+)\.sqlite$")
+# Tables a release carries (or that only describe what it carries). Every
+# other table that changed waits for the snapshot (other_changes).
+RELEASE_TABLES = {"Songs", "Songbooks", "BibleVersions", "BibleBooks", "BibleVerse", "CgfBibleReplaces"}
 
 
 # ---------------------------------------------------------------------------
@@ -164,9 +167,38 @@ def table_digest(con, table):
     return h.hexdigest()
 
 
+def bibles_of(con):
+    """Every Bible of a snapshot: id -> its BibleVersions row, books and verses,
+    in the order the database holds them."""
+    out = {}
+    if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='BibleVersions'").fetchone():
+        return out
+    for v in con.execute("SELECT id, bible_name, abbreviation, information, right_to_left FROM BibleVersions ORDER BY id"):
+        bid = int(v["id"])
+        books = [[r[0], r[1], r[2]] for r in con.execute(
+            "SELECT id, book_name, chapter_count FROM BibleBooks WHERE CAST(bible_id AS INTEGER) = ? ORDER BY rowid", (bid,))]
+        verses = [[r[0], r[1], r[2], r[3], r[4]] for r in con.execute(
+            "SELECT verse_id, book, chapter, verse, verse_text FROM BibleVerse WHERE CAST(bible_id AS INTEGER) = ? "
+            "ORDER BY rowid", (bid,))]
+        out[bid] = {
+            "meta": {"id": bid, "bible_name": v["bible_name"] or "", "abbreviation": v["abbreviation"] or "",
+                     "information": v["information"] or "", "right_to_left": int(v["right_to_left"] or 0)},
+            "books": books, "verses": verses,
+        }
+    return out
+
+
+def bible_replaces(con):
+    """The library's old Bible id -> the Bible that takes its place in the
+    laptops' screen settings (table CgfBibleReplaces, written by the exporter)."""
+    if not con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='CgfBibleReplaces'").fetchone():
+        return {}
+    return {str(r[0]): str(r[1]) for r in con.execute("SELECT old_id, new_id FROM CgfBibleReplaces ORDER BY old_id")}
+
+
 def compute_delta(old_path, new_path):
-    """Songs and songbooks that differ between two snapshots, plus whether
-    anything else (Bibles, themes, ...) changed; that waits for the snapshot."""
+    """Songs, songbooks and Bibles that differ between two snapshots, plus
+    whether anything else (themes, ...) changed; that waits for the snapshot."""
     old, new = open_ro(old_path), open_ro(new_path)
     try:
         band = f"WHERE id <= {LOCAL_BAND}"
@@ -187,22 +219,37 @@ def compute_delta(old_path, new_path):
 
         tables = lambda con: {r[0] for r in con.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
-        others = (tables(old) | tables(new)) - {"Songs", "Songbooks"}
+        # Bibles travel in the release only when both snapshots have the full
+        # Bible tables; otherwise a changed Bible table waits for the snapshot.
+        carried = RELEASE_TABLES if "BibleVersions" in tables(old) & tables(new) else {"Songs", "Songbooks"}
+        others = (tables(old) | tables(new)) - carried
         other_changes = bool(skipped) or any(
             t not in tables(old) or t not in tables(new) or table_digest(old, t) != table_digest(new, t)
             for t in sorted(others))
+
+        bib_old, bib_new = bibles_of(old), bibles_of(new)
+        bibles_changed = [i for i in sorted(bib_new) if bib_new[i] != bib_old.get(i)]
+        bibles_removed = [i for i in sorted(bib_old) if i not in bib_new]
+        replaces_old, replaces_new = bible_replaces(old), bible_replaces(new)
+        bible_delta = "BibleVersions" in carried and bool(bibles_changed or bibles_removed
+                                                          or replaces_old != replaces_new)
         return {
             "songbooks": songbooks,
             "songbooks_deleted": songbooks_deleted,
             "songs": songs,
             "songs_deleted": songs_deleted,
             "other_changes": other_changes,
+            "bibles": [bib_new[i] for i in bibles_changed] if bible_delta else [],
+            "bibles_library": sorted(bib_new) if bible_delta else None,
+            "bible_replaces": replaces_new if bible_delta else None,
             "summary": {
                 "songs_changed": len(songs) - songs_added,
                 "songs_added": songs_added,
                 "songs_deleted": len(songs_deleted),
                 "songbooks_changed": len(songbooks) + len(songbooks_deleted),
                 "skipped_large": skipped,
+                "bibles_changed": bibles_changed,
+                "bibles_removed": bibles_removed,
             },
         }
     finally:
@@ -211,31 +258,60 @@ def compute_delta(old_path, new_path):
 
 
 def build_parts(delta, church, from_v, to_v, snapshot_name, snapshot_sha, key, published_at=None):
-    """Split a delta into signed parts. Songbooks and deletions ride in part 1
-    so a song never arrives before its songbook."""
+    """Split a delta into signed parts. Songbooks, deletions and each Bible's
+    details (its BibleVersions row, books and verse count) ride in part 1, so
+    nothing arrives before what it belongs to; songs and Bible verses fill the
+    parts in order."""
     header = {
         "kind": "cgf-release", "v": 1, "church": church, "from": from_v, "to": to_v,
         "published_at": published_at or datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "snapshot": snapshot_name, "snapshot_sha256": snapshot_sha,
         "other_changes": delta["other_changes"], "summary": delta["summary"],
     }
+    has_bibles = delta.get("bibles_library") is not None
+    if has_bibles:
+        # An app older than Bible releases would skip them and still count the
+        # version as applied; newer apps and companions check this list.
+        header["needs"] = ["bibles"]
+
+    units = [("song", row, len(json.dumps(row, ensure_ascii=False))) for row in delta["songs"]]
+    for bible in delta.get("bibles", []):
+        bid = bible["meta"]["id"]
+        units += [("verse", (bid, row), len(json.dumps(row, ensure_ascii=False)) + 1) for row in bible["verses"]]
+
     groups, current, size = [], [], 0
-    for row in delta["songs"]:
-        n = len(json.dumps(row, ensure_ascii=False))
-        if current and size + n > PART_BUDGET:
+    for unit in units:
+        if current and size + unit[2] > PART_BUDGET:
             groups.append(current)
             current, size = [], 0
-        current.append(row)
-        size += n
+        current.append(unit)
+        size += unit[2]
     groups.append(current)
 
     kid = key_id(key)
     parts = []
-    for i, songs in enumerate(groups, start=1):
+    for i, group in enumerate(groups, start=1):
+        songs = [u[1] for u in group if u[0] == "song"]
+        batches = []
+        for u in group:
+            if u[0] != "verse":
+                continue
+            bid, row = u[1]
+            if not batches or batches[-1]["id"] != bid:
+                batches.append({"id": bid, "rows": []})
+            batches[-1]["rows"].append(row)
         body = dict(header, part=i, parts=len(groups), songs=songs,
                     songbooks=delta["songbooks"] if i == 1 else [],
                     songbooks_deleted=delta["songbooks_deleted"] if i == 1 else [],
                     songs_deleted=delta["songs_deleted"] if i == 1 else [])
+        if has_bibles:
+            if i == 1:
+                body["bibles"] = [dict(b["meta"], books=b["books"], verses=len(b["verses"]))
+                                  for b in delta["bibles"]]
+                body["bibles_library"] = delta["bibles_library"]
+                body["bible_replaces"] = delta["bible_replaces"]
+            if batches:
+                body["bible_verses"] = batches
         payload = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
         parts.append({"type": "release", "payload": payload, "sig": sign(key, payload), "key": kid})
     return parts
@@ -345,6 +421,11 @@ def cmd_diff(args):
     d = compute_delta(args.old, args.new)
     print(json.dumps(d["summary"], indent=2))
     print(f"other tables changed: {d['other_changes']}")
+    for b in d.get("bibles", []):
+        m = b["meta"]
+        print(f"  Bible {m['id']}: {m['bible_name']} ({len(b['verses'])} verses)")
+    if d.get("bibles_library") is not None:
+        print(f"  library Bibles: {d['bibles_library']}; replaces: {d['bible_replaces']}")
     for row in d["songs"][:20]:
         print(f"  song {row['id']}: {row['title']}")
 
@@ -386,7 +467,9 @@ def cmd_push(args):
         s = delta["summary"]
         print(f"v{from_v} -> v{to_v}: {s['songs_changed']} changed, {s['songs_added']} added, "
               f"{s['songs_deleted']} removed songs; {s['songbooks_changed']} songbook changes; "
-              f"{len(release)} part(s)" + ("; other tables wait for the snapshot" if delta["other_changes"] else ""))
+              f"{len(release)} part(s)" + ("; other tables wait for the snapshot" if delta["other_changes"] else "")
+              + (f"; Bibles replaced {s['bibles_changed']}, removed {s['bibles_removed']}"
+                 if delta.get("bibles_library") is not None else ""))
     r = request(cfg, "POST", "/releases", {"parts": parts})
     print(f"PUSH OK: server at v{r['latest']}, sent to {r['connected']} connected laptop(s)")
 

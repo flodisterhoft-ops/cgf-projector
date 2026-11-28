@@ -57,6 +57,8 @@ public slots:
     // each release's result back to the program that sent it.
     void setLibraryVersion(int version);
     void sendToClient(quintptr client, const QJsonObject &message);
+    // After a release changed Bibles: read the list and book names again.
+    void reloadBibles();
 
 signals:
     void started(quint16 port);

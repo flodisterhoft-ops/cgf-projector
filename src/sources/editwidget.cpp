@@ -317,14 +317,15 @@ void EditWidget::addNewSong(Song song, QString msgNewSongbook, QString msgCaptio
 
     QSqlQuery sq;
     QStringList songbook_list;
-    songbook_list << msgNewSongbook;
+    // Songbooks come only from the central library (docs/library-from-cloud.md):
+    // a new song goes into one of them, never into a new one made here.
     sq.exec("SELECT id, name FROM Songbooks");
     while (sq.next())
         songbook_list << sq.value(1).toString();
 
     int current_songbook(0);
     if (!add_to_songbook.isEmpty())
-        current_songbook = songbook_list.indexOf(add_to_songbook);
+        current_songbook = qMax(0, int(songbook_list.indexOf(add_to_songbook)));
     else
         current_songbook = 0;
 

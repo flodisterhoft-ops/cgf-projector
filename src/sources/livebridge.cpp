@@ -90,6 +90,11 @@ void LiveBridge::setLibraryVersion(int version)
                               Qt::QueuedConnection);
 }
 
+void LiveBridge::reloadBibles()
+{
+    QMetaObject::invokeMethod(server, [s = server] { s->reloadBibles(); }, Qt::QueuedConnection);
+}
+
 void LiveBridge::replyToClient(quintptr client, const QJsonObject &message)
 {
     QMetaObject::invokeMethod(server, [s = server, client, message] { s->sendToClient(client, message); },
