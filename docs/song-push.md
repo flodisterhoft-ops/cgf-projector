@@ -155,7 +155,7 @@ settings.
 |---|---|
 | `push-server/` | The Worker and Durable Object (`src/index.ts`, `src/release.ts`), tests in `test/` |
 | `tools/push_release.py` | Publisher side: keys, devices, deltas, signing, push; tests in `tools/test_push_release.py` |
-| `src/companion/` | `cgf-companion.exe` (Qt, runs without a window; its own `.pro`) |
+| `src/companion/` | `cgf-companion.exe` (Qt, runs without a window; its own `.pro`). `--fetch-libreoffice` downloads LibreOffice for the PowerPoint import (BUILD.md) |
 | `src/sources/librarypush.cpp` | Checks signatures, buffers parts, applies releases to the database |
 | `src/sources/softprojectorsync.cpp` | Main window side: starts the companion, refreshes the lists |
 | `bridgeserver.cpp`, `livebridge.cpp` | `release` messages from local programs, the library version in `hello` |
